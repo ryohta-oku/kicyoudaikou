@@ -194,46 +194,21 @@ async function convertPdfToImages(
 ): Promise<string[]> {
   const sharp = (await import("sharp")).default;
 
-  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
-  const pdfDoc = await loadingTask.promise;
-  const numPages = pdfDoc.numPages;
+  // sharpのmetadataでPDFのページ数を取得
+  const metadata = await sharp(pdfBuffer, { density: 200 }).metadata();
+  const numPages = metadata.pages || 1;
 
   const imagePaths: string[] = [];
 
-  for (let i = 1; i <= numPages; i++) {
-    const page = await pdfDoc.getPage(i);
-    const viewport = page.getViewport({ scale: 2.0 });
-
-    const width = Math.floor(viewport.width);
-    const height = Math.floor(viewport.height);
-
-    const pageImageFilename = `page_${i}.png`;
+  for (let i = 0; i < numPages; i++) {
+    const pageImageFilename = `page_${i + 1}.png`;
     const pageImagePath = path.join(outputDir, pageImageFilename);
 
-    try {
-      // sharpでPDFページを画像に変換
-      await sharp(pdfBuffer, { page: i - 1, density: 200 })
-        .png()
-        .toFile(pageImagePath);
-    } catch {
-      // sharpでPDFが読めない場合、プレースホルダー画像を生成
-      await sharp({
-        create: {
-          width,
-          height,
-          channels: 4,
-          background: { r: 255, g: 255, b: 255, alpha: 1 },
-        },
-      })
-        .png()
-        .toFile(pageImagePath);
-    }
+    await sharp(pdfBuffer, { page: i, density: 200 })
+      .png()
+      .toFile(pageImagePath);
 
     imagePaths.push(`/uploads/pages/${documentId}/${pageImageFilename}`);
-
-    page.cleanup();
   }
 
   return imagePaths;
