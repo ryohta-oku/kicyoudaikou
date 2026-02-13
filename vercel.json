@@ -1,5 +1,13 @@
 {
   "buildCommand": "npx prisma generate && next build",
   "framework": "nextjs",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "functions": {
+    "src/app/api/ocr/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/classify/route.ts": {
+      "maxDuration": 60
+    }
+  }
 }

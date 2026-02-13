@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { classifyText, parseOCRText } from "@/lib/classifier";
+import { classifyWithAI, classifyText, parseOCRText } from "@/lib/classifier";
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,56 +28,100 @@ export async function POST(request: NextRequest) {
 
     const entries = [];
 
-    for (const page of document.pages) {
-      const text = page.correctedText || page.ocrText;
-      const parsedItems = parseOCRText(text);
+    // 全ページのOCRテキストを結合
+    const allText = document.pages
+      .map((p) => p.correctedText || p.ocrText)
+      .filter((t) => t.trim())
+      .join("\n---\n");
 
-      for (const item of parsedItems) {
-        const classification = await classifyText(item.description);
+    if (!allText.trim()) {
+      await prisma.document.update({
+        where: { id: documentId },
+        data: { status: "classified" },
+      });
+      return NextResponse.json({ entries: [] });
+    }
 
+    // AI分類を試行、失敗したらキーワードベースにフォールバック
+    let useAI = true;
+    let aiEntries: Awaited<ReturnType<typeof classifyWithAI>> = [];
+
+    try {
+      aiEntries = await classifyWithAI(allText);
+    } catch (error) {
+      console.warn("AI classification failed, falling back to keyword-based:", error);
+      useAI = false;
+    }
+
+    if (useAI && aiEntries.length > 0) {
+      // AI分類の結果をDB保存
+      for (const item of aiEntries) {
         const entry = await prisma.journalEntry.create({
           data: {
             documentId,
-            pageId: page.id,
+            pageId: document.pages[0]?.id || null,
             date: item.date,
             description: item.description,
-            accountCode: classification.accountCode,
-            accountName: classification.accountName,
-            subAccountCode: classification.subAccountCode,
-            subAccountName: classification.subAccountName,
+            accountCode: item.accountCode,
+            accountName: item.accountName,
+            subAccountCode: item.subAccountCode,
+            subAccountName: item.subAccountName,
             debitAmount: item.amount,
             creditAmount: 0,
-            aiSuggested: classification.confidence > 0,
+            aiSuggested: true,
             isConfirmed: false,
           },
         });
-
         entries.push(entry);
       }
+    } else {
+      // フォールバック: キーワードベースの分類
+      for (const page of document.pages) {
+        const text = page.correctedText || page.ocrText;
+        const parsedItems = parseOCRText(text);
 
-      // テキスト全体からも推測（parsedItemsが空の場合）
-      if (parsedItems.length === 0 && text.trim()) {
-        const classification = await classifyText(text);
-        const today = new Date().toISOString().split("T")[0];
+        for (const item of parsedItems) {
+          const classification = await classifyText(item.description);
+          const entry = await prisma.journalEntry.create({
+            data: {
+              documentId,
+              pageId: page.id,
+              date: item.date,
+              description: item.description,
+              accountCode: classification.accountCode,
+              accountName: classification.accountName,
+              subAccountCode: classification.subAccountCode,
+              subAccountName: classification.subAccountName,
+              debitAmount: item.amount,
+              creditAmount: 0,
+              aiSuggested: classification.confidence > 0,
+              isConfirmed: false,
+            },
+          });
+          entries.push(entry);
+        }
 
-        const entry = await prisma.journalEntry.create({
-          data: {
-            documentId,
-            pageId: page.id,
-            date: today,
-            description: text.substring(0, 100),
-            accountCode: classification.accountCode,
-            accountName: classification.accountName,
-            subAccountCode: classification.subAccountCode,
-            subAccountName: classification.subAccountName,
-            debitAmount: 0,
-            creditAmount: 0,
-            aiSuggested: classification.confidence > 0,
-            isConfirmed: false,
-          },
-        });
-
-        entries.push(entry);
+        if (parsedItems.length === 0 && text.trim()) {
+          const classification = await classifyText(text);
+          const today = new Date().toISOString().split("T")[0];
+          const entry = await prisma.journalEntry.create({
+            data: {
+              documentId,
+              pageId: page.id,
+              date: today,
+              description: text.substring(0, 100),
+              accountCode: classification.accountCode,
+              accountName: classification.accountName,
+              subAccountCode: classification.subAccountCode,
+              subAccountName: classification.subAccountName,
+              debitAmount: 0,
+              creditAmount: 0,
+              aiSuggested: classification.confidence > 0,
+              isConfirmed: false,
+            },
+          });
+          entries.push(entry);
+        }
       }
     }
 

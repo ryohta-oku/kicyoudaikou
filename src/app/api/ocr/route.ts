@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import path from "path";
 import { mkdir, readFile, copyFile, writeFile } from "fs/promises";
-import Tesseract from "tesseract.js";
 import { getUploadBaseDir, toPhysicalPath } from "@/lib/storage";
+import { getOpenAIClient, OCR_MODEL } from "@/lib/openai";
 
 /**
  * ドキュメントのファイルデータを取得する
@@ -29,6 +29,63 @@ async function ensureFileOnDisk(document: { filepath: string; fileData: Uint8Arr
   await mkdir(dir, { recursive: true });
   await writeFile(filePath, Buffer.from(document.fileData));
   return filePath;
+}
+
+/**
+ * 画像ファイルをbase64エンコードして返す
+ */
+async function imageToBase64(filePath: string): Promise<{ base64: string; mimeType: string }> {
+  const buffer = await readFile(filePath);
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeMap: Record<string, string> = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+  };
+  const mimeType = mimeMap[ext] || "image/jpeg";
+  return { base64: buffer.toString("base64"), mimeType };
+}
+
+/**
+ * GPT-4o mini Vision で画像からテキストを読み取る
+ */
+async function ocrWithVision(imagePath: string): Promise<string> {
+  const client = getOpenAIClient();
+  const { base64, mimeType } = await imageToBase64(imagePath);
+
+  const response = await client.chat.completions.create({
+    model: OCR_MODEL,
+    max_tokens: 4096,
+    messages: [
+      {
+        role: "system",
+        content:
+          "あなたはOCR（光学文字認識）の専門家です。画像に含まれるテキストをすべて正確に読み取ってください。" +
+          "レイアウトをできるだけ維持し、日本語・英語・数字を正確に読み取ってください。" +
+          "金額、日付、店名、品目などの情報は特に正確に読み取ってください。" +
+          "画像にテキストが見つからない場合は「テキストなし」と返してください。",
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:${mimeType};base64,${base64}`,
+            },
+          },
+          {
+            type: "text",
+            text: "この画像に含まれるすべてのテキストを読み取ってください。",
+          },
+        ],
+      },
+    ],
+  });
+
+  return response.choices[0]?.message?.content || "テキストなし";
 }
 
 export async function POST(request: NextRequest) {
@@ -84,14 +141,14 @@ export async function POST(request: NextRequest) {
       pageImages = [`/uploads/pages/${documentId}/${pageImageFilename}`];
     }
 
-    // 各ページでOCRを実行し、画像データもDBに保存
+    // 各ページでGPT-4o mini Vision OCRを実行
     const pages = [];
     for (let i = 0; i < pageImages.length; i++) {
       const imagePath = pageImages[i];
       const fullImagePath = toPhysicalPath(imagePath);
 
-      const result = await Tesseract.recognize(fullImagePath, "jpn+eng", {});
-      const ocrText = result.data.text;
+      // GPT-4o mini Vision でOCR
+      const ocrText = await ocrWithVision(fullImagePath);
 
       // ページ画像のバイナリデータを読み取り
       let imageData: Uint8Array<ArrayBuffer> | null = null;
@@ -135,8 +192,6 @@ async function convertPdfToImages(
   outputDir: string,
   documentId: string
 ): Promise<string[]> {
-  // pdfjs-distを使ってPDFをcanvasに描画し、画像として保存
-  // サーバーサイドではsharpを使用
   const sharp = (await import("sharp")).default;
 
   const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
@@ -149,17 +204,11 @@ async function convertPdfToImages(
 
   for (let i = 1; i <= numPages; i++) {
     const page = await pdfDoc.getPage(i);
-    const viewport = page.getViewport({ scale: 2.0 }); // 高解像度でレンダリング
+    const viewport = page.getViewport({ scale: 2.0 });
 
-    // NodeCanvasFactoryを使わず、直接ピクセルデータを取得
     const width = Math.floor(viewport.width);
     const height = Math.floor(viewport.height);
 
-    // OperatorListを使ってテキスト抽出のみ行い、画像はsharpで生成
-    // pdfjs-distのNode.js環境ではcanvasが使えないため、
-    // 代替としてPDFの最初のページを画像化する簡易実装
-
-    // PDFそのものを画像に変換（sharpはPDFの1ページ目を読める）
     const pageImageFilename = `page_${i}.png`;
     const pageImagePath = path.join(outputDir, pageImageFilename);
 
