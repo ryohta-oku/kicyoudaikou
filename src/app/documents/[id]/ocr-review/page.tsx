@@ -3,7 +3,8 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Loader2, Play } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Play, FileText } from "lucide-react";
+import Image from "next/image";
 import Stepper, { WORKFLOW_STEPS } from "@/components/Stepper";
 import OCREditor from "@/components/OCREditor";
 
@@ -19,6 +20,8 @@ interface Page {
 interface Document {
   id: string;
   filename: string;
+  filepath: string;
+  fileType: string;
   status: string;
   pages: Page[];
 }
@@ -200,14 +203,40 @@ export default function OCRReviewPage({ params }: { params: Promise<{ id: string
       )}
 
       {!hasPages && !ocrProcessing && (
-        <div className="text-center py-16 bg-white rounded-xl border">
-          <Play className="mx-auto h-16 w-16 text-gray-300 mb-4" />
-          <h3 className="text-lg font-medium text-gray-700 mb-2">
-            OCR処理を開始してください
-          </h3>
-          <p className="text-sm text-gray-500">
-            上の「OCR処理を開始」ボタンを押して、PDFからテキストを読み取ります
-          </p>
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
+            <Play className="w-5 h-5 text-blue-600 flex-shrink-0" />
+            <p className="text-sm text-blue-700">
+              上の「OCR処理を開始」ボタンを押して、テキストを読み取ります
+            </p>
+          </div>
+          <div className="bg-white rounded-xl border overflow-hidden">
+            <div className="bg-gray-50 px-4 py-3 border-b">
+              <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                アップロードファイル プレビュー
+              </h3>
+            </div>
+            <div className="p-4">
+              {document.fileType === "pdf" ? (
+                <iframe
+                  src={`/api/files?path=${encodeURIComponent(document.filepath)}`}
+                  className="w-full border rounded"
+                  style={{ height: "700px" }}
+                  title="PDFプレビュー"
+                />
+              ) : (
+                <Image
+                  src={`/api/files?path=${encodeURIComponent(document.filepath)}`}
+                  alt={document.filename}
+                  width={800}
+                  height={1100}
+                  className="w-full h-auto border rounded"
+                  unoptimized
+                />
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
