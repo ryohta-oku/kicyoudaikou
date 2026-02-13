@@ -88,6 +88,92 @@ async function ocrWithVision(imagePath: string): Promise<string> {
   return response.choices[0]?.message?.content || "テキストなし";
 }
 
+/**
+ * PDFのページ数を簡易的に取得する（バイナリ解析）
+ */
+function getPdfPageCount(buffer: Buffer): number {
+  const str = buffer.toString("binary");
+  const match = str.match(/\/Type\s*\/Pages[^]*?\/Count\s+(\d+)/);
+  return match ? parseInt(match[1], 10) : 1;
+}
+
+/**
+ * PDFをOpenAIに直接送信してOCR処理する（Vercel対応）
+ */
+async function ocrPdfDirect(pdfBuffer: Buffer, pageCount: number): Promise<string[]> {
+  const client = getOpenAIClient();
+  const base64 = pdfBuffer.toString("base64");
+
+  const pageInstruction = pageCount > 1
+    ? `このPDFは${pageCount}ページあります。各ページのテキストを「--- ページ 1 ---」「--- ページ 2 ---」のように区切って出力してください。`
+    : "このPDFに含まれるすべてのテキストを読み取ってください。";
+
+  const response = await client.chat.completions.create({
+    model: OCR_MODEL,
+    max_tokens: 16384,
+    messages: [
+      {
+        role: "system",
+        content:
+          "あなたはOCR（光学文字認識）の専門家です。PDFに含まれるテキストをすべて正確に読み取ってください。" +
+          "レイアウトをできるだけ維持し、日本語・英語・数字を正確に読み取ってください。" +
+          "金額、日付、店名、品目などの情報は特に正確に読み取ってください。" +
+          "テキストが見つからない場合は「テキストなし」と返してください。",
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "file",
+            file: {
+              filename: "document.pdf",
+              file_data: `data:application/pdf;base64,${base64}`,
+            },
+          } as never,
+          {
+            type: "text",
+            text: pageInstruction,
+          },
+        ],
+      },
+    ],
+  });
+
+  const fullText = response.choices[0]?.message?.content || "テキストなし";
+
+  if (pageCount <= 1) {
+    return [fullText];
+  }
+
+  // ページ区切りでテキストを分割
+  const parts = fullText.split(/---\s*ページ\s*\d+\s*---/).filter((t) => t.trim());
+  if (parts.length >= pageCount) {
+    return parts.map((t) => t.trim());
+  }
+
+  // 区切りがうまくいかなかった場合、全テキストを1ページとして返す
+  return [fullText];
+}
+
+/**
+ * プレースホルダー画像を作成する（PDF用）
+ */
+async function createPlaceholderImage(
+  outputPath: string,
+  pageNumber: number
+): Promise<void> {
+  const sharp = (await import("sharp")).default;
+
+  // SVGでページ番号入りのプレースホルダーを作成
+  const svg = `<svg width="800" height="1100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="800" height="1100" fill="#f3f4f6"/>
+    <text x="400" y="520" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#6b7280">PDF ページ ${pageNumber}</text>
+    <text x="400" y="570" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#9ca3af">OCRテキストは右側に表示されます</text>
+  </svg>`;
+
+  await sharp(Buffer.from(svg)).png().toFile(outputPath);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { documentId } = await request.json();
@@ -119,58 +205,88 @@ export async function POST(request: NextRequest) {
     const imagesDir = path.join(getUploadBaseDir(), "pages", documentId);
     await mkdir(imagesDir, { recursive: true });
 
-    let pageImages: string[];
+    const pages = [];
 
     if (document.fileType === "pdf") {
-      // PDFをページ画像に変換
+      // === PDF処理: OpenAIに直接送信 ===
       const pdfBuffer = await readFile(filePath);
-      pageImages = await convertPdfToImages(pdfBuffer, imagesDir, documentId);
-    } else if (document.fileType === "heic" || document.fileType === "heif") {
-      // HEIC/HEIFの場合: sharpでJPEGに変換してからOCR
-      const sharp = (await import("sharp")).default;
-      const pageImageFilename = "page_1.jpg";
-      const destPath = path.join(imagesDir, pageImageFilename);
-      await sharp(filePath).jpeg({ quality: 95 }).toFile(destPath);
-      pageImages = [`/uploads/pages/${documentId}/${pageImageFilename}`];
+      const pageCount = getPdfPageCount(pdfBuffer);
+      const ocrTexts = await ocrPdfDirect(pdfBuffer, pageCount);
+
+      for (let i = 0; i < ocrTexts.length; i++) {
+        const pageImageFilename = `page_${i + 1}.png`;
+        const pageImagePath = path.join(imagesDir, pageImageFilename);
+        const imagePath = `/uploads/pages/${documentId}/${pageImageFilename}`;
+
+        // プレースホルダー画像を作成
+        await createPlaceholderImage(pageImagePath, i + 1);
+
+        let imageData: Uint8Array<ArrayBuffer> | null = null;
+        try {
+          const buf = await readFile(pageImagePath);
+          imageData = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+        } catch {
+          // 画像データの読み取りに失敗しても続行
+        }
+
+        const page = await prisma.documentPage.create({
+          data: {
+            documentId,
+            pageNumber: i + 1,
+            imagePath,
+            imageData,
+            ocrText: ocrTexts[i],
+            correctedText: ocrTexts[i],
+          },
+        });
+
+        pages.push(page);
+      }
     } else {
-      // その他の画像ファイルの場合: pagesディレクトリにコピーして1ページとして扱う
-      const ext = path.extname(document.filename) || `.${document.fileType}`;
-      const pageImageFilename = `page_1${ext}`;
-      const destPath = path.join(imagesDir, pageImageFilename);
-      await copyFile(filePath, destPath);
-      pageImages = [`/uploads/pages/${documentId}/${pageImageFilename}`];
-    }
+      // === 画像処理: 従来のVision OCR ===
+      let pageImages: string[];
 
-    // 各ページでGPT-4o mini Vision OCRを実行
-    const pages = [];
-    for (let i = 0; i < pageImages.length; i++) {
-      const imagePath = pageImages[i];
-      const fullImagePath = toPhysicalPath(imagePath);
-
-      // GPT-4o mini Vision でOCR
-      const ocrText = await ocrWithVision(fullImagePath);
-
-      // ページ画像のバイナリデータを読み取り
-      let imageData: Uint8Array<ArrayBuffer> | null = null;
-      try {
-        const buf = await readFile(fullImagePath);
-        imageData = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
-      } catch {
-        // 画像データの読み取りに失敗しても続行
+      if (document.fileType === "heic" || document.fileType === "heif") {
+        const sharp = (await import("sharp")).default;
+        const pageImageFilename = "page_1.jpg";
+        const destPath = path.join(imagesDir, pageImageFilename);
+        await sharp(filePath).jpeg({ quality: 95 }).toFile(destPath);
+        pageImages = [`/uploads/pages/${documentId}/${pageImageFilename}`];
+      } else {
+        const ext = path.extname(document.filename) || `.${document.fileType}`;
+        const pageImageFilename = `page_1${ext}`;
+        const destPath = path.join(imagesDir, pageImageFilename);
+        await copyFile(filePath, destPath);
+        pageImages = [`/uploads/pages/${documentId}/${pageImageFilename}`];
       }
 
-      const page = await prisma.documentPage.create({
-        data: {
-          documentId,
-          pageNumber: i + 1,
-          imagePath,
-          imageData,
-          ocrText,
-          correctedText: ocrText,
-        },
-      });
+      for (let i = 0; i < pageImages.length; i++) {
+        const imagePath = pageImages[i];
+        const fullImagePath = toPhysicalPath(imagePath);
 
-      pages.push(page);
+        const ocrText = await ocrWithVision(fullImagePath);
+
+        let imageData: Uint8Array<ArrayBuffer> | null = null;
+        try {
+          const buf = await readFile(fullImagePath);
+          imageData = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+        } catch {
+          // 画像データの読み取りに失敗しても続行
+        }
+
+        const page = await prisma.documentPage.create({
+          data: {
+            documentId,
+            pageNumber: i + 1,
+            imagePath,
+            imageData,
+            ocrText,
+            correctedText: ocrText,
+          },
+        });
+
+        pages.push(page);
+      }
     }
 
     // ステータスをOCR完了に更新
@@ -185,31 +301,4 @@ export async function POST(request: NextRequest) {
     const detail = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: "OCR処理に失敗しました", code: "OCR_FAILED", detail }, { status: 500 });
   }
-}
-
-async function convertPdfToImages(
-  pdfBuffer: Buffer,
-  outputDir: string,
-  documentId: string
-): Promise<string[]> {
-  const sharp = (await import("sharp")).default;
-
-  // sharpのmetadataでPDFのページ数を取得
-  const metadata = await sharp(pdfBuffer, { density: 200 }).metadata();
-  const numPages = metadata.pages || 1;
-
-  const imagePaths: string[] = [];
-
-  for (let i = 0; i < numPages; i++) {
-    const pageImageFilename = `page_${i + 1}.png`;
-    const pageImagePath = path.join(outputDir, pageImageFilename);
-
-    await sharp(pdfBuffer, { page: i, density: 200 })
-      .png()
-      .toFile(pageImagePath);
-
-    imagePaths.push(`/uploads/pages/${documentId}/${pageImageFilename}`);
-  }
-
-  return imagePaths;
 }
