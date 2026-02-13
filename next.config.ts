@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [],
     unoptimized: true,
   },
-  serverExternalPackages: ["tesseract.js", "sharp"],
+  serverExternalPackages: ["tesseract.js", "sharp", "better-sqlite3", "@libsql/client"],
   turbopack: {
     resolveAlias: {
       canvas: { browser: "", default: "canvas" },
