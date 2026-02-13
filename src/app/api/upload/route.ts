@@ -71,17 +71,31 @@ export async function POST(request: NextRequest) {
     const creator = (formData.get("creator") as string) || "";
 
     // ファイルデータをDBに保存（Vercel環境での永続化）
-    const document = await prisma.document.create({
-      data: {
-        filename: file.name,
-        filepath: `/uploads/${savedFilename}`,
-        fileType,
-        fileData: buffer,
-        title,
-        creator,
-        status: "uploaded",
-      },
-    });
+    let document;
+    try {
+      document = await prisma.document.create({
+        data: {
+          filename: file.name,
+          filepath: `/uploads/${savedFilename}`,
+          fileType,
+          fileData: buffer,
+          title,
+          creator,
+          status: "uploaded",
+        },
+      });
+    } catch {
+      // title/creatorカラムが未マイグレーションの場合にフォールバック
+      document = await prisma.document.create({
+        data: {
+          filename: file.name,
+          filepath: `/uploads/${savedFilename}`,
+          fileType,
+          fileData: buffer,
+          status: "uploaded",
+        },
+      });
+    }
 
     return NextResponse.json({ document: { id: document.id, filename: document.filename, filepath: document.filepath, fileType: document.fileType, status: document.status } });
   } catch (error) {

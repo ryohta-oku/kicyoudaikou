@@ -124,7 +124,10 @@ export default function FileUpload({
     formData.append("file", item.file);
     const res = await fetch("/api/upload", { method: "POST", body: formData });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "アップロードに失敗しました");
+    if (!res.ok) {
+      const detail = data.detail ? ` (${data.detail})` : "";
+      throw new Error(`${data.error || "アップロードに失敗しました"}${detail}`);
+    }
     return data.document.id;
   };
 
@@ -136,7 +139,10 @@ export default function FileUpload({
       body: JSON.stringify({ documentId }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "OCR処理に失敗しました");
+    if (!res.ok) {
+      const detail = data.detail ? ` (${data.detail})` : "";
+      throw new Error(`${data.error || "OCR処理に失敗しました"}${detail}`);
+    }
   };
 
   const updateFileStatus = (
