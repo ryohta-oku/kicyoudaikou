@@ -17,6 +17,14 @@ function createPrismaClient() {
     return new PrismaClient({ adapter });
   }
 
+  // Vercel環境ではTursoが必須
+  if (process.env.VERCEL === "1") {
+    throw new Error(
+      "TURSO_DATABASE_URL が設定されていません。" +
+      "Vercel の環境変数に TURSO_DATABASE_URL と TURSO_AUTH_TOKEN を設定してください。"
+    );
+  }
+
   // ローカル開発用 (better-sqlite3)
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { PrismaBetterSqlite3 } = require("@prisma/adapter-better-sqlite3");
