@@ -4,6 +4,7 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { getUploadBaseDir } from "@/lib/storage";
+import convert from "heic-convert";
 
 const ACCEPTED_MIME_TYPES = [
   "application/pdf",
@@ -66,10 +67,38 @@ export async function POST(request: NextRequest) {
       // Vercel環境では/tmp書き込み失敗しても続行（DBに保存するため）
     }
 
-    const fileType = getFileType(file);
+    let fileType = getFileType(file);
     const title = (formData.get("title") as string) || file.name.replace(/\.[^.]+$/, "");
     const creator = (formData.get("creator") as string) || "";
     const folderId = (formData.get("folderId") as string) || null;
+
+    // HEIC/HEIF → JPEG 変換（ブラウザ表示・OCR互換性のため）
+    let finalBuffer = buffer;
+    let finalFilename = savedFilename;
+    if (fileType === "heic") {
+      try {
+        const jpegData = await convert({
+          buffer: buffer.buffer as ArrayBuffer,
+          format: "JPEG",
+          quality: 0.95,
+        });
+        finalBuffer = Buffer.from(jpegData);
+        finalFilename = `${fileId}.jpg`;
+        fileType = "jpeg";
+
+        // 変換後のJPEGをローカルに保存し直す
+        try {
+          const uploadDir = getUploadBaseDir();
+          const filepath = path.join(uploadDir, finalFilename);
+          await writeFile(filepath, finalBuffer);
+        } catch {
+          // Vercel環境では/tmp書き込み失敗しても続行
+        }
+      } catch (heicError) {
+        console.error("HEIC conversion failed, saving original:", heicError);
+        // 変換に失敗した場合は元のHEICファイルをそのまま保存
+      }
+    }
 
     // ファイルデータをDBに保存（Vercel環境での永続化）
     let document;
@@ -77,9 +106,9 @@ export async function POST(request: NextRequest) {
       document = await prisma.document.create({
         data: {
           filename: file.name,
-          filepath: `/uploads/${savedFilename}`,
+          filepath: `/uploads/${finalFilename}`,
           fileType,
-          fileData: buffer,
+          fileData: finalBuffer,
           title,
           creator,
           folderId,
@@ -93,7 +122,7 @@ export async function POST(request: NextRequest) {
           filename: file.name,
           filepath: `/uploads/${savedFilename}`,
           fileType,
-          fileData: buffer,
+          fileData: finalBuffer,
           status: "uploaded",
         },
       });

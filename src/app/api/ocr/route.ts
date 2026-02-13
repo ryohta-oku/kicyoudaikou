@@ -247,10 +247,17 @@ export async function POST(request: NextRequest) {
       let pageImages: string[];
 
       if (document.fileType === "heic" || document.fileType === "heif") {
-        const sharp = (await import("sharp")).default;
+        // HEIC/HEIF: heic-convertでJPEGに変換（Vercel対応）
+        const convert = (await import("heic-convert")).default;
+        const heicBuffer = await readFile(filePath);
+        const jpegData = await convert({
+          buffer: heicBuffer.buffer as ArrayBuffer,
+          format: "JPEG",
+          quality: 0.95,
+        });
         const pageImageFilename = "page_1.jpg";
         const destPath = path.join(imagesDir, pageImageFilename);
-        await sharp(filePath).jpeg({ quality: 95 }).toFile(destPath);
+        await writeFile(destPath, Buffer.from(jpegData));
         pageImages = [`/uploads/pages/${documentId}/${pageImageFilename}`];
       } else {
         const ext = path.extname(document.filename) || `.${document.fileType}`;
