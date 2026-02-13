@@ -14,6 +14,8 @@ model Document {
   filepath   String
   fileType   String   @default("pdf") // pdf, jpeg, png, webp, etc.
   fileData   Bytes?   // アップロードファイルのバイナリデータ（Vercel用）
+  title      String   @default("") // ドキュメントタイトル
+  creator    String   @default("") // 作成者
   status     String   @default("uploaded") // uploaded, ocr_processing, ocr_complete, classified, reviewed, exported
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

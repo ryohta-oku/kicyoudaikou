@@ -67,6 +67,8 @@ export async function POST(request: NextRequest) {
     }
 
     const fileType = getFileType(file);
+    const title = (formData.get("title") as string) || file.name.replace(/\.[^.]+$/, "");
+    const creator = (formData.get("creator") as string) || "";
 
     // ファイルデータをDBに保存（Vercel環境での永続化）
     const document = await prisma.document.create({
@@ -75,6 +77,8 @@ export async function POST(request: NextRequest) {
         filepath: `/uploads/${savedFilename}`,
         fileType,
         fileData: buffer,
+        title,
+        creator,
         status: "uploaded",
       },
     });

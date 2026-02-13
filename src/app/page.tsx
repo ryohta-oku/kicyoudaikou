@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   FileText,
   Upload,
@@ -10,6 +9,7 @@ import {
   ArrowRight,
   Trash2,
   Loader2,
+  Download,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import FileUpload from "@/components/FileUpload";
@@ -18,6 +18,8 @@ interface Document {
   id: string;
   filename: string;
   filepath: string;
+  title: string;
+  creator: string;
   status: string;
   createdAt: string;
   pages: { id: string }[];
@@ -25,13 +27,12 @@ interface Document {
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
     try {
       const res = await fetch("/api/documents");
       const data = await res.json();
@@ -41,14 +42,16 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchDocuments();
-  }, []);
+  }, [fetchDocuments]);
 
-  const handleUploadComplete = (documentId: string) => {
-    router.push(`/documents/${documentId}/ocr-review`);
+  const handleBulkUploadComplete = () => {
+    // アップロード＋OCR完了後にドキュメント一覧をリフレッシュ
+    fetchDocuments();
+    setShowUpload(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -96,7 +99,7 @@ export default function DashboardPage() {
           className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
         >
           <Upload className="w-4 h-4" />
-          新しいPDFをアップロード
+          ファイルをアップロード
         </button>
       </div>
 
@@ -104,9 +107,9 @@ export default function DashboardPage() {
       {showUpload && (
         <div className="bg-white rounded-xl border p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            PDFファイルをアップロード
+            ファイルをアップロード（複数選択可）
           </h2>
-          <FileUpload onUploadComplete={handleUploadComplete} />
+          <FileUpload onBulkUploadComplete={handleBulkUploadComplete} />
         </div>
       )}
 
@@ -122,7 +125,7 @@ export default function DashboardPage() {
             ドキュメントがありません
           </h3>
           <p className="text-sm text-gray-500 mb-6">
-            PDFファイルをアップロードして記帳作業を始めましょう
+            PDF・画像ファイルをアップロードして記帳作業を始めましょう
           </p>
           <button
             onClick={() => setShowUpload(true)}
@@ -134,92 +137,122 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="bg-white rounded-xl border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b">
-                <th className="px-6 py-3 text-left font-medium text-gray-600">
-                  ファイル名
-                </th>
-                <th className="px-6 py-3 text-left font-medium text-gray-600">
-                  ステータス
-                </th>
-                <th className="px-6 py-3 text-center font-medium text-gray-600">
-                  ページ数
-                </th>
-                <th className="px-6 py-3 text-center font-medium text-gray-600">
-                  仕訳数
-                </th>
-                <th className="px-6 py-3 text-left font-medium text-gray-600">
-                  作成日
-                </th>
-                <th className="px-6 py-3 text-center font-medium text-gray-600">
-                  操作
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {documents.map((doc) => {
-                const nextAction = getNextAction(doc.status, doc.id);
-                return (
-                  <tr key={doc.id} className="border-b hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-5 h-5 text-red-500 flex-shrink-0" />
-                        <span className="font-medium text-gray-900 truncate max-w-[200px]">
-                          {doc.filename}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b">
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">
+                    作成日
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">
+                    タイトル
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">
+                    ファイル名
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">
+                    申請ステータス
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">
+                    作成者
+                  </th>
+                  <th className="px-4 py-3 text-center font-medium text-gray-600">
+                    エクスポート
+                  </th>
+                  <th className="px-4 py-3 text-center font-medium text-gray-600">
+                    操作
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {documents.map((doc) => {
+                  const nextAction = getNextAction(doc.status, doc.id);
+                  const canExport =
+                    doc.status === "reviewed" || doc.status === "exported";
+                  return (
+                    <tr key={doc.id} className="border-b hover:bg-gray-50">
+                      {/* 作成日 */}
+                      <td className="px-4 py-4 text-gray-600 whitespace-nowrap">
+                        {new Date(doc.createdAt).toLocaleDateString("ja-JP")}
+                      </td>
+                      {/* タイトル */}
+                      <td className="px-4 py-4">
+                        <span className="font-medium text-gray-900 truncate block max-w-[200px]">
+                          {doc.title || doc.filename.replace(/\.[^.]+$/, "")}
                         </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={cn(
-                          "inline-flex px-2.5 py-1 rounded-full text-xs font-medium",
-                          STATUS_COLORS[doc.status] || "bg-gray-100 text-gray-800"
+                      </td>
+                      {/* ファイル名 */}
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-red-500 flex-shrink-0" />
+                          <span className="text-gray-600 truncate max-w-[180px]">
+                            {doc.filename}
+                          </span>
+                        </div>
+                      </td>
+                      {/* 申請ステータス */}
+                      <td className="px-4 py-4">
+                        <span
+                          className={cn(
+                            "inline-flex px-2.5 py-1 rounded-full text-xs font-medium",
+                            STATUS_COLORS[doc.status] ||
+                              "bg-gray-100 text-gray-800"
+                          )}
+                        >
+                          {STATUS_LABELS[doc.status] || doc.status}
+                        </span>
+                      </td>
+                      {/* 作成者 */}
+                      <td className="px-4 py-4 text-gray-600">
+                        {doc.creator || "-"}
+                      </td>
+                      {/* エクスポート */}
+                      <td className="px-4 py-4 text-center">
+                        {canExport ? (
+                          <Link
+                            href={`/documents/${doc.id}/export`}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            CSV出力
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-gray-400">-</span>
                         )}
-                      >
-                        {STATUS_LABELS[doc.status] || doc.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center text-gray-600">
-                      {doc.pages.length}
-                    </td>
-                    <td className="px-6 py-4 text-center text-gray-600">
-                      {doc._count.journalEntries}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {new Date(doc.createdAt).toLocaleDateString("ja-JP")}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <Link
-                          href={nextAction.href}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          {doc.status === "uploaded" ? (
-                            <Eye className="w-4 h-4" />
-                          ) : (
-                            <ArrowRight className="w-4 h-4" />
-                          )}
-                          {nextAction.label}
-                        </Link>
-                        <button
-                          onClick={() => handleDelete(doc.id)}
-                          disabled={deletingId === doc.id}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                        >
-                          {deletingId === doc.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      {/* 操作 */}
+                      <td className="px-4 py-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <Link
+                            href={nextAction.href}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          >
+                            {doc.status === "uploaded" ? (
+                              <Eye className="w-4 h-4" />
+                            ) : (
+                              <ArrowRight className="w-4 h-4" />
+                            )}
+                            {nextAction.label}
+                          </Link>
+                          <button
+                            onClick={() => handleDelete(doc.id)}
+                            disabled={deletingId === doc.id}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            {deletingId === doc.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

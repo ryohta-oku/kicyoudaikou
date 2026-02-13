@@ -38,6 +38,8 @@ export async function GET() {
           "filename" TEXT NOT NULL,
           "filepath" TEXT NOT NULL,
           "fileType" TEXT NOT NULL DEFAULT 'pdf',
+          "title" TEXT NOT NULL DEFAULT '',
+          "creator" TEXT NOT NULL DEFAULT '',
           "status" TEXT NOT NULL DEFAULT 'uploaded',
           "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -58,6 +60,18 @@ export async function GET() {
           `ALTER TABLE "Document" ADD COLUMN "fileData" BLOB`
         );
         results.push("✓ Document.fileData カラムを追加しました");
+      }
+      if (!docColumns.includes("title")) {
+        await client.execute(
+          `ALTER TABLE "Document" ADD COLUMN "title" TEXT NOT NULL DEFAULT ''`
+        );
+        results.push("✓ Document.title カラムを追加しました");
+      }
+      if (!docColumns.includes("creator")) {
+        await client.execute(
+          `ALTER TABLE "Document" ADD COLUMN "creator" TEXT NOT NULL DEFAULT ''`
+        );
+        results.push("✓ Document.creator カラムを追加しました");
       }
       results.push("Document テーブルは既に存在します");
     }
