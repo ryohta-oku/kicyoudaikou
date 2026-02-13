@@ -12,6 +12,7 @@ model Document {
   id         String   @id @default(uuid())
   filename   String
   filepath   String
+  fileType   String   @default("pdf") // pdf, jpeg, png, webp, etc.
   status     String   @default("uploaded") // uploaded, ocr_processing, ocr_complete, classified, reviewed, exported
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

@@ -4,6 +4,21 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 
+const ACCEPTED_MIME_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/bmp",
+  "image/tiff",
+];
+
+function getFileType(mimeType: string): string {
+  if (mimeType === "application/pdf") return "pdf";
+  return mimeType.replace("image/", "");
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -13,8 +28,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "ファイルが選択されていません" }, { status: 400 });
     }
 
-    if (file.type !== "application/pdf") {
-      return NextResponse.json({ error: "PDFファイルのみアップロード可能です" }, { status: 400 });
+    if (!ACCEPTED_MIME_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        { error: "PDF または画像ファイル（JPEG, PNG, WebP, GIF, BMP, TIFF）をアップロードしてください" },
+        { status: 400 }
+      );
     }
 
     const uploadDir = path.join(process.cwd(), "public", "uploads");
@@ -29,10 +47,13 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
     await writeFile(filepath, buffer);
 
+    const fileType = getFileType(file.type);
+
     const document = await prisma.document.create({
       data: {
         filename: file.name,
         filepath: `/uploads/${savedFilename}`,
+        fileType,
         status: "uploaded",
       },
     });

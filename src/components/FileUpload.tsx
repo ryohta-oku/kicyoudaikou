@@ -1,8 +1,28 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Upload, File, X, Loader2 } from "lucide-react";
+import { Upload, File, Image as ImageIcon, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const ACCEPTED_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/bmp",
+  "image/tiff",
+];
+
+const ACCEPTED_EXTENSIONS = ".pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.tif";
+
+function isAcceptedFile(file: File): boolean {
+  return ACCEPTED_TYPES.includes(file.type);
+}
+
+function isImageFile(file: File): boolean {
+  return file.type.startsWith("image/");
+}
 
 interface FileUploadProps {
   onUploadComplete: (documentId: string) => void;
@@ -30,10 +50,10 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
     setError(null);
 
     const file = e.dataTransfer.files[0];
-    if (file && file.type === "application/pdf") {
+    if (file && isAcceptedFile(file)) {
       setSelectedFile(file);
     } else {
-      setError("PDFファイルのみアップロード可能です");
+      setError("PDF または画像ファイル（JPEG, PNG, WebP, GIF, BMP, TIFF）をアップロードしてください");
     }
   }, []);
 
@@ -41,10 +61,10 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
     setError(null);
     const file = e.target.files?.[0];
     if (file) {
-      if (file.type === "application/pdf") {
+      if (isAcceptedFile(file)) {
         setSelectedFile(file);
       } else {
-        setError("PDFファイルのみアップロード可能です");
+        setError("PDF または画像ファイル（JPEG, PNG, WebP, GIF, BMP, TIFF）をアップロードしてください");
       }
     }
   }, []);
@@ -95,24 +115,28 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
         <input
           id="file-input"
           type="file"
-          accept=".pdf"
+          accept={ACCEPTED_EXTENSIONS}
           className="hidden"
           onChange={handleFileSelect}
         />
 
         <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
         <p className="text-lg font-medium text-gray-700 mb-1">
-          PDFファイルをドラッグ&ドロップ
+          PDF・画像ファイルをドラッグ&ドロップ
         </p>
         <p className="text-sm text-gray-500">
-          またはクリックしてファイルを選択
+          またはクリックしてファイルを選択（PDF, JPEG, PNG, WebP, GIF, BMP, TIFF）
         </p>
       </div>
 
       {selectedFile && (
         <div className="flex items-center justify-between bg-white border rounded-lg p-4">
           <div className="flex items-center gap-3">
-            <File className="h-8 w-8 text-red-500" />
+            {selectedFile && isImageFile(selectedFile) ? (
+              <ImageIcon className="h-8 w-8 text-blue-500" />
+            ) : (
+              <File className="h-8 w-8 text-red-500" />
+            )}
             <div>
               <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
               <p className="text-xs text-gray-500">

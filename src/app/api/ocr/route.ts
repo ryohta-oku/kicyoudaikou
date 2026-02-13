@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import path from "path";
-import { mkdir, readFile } from "fs/promises";
+import { mkdir, readFile, copyFile } from "fs/promises";
 import Tesseract from "tesseract.js";
 
 export async function POST(request: NextRequest) {
@@ -26,13 +26,24 @@ export async function POST(request: NextRequest) {
       data: { status: "ocr_processing" },
     });
 
-    const pdfPath = path.join(process.cwd(), "public", document.filepath);
+    const filePath = path.join(process.cwd(), "public", document.filepath);
     const imagesDir = path.join(process.cwd(), "public", "uploads", "pages", documentId);
     await mkdir(imagesDir, { recursive: true });
 
-    // PDFをページ画像に変換
-    const pdfBuffer = await readFile(pdfPath);
-    const pageImages = await convertPdfToImages(pdfBuffer, imagesDir, documentId);
+    let pageImages: string[];
+
+    if (document.fileType === "pdf") {
+      // PDFをページ画像に変換
+      const pdfBuffer = await readFile(filePath);
+      pageImages = await convertPdfToImages(pdfBuffer, imagesDir, documentId);
+    } else {
+      // 画像ファイルの場合: pagesディレクトリにコピーして1ページとして扱う
+      const ext = path.extname(document.filename) || `.${document.fileType}`;
+      const pageImageFilename = `page_1${ext}`;
+      const destPath = path.join(imagesDir, pageImageFilename);
+      await copyFile(filePath, destPath);
+      pageImages = [`/uploads/pages/${documentId}/${pageImageFilename}`];
+    }
 
     // 各ページでOCRを実行
     const pages = [];
