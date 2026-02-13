@@ -36,8 +36,15 @@ export async function POST(request: NextRequest) {
       // PDFをページ画像に変換
       const pdfBuffer = await readFile(filePath);
       pageImages = await convertPdfToImages(pdfBuffer, imagesDir, documentId);
+    } else if (document.fileType === "heic" || document.fileType === "heif") {
+      // HEIC/HEIFの場合: sharpでJPEGに変換してからOCR
+      const sharp = (await import("sharp")).default;
+      const pageImageFilename = "page_1.jpg";
+      const destPath = path.join(imagesDir, pageImageFilename);
+      await sharp(filePath).jpeg({ quality: 95 }).toFile(destPath);
+      pageImages = [`/uploads/pages/${documentId}/${pageImageFilename}`];
     } else {
-      // 画像ファイルの場合: pagesディレクトリにコピーして1ページとして扱う
+      // その他の画像ファイルの場合: pagesディレクトリにコピーして1ページとして扱う
       const ext = path.extname(document.filename) || `.${document.fileType}`;
       const pageImageFilename = `page_1${ext}`;
       const destPath = path.join(imagesDir, pageImageFilename);

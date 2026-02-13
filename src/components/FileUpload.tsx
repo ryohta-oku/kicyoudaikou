@@ -12,16 +12,23 @@ const ACCEPTED_TYPES = [
   "image/gif",
   "image/bmp",
   "image/tiff",
+  "image/heic",
+  "image/heif",
 ];
 
-const ACCEPTED_EXTENSIONS = ".pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.tif";
+const ACCEPTED_EXTENSIONS = ".pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.tif,.heic,.heif";
 
+// HEICファイルはブラウザがMIMEタイプを正しく認識しないことがあるため拡張子でもチェック
 function isAcceptedFile(file: File): boolean {
-  return ACCEPTED_TYPES.includes(file.type);
+  if (ACCEPTED_TYPES.includes(file.type)) return true;
+  const ext = file.name.toLowerCase().split(".").pop();
+  return ext === "heic" || ext === "heif";
 }
 
 function isImageFile(file: File): boolean {
-  return file.type.startsWith("image/");
+  if (file.type.startsWith("image/")) return true;
+  const ext = file.name.toLowerCase().split(".").pop();
+  return ext === "heic" || ext === "heif";
 }
 
 interface FileUploadProps {
@@ -53,7 +60,7 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
     if (file && isAcceptedFile(file)) {
       setSelectedFile(file);
     } else {
-      setError("PDF または画像ファイル（JPEG, PNG, WebP, GIF, BMP, TIFF）をアップロードしてください");
+      setError("PDF または画像ファイル（JPEG, PNG, WebP, GIF, BMP, TIFF, HEIC）をアップロードしてください");
     }
   }, []);
 
@@ -64,7 +71,7 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
       if (isAcceptedFile(file)) {
         setSelectedFile(file);
       } else {
-        setError("PDF または画像ファイル（JPEG, PNG, WebP, GIF, BMP, TIFF）をアップロードしてください");
+        setError("PDF または画像ファイル（JPEG, PNG, WebP, GIF, BMP, TIFF, HEIC）をアップロードしてください");
       }
     }
   }, []);
@@ -125,7 +132,7 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
           PDF・画像ファイルをドラッグ&ドロップ
         </p>
         <p className="text-sm text-gray-500">
-          またはクリックしてファイルを選択（PDF, JPEG, PNG, WebP, GIF, BMP, TIFF）
+          またはクリックしてファイルを選択（PDF, JPEG, PNG, HEIC 等）
         </p>
       </div>
 

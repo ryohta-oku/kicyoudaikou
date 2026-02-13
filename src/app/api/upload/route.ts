@@ -12,11 +12,24 @@ const ACCEPTED_MIME_TYPES = [
   "image/gif",
   "image/bmp",
   "image/tiff",
+  "image/heic",
+  "image/heif",
 ];
 
-function getFileType(mimeType: string): string {
-  if (mimeType === "application/pdf") return "pdf";
-  return mimeType.replace("image/", "");
+// HEICはブラウザがMIMEタイプを正しく認識しないことがあるため拡張子でもチェック
+const HEIC_EXTENSIONS = [".heic", ".heif"];
+
+function isAcceptedFile(file: File): boolean {
+  if (ACCEPTED_MIME_TYPES.includes(file.type)) return true;
+  const ext = path.extname(file.name).toLowerCase();
+  return HEIC_EXTENSIONS.includes(ext);
+}
+
+function getFileType(file: File): string {
+  const ext = path.extname(file.name).toLowerCase();
+  if (HEIC_EXTENSIONS.includes(ext)) return "heic";
+  if (file.type === "application/pdf") return "pdf";
+  return file.type.replace("image/", "");
 }
 
 export async function POST(request: NextRequest) {
@@ -28,9 +41,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "ファイルが選択されていません" }, { status: 400 });
     }
 
-    if (!ACCEPTED_MIME_TYPES.includes(file.type)) {
+    if (!isAcceptedFile(file)) {
       return NextResponse.json(
-        { error: "PDF または画像ファイル（JPEG, PNG, WebP, GIF, BMP, TIFF）をアップロードしてください" },
+        { error: "PDF または画像ファイル（JPEG, PNG, WebP, GIF, BMP, TIFF, HEIC）をアップロードしてください" },
         { status: 400 }
       );
     }
@@ -47,7 +60,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
     await writeFile(filepath, buffer);
 
-    const fileType = getFileType(file.type);
+    const fileType = getFileType(file);
 
     const document = await prisma.document.create({
       data: {
