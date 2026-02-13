@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// アップロードされたドキュメント
+model Document {
+  id         String   @id @default(uuid())
+  filename   String
+  filepath   String
+  status     String   @default("uploaded") // uploaded, ocr_processing, ocr_complete, classified, reviewed, exported
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  pages          DocumentPage[]
+  journalEntries JournalEntry[]
+}
+
+// ドキュメントの各ページ
+model DocumentPage {
+  id            String  @id @default(uuid())
+  documentId    String
+  pageNumber    Int
+  imagePath     String  // レンダリングされたページ画像のパス
+  ocrText       String  @default("") // OCRで読み取ったテキスト
+  correctedText String  @default("") // ユーザーが修正したテキスト
+  isConfirmed   Boolean @default(false)
+
+  document       Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  journalEntries JournalEntry[]
+
+  @@unique([documentId, pageNumber])
+}
+
+// 仕訳データ
+model JournalEntry {
+  id              String   @id @default(uuid())
+  documentId      String
+  pageId          String?
+  date            String   // 取引日 (YYYY-MM-DD)
+  description     String   // 摘要
+  accountCode     String   @default("") // 勘定科目コード
+  accountName     String   @default("") // 勘定科目名
+  subAccountCode  String   @default("") // 補助科目コード
+  subAccountName  String   @default("") // 補助科目名
+  debitAmount     Int      @default(0)  // 借方金額
+  creditAmount    Int      @default(0)  // 貸方金額
+  taxRate         String   @default("") // 税率区分
+  aiSuggested     Boolean  @default(false) // AI推測かどうか
+  isConfirmed     Boolean  @default(false) // 確認済みかどうか
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  document Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  page     DocumentPage? @relation(fields: [pageId], references: [id])
+}
+
+// 勘定科目マスター
+model Account {
+  id          String       @id @default(uuid())
+  code        String       @unique
+  name        String
+  category    String       // 資産, 負債, 純資産, 収益, 費用
+  subAccounts SubAccount[]
+}
+
+// 補助科目マスター
+model SubAccount {
+  id        String @id @default(uuid())
+  accountId String
+  code      String
+  name      String
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, code])
+}
