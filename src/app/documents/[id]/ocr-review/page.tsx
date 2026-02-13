@@ -60,9 +60,11 @@ export default function OCRReviewPage({ params }: { params: Promise<{ id: string
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // ページが無い場合は自動でOCRを開始
+  // ページが無い場合は自動でOCRを開始（スタック状態のocr_processingも含む）
   useEffect(() => {
-    if (document && document.pages.length === 0 && document.status === "uploaded" && !ocrProcessing) {
+    if (document && document.pages.length === 0 &&
+        (document.status === "uploaded" || document.status === "ocr_processing") &&
+        !ocrProcessing) {
       startOCR();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
