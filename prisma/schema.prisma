@@ -13,6 +13,7 @@ model Document {
   filename   String
   filepath   String
   fileType   String   @default("pdf") // pdf, jpeg, png, webp, etc.
+  fileData   Bytes?   // アップロードファイルのバイナリデータ（Vercel用）
   status     String   @default("uploaded") // uploaded, ocr_processing, ocr_complete, classified, reviewed, exported
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -27,6 +28,7 @@ model DocumentPage {
   documentId    String
   pageNumber    Int
   imagePath     String  // レンダリングされたページ画像のパス
+  imageData     Bytes?  // ページ画像のバイナリデータ（Vercel用）
   ocrText       String  @default("") // OCRで読み取ったテキスト
   correctedText String  @default("") // ユーザーが修正したテキスト
   isConfirmed   Boolean @default(false)

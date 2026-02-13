@@ -45,7 +45,6 @@ export async function GET() {
       `);
       results.push("✓ Document テーブルを作成しました");
     } else {
-      // fileType カラムが無ければ追加
       const docInfo = await client.execute("PRAGMA table_info(Document)");
       const docColumns = docInfo.rows.map((r: { name: string }) => r.name);
       if (!docColumns.includes("fileType")) {
@@ -53,6 +52,12 @@ export async function GET() {
           `ALTER TABLE "Document" ADD COLUMN "fileType" TEXT NOT NULL DEFAULT 'pdf'`
         );
         results.push("✓ Document.fileType カラムを追加しました");
+      }
+      if (!docColumns.includes("fileData")) {
+        await client.execute(
+          `ALTER TABLE "Document" ADD COLUMN "fileData" BLOB`
+        );
+        results.push("✓ Document.fileData カラムを追加しました");
       }
       results.push("Document テーブルは既に存在します");
     }
@@ -77,6 +82,14 @@ export async function GET() {
       `);
       results.push("✓ DocumentPage テーブルを作成しました");
     } else {
+      const pageInfo = await client.execute("PRAGMA table_info(DocumentPage)");
+      const pageColumns = pageInfo.rows.map((r: { name: string }) => r.name);
+      if (!pageColumns.includes("imageData")) {
+        await client.execute(
+          `ALTER TABLE "DocumentPage" ADD COLUMN "imageData" BLOB`
+        );
+        results.push("✓ DocumentPage.imageData カラムを追加しました");
+      }
       results.push("DocumentPage テーブルは既に存在します");
     }
 

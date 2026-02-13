@@ -49,30 +49,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const uploadDir = getUploadBaseDir();
-    await mkdir(uploadDir, { recursive: true });
-
     const fileId = uuidv4();
     const ext = path.extname(file.name);
     const savedFilename = `${fileId}${ext}`;
-    const filepath = path.join(uploadDir, savedFilename);
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    await writeFile(filepath, buffer);
+
+    // ローカルファイルシステムにも保存（ローカル開発用＆同一リクエスト内のOCR処理用）
+    try {
+      const uploadDir = getUploadBaseDir();
+      await mkdir(uploadDir, { recursive: true });
+      const filepath = path.join(uploadDir, savedFilename);
+      await writeFile(filepath, buffer);
+    } catch {
+      // Vercel環境では/tmp書き込み失敗しても続行（DBに保存するため）
+    }
 
     const fileType = getFileType(file);
 
+    // ファイルデータをDBに保存（Vercel環境での永続化）
     const document = await prisma.document.create({
       data: {
         filename: file.name,
         filepath: `/uploads/${savedFilename}`,
         fileType,
+        fileData: buffer,
         status: "uploaded",
       },
     });
 
-    return NextResponse.json({ document });
+    return NextResponse.json({ document: { id: document.id, filename: document.filename, filepath: document.filepath, fileType: document.fileType, status: document.status } });
   } catch (error) {
     console.error("Upload error:", error);
     const detail = error instanceof Error ? error.message : String(error);

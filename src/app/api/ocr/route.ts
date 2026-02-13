@@ -1,9 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import path from "path";
-import { mkdir, readFile, copyFile } from "fs/promises";
+import { mkdir, readFile, copyFile, writeFile } from "fs/promises";
 import Tesseract from "tesseract.js";
 import { getUploadBaseDir, toPhysicalPath } from "@/lib/storage";
+
+/**
+ * ドキュメントのファイルデータを取得する
+ * まずローカルファイルシステムを確認し、なければDBから取得して/tmpに書き出す
+ */
+async function ensureFileOnDisk(document: { filepath: string; fileData: Uint8Array | null }): Promise<string> {
+  const filePath = toPhysicalPath(document.filepath);
+
+  // ローカルに存在するか確認
+  try {
+    await readFile(filePath);
+    return filePath;
+  } catch {
+    // ローカルにない場合、DBから復元
+  }
+
+  if (!document.fileData) {
+    throw new Error("ファイルデータがDBに保存されていません");
+  }
+
+  // DBのデータを/tmpに書き出し
+  const dir = path.dirname(filePath);
+  await mkdir(dir, { recursive: true });
+  await writeFile(filePath, Buffer.from(document.fileData));
+  return filePath;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +53,12 @@ export async function POST(request: NextRequest) {
       data: { status: "ocr_processing" },
     });
 
-    const filePath = toPhysicalPath(document.filepath);
+    // ファイルをディスク上に確保（DBから復元する場合あり）
+    const filePath = await ensureFileOnDisk({
+      filepath: document.filepath,
+      fileData: document.fileData,
+    });
+
     const imagesDir = path.join(getUploadBaseDir(), "pages", documentId);
     await mkdir(imagesDir, { recursive: true });
 
@@ -53,7 +84,7 @@ export async function POST(request: NextRequest) {
       pageImages = [`/uploads/pages/${documentId}/${pageImageFilename}`];
     }
 
-    // 各ページでOCRを実行
+    // 各ページでOCRを実行し、画像データもDBに保存
     const pages = [];
     for (let i = 0; i < pageImages.length; i++) {
       const imagePath = pageImages[i];
@@ -62,11 +93,21 @@ export async function POST(request: NextRequest) {
       const result = await Tesseract.recognize(fullImagePath, "jpn+eng", {});
       const ocrText = result.data.text;
 
+      // ページ画像のバイナリデータを読み取り
+      let imageData: Uint8Array<ArrayBuffer> | null = null;
+      try {
+        const buf = await readFile(fullImagePath);
+        imageData = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+      } catch {
+        // 画像データの読み取りに失敗しても続行
+      }
+
       const page = await prisma.documentPage.create({
         data: {
           documentId,
           pageNumber: i + 1,
           imagePath,
+          imageData,
           ocrText,
           correctedText: ocrText,
         },
