@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback } from "react";
 import {
   Upload,
   File,
@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   AlertCircle,
   FolderPlus,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -64,8 +65,6 @@ export default function FileUpload({
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [folderName, setFolderName] = useState("");
-  const processTriggered = useRef(false);
-
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     setError(null);
     const validFiles: FileItem[] = [];
@@ -241,17 +240,7 @@ export default function FileUpload({
     }
   };
 
-  // ファイルが追加されたら自動でアップロード＋OCR開始
-  useEffect(() => {
-    const hasPending = files.some((f) => f.status === "pending");
-    if (hasPending && !isProcessing && !processTriggered.current) {
-      processTriggered.current = true;
-      handleBulkProcess().finally(() => {
-        processTriggered.current = false;
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [files]);
+  const hasPendingFiles = files.some((f) => f.status === "pending");
 
   const doneCount = files.filter(
     (f) => f.status === "ocr_complete"
@@ -340,7 +329,7 @@ export default function FileUpload({
           またはクリックしてファイルを選択（PDF, JPEG, PNG, HEIC 等）
         </p>
         <p className="text-xs text-blue-600 mt-2">
-          ファイルを選択すると自動でアップロード＆OCR処理が開始されます
+          ファイルを追加してから「送信」ボタンでアップロード＆OCR処理を開始します
         </p>
       </div>
 
@@ -407,7 +396,7 @@ export default function FileUpload({
         </div>
       )}
 
-      {/* ステータスバー */}
+      {/* ステータスバー & 送信ボタン */}
       {files.length > 0 && (
         <div className="flex items-center justify-between">
           <div className="text-sm text-gray-500">
@@ -424,14 +413,25 @@ export default function FileUpload({
               </span>
             )}
           </div>
-          {!isProcessing && doneCount === 0 && files.length > 0 && (
-            <button
-              onClick={() => setFiles([])}
-              className="px-4 py-2 text-sm text-gray-600 border rounded-lg hover:bg-gray-50"
-            >
-              すべてクリア
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {!isProcessing && hasPendingFiles && (
+              <button
+                onClick={() => setFiles([])}
+                className="px-4 py-2 text-sm text-gray-600 border rounded-lg hover:bg-gray-50"
+              >
+                すべてクリア
+              </button>
+            )}
+            {!isProcessing && hasPendingFiles && (
+              <button
+                onClick={handleBulkProcess}
+                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              >
+                <Send className="w-4 h-4" />
+                送信してOCR処理を開始
+              </button>
+            )}
+          </div>
         </div>
       )}
 
