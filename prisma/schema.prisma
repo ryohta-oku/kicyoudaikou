@@ -7,9 +7,21 @@ datasource db {
   provider = "sqlite"
 }
 
+// フォルダ（アップロード時にファイルをグループ化）
+model Folder {
+  id        String   @id @default(uuid())
+  name      String
+  creator   String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents Document[]
+}
+
 // アップロードされたドキュメント
 model Document {
   id         String   @id @default(uuid())
+  folderId   String?
   filename   String
   filepath   String
   fileType   String   @default("pdf") // pdf, jpeg, png, webp, etc.
@@ -20,6 +32,7 @@ model Document {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  folder         Folder?        @relation(fields: [folderId], references: [id], onDelete: Cascade)
   pages          DocumentPage[]
   journalEntries JournalEntry[]
 }

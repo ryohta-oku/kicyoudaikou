@@ -55,6 +55,14 @@ export default function OCRReviewPage({ params }: { params: Promise<{ id: string
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // ページが無い場合は自動でOCRを開始
+  useEffect(() => {
+    if (document && document.pages.length === 0 && document.status === "uploaded" && !ocrProcessing) {
+      startOCR();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [document]);
+
   const startOCR = async () => {
     setOcrProcessing(true);
     setError(null);
@@ -207,7 +215,7 @@ export default function OCRReviewPage({ params }: { params: Promise<{ id: string
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
             <Play className="w-5 h-5 text-blue-600 flex-shrink-0" />
             <p className="text-sm text-blue-700">
-              上の「OCR処理を開始」ボタンを押して、テキストを読み取ります
+              OCR処理を自動的に開始しています...
             </p>
           </div>
           <div className="bg-white rounded-xl border overflow-hidden">

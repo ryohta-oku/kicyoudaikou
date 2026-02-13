@@ -30,11 +30,28 @@ export async function GET() {
     const existingTables = tableList.rows.map((r: { name: string }) => r.name);
     results.push(`既存テーブル: ${existingTables.join(", ")}`);
 
+    // --- Folder テーブル ---
+    if (!existingTables.includes("Folder")) {
+      await client.execute(`
+        CREATE TABLE "Folder" (
+          "id" TEXT PRIMARY KEY NOT NULL,
+          "name" TEXT NOT NULL,
+          "creator" TEXT NOT NULL DEFAULT '',
+          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      results.push("✓ Folder テーブルを作成しました");
+    } else {
+      results.push("Folder テーブルは既に存在します");
+    }
+
     // --- Document テーブル ---
     if (!existingTables.includes("Document")) {
       await client.execute(`
         CREATE TABLE "Document" (
           "id" TEXT PRIMARY KEY NOT NULL,
+          "folderId" TEXT,
           "filename" TEXT NOT NULL,
           "filepath" TEXT NOT NULL,
           "fileType" TEXT NOT NULL DEFAULT 'pdf',
@@ -42,7 +59,8 @@ export async function GET() {
           "creator" TEXT NOT NULL DEFAULT '',
           "status" TEXT NOT NULL DEFAULT 'uploaded',
           "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+          "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY ("folderId") REFERENCES "Folder" ("id") ON DELETE CASCADE
         )
       `);
       results.push("✓ Document テーブルを作成しました");
@@ -72,6 +90,12 @@ export async function GET() {
           `ALTER TABLE "Document" ADD COLUMN "creator" TEXT NOT NULL DEFAULT ''`
         );
         results.push("✓ Document.creator カラムを追加しました");
+      }
+      if (!docColumns.includes("folderId")) {
+        await client.execute(
+          `ALTER TABLE "Document" ADD COLUMN "folderId" TEXT REFERENCES "Folder"("id") ON DELETE CASCADE`
+        );
+        results.push("✓ Document.folderId カラムを追加しました");
       }
       results.push("Document テーブルは既に存在します");
     }

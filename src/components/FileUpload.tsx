@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Upload,
   File,
@@ -9,6 +9,7 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  FolderPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +63,8 @@ export default function FileUpload({
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [folderName, setFolderName] = useState("");
+  const processTriggered = useRef(false);
 
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     setError(null);
@@ -118,10 +121,25 @@ export default function FileUpload({
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  /** フォルダを作成 */
+  const createFolder = async (name: string): Promise<string> => {
+    const res = await fetch("/api/folders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "フォルダの作成に失敗しました");
+    }
+    return data.folder.id;
+  };
+
   /** 1ファイルをアップロード */
-  const uploadOne = async (item: FileItem): Promise<string> => {
+  const uploadOne = async (item: FileItem, folderId: string): Promise<string> => {
     const formData = new FormData();
     formData.append("file", item.file);
+    formData.append("folderId", folderId);
     const res = await fetch("/api/upload", { method: "POST", body: formData });
     const data = await res.json();
     if (!res.ok) {
@@ -154,52 +172,62 @@ export default function FileUpload({
     );
   };
 
-  /** 一括アップロード → 順次OCR */
+  /** 一括アップロード → 順次OCR（自動実行） */
   const handleBulkProcess = async () => {
     if (files.length === 0) return;
+
+    // フォルダ名が未入力の場合、日時ベースのデフォルト名を使用
+    const name = folderName.trim() || `アップロード ${new Date().toLocaleString("ja-JP")}`;
+
     setIsProcessing(true);
     setError(null);
 
     const documentIds: string[] = [];
 
-    // Step 1: 全ファイルをアップロード
-    for (let i = 0; i < files.length; i++) {
-      if (files[i].status !== "pending") continue;
-      updateFileStatus(i, { status: "uploading" });
-      try {
-        const docId = await uploadOne(files[i]);
-        documentIds.push(docId);
-        updateFileStatus(i, { status: "uploaded", documentId: docId });
-      } catch (err) {
-        updateFileStatus(i, {
-          status: "error",
-          error: err instanceof Error ? err.message : "アップロード失敗",
-        });
+    try {
+      // Step 0: フォルダを作成
+      const folderId = await createFolder(name);
+
+      // Step 1: 全ファイルをアップロード
+      for (let i = 0; i < files.length; i++) {
+        if (files[i].status !== "pending") continue;
+        updateFileStatus(i, { status: "uploading" });
+        try {
+          const docId = await uploadOne(files[i], folderId);
+          documentIds.push(docId);
+          updateFileStatus(i, { status: "uploaded", documentId: docId });
+        } catch (err) {
+          updateFileStatus(i, {
+            status: "error",
+            error: err instanceof Error ? err.message : "アップロード失敗",
+          });
+        }
       }
-    }
 
-    // Step 2: アップロード成功したファイルのOCRを順次実行
-    for (let i = 0; i < files.length; i++) {
-      // 最新のstateを取得するためsetFilesのコールバックを利用
-      const currentFile = await new Promise<FileItem>((resolve) => {
-        setFiles((prev) => {
-          resolve(prev[i]);
-          return prev;
+      // Step 2: アップロード成功したファイルのOCRを順次自動実行
+      for (let i = 0; i < files.length; i++) {
+        const currentFile = await new Promise<FileItem>((resolve) => {
+          setFiles((prev) => {
+            resolve(prev[i]);
+            return prev;
+          });
         });
-      });
 
-      if (currentFile.status !== "uploaded" || !currentFile.documentId) continue;
+        if (currentFile.status !== "uploaded" || !currentFile.documentId) continue;
 
-      updateFileStatus(i, { status: "ocr_processing" });
-      try {
-        await runOCR(currentFile.documentId);
-        updateFileStatus(i, { status: "ocr_complete" });
-      } catch (err) {
-        updateFileStatus(i, {
-          status: "error",
-          error: err instanceof Error ? err.message : "OCR失敗",
-        });
+        updateFileStatus(i, { status: "ocr_processing" });
+        try {
+          await runOCR(currentFile.documentId);
+          updateFileStatus(i, { status: "ocr_complete" });
+        } catch (err) {
+          updateFileStatus(i, {
+            status: "error",
+            error: err instanceof Error ? err.message : "OCR失敗",
+          });
+        }
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "処理に失敗しました");
     }
 
     setIsProcessing(false);
@@ -213,7 +241,18 @@ export default function FileUpload({
     }
   };
 
-  const pendingCount = files.filter((f) => f.status === "pending").length;
+  // ファイルが追加されたら自動でアップロード＋OCR開始
+  useEffect(() => {
+    const hasPending = files.some((f) => f.status === "pending");
+    if (hasPending && !isProcessing && !processTriggered.current) {
+      processTriggered.current = true;
+      handleBulkProcess().finally(() => {
+        processTriggered.current = false;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files]);
+
   const doneCount = files.filter(
     (f) => f.status === "ocr_complete"
   ).length;
@@ -255,6 +294,19 @@ export default function FileUpload({
 
   return (
     <div className="space-y-4">
+      {/* フォルダ名入力 */}
+      <div className="flex items-center gap-3">
+        <FolderPlus className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+        <input
+          type="text"
+          value={folderName}
+          onChange={(e) => setFolderName(e.target.value)}
+          placeholder="フォルダ名を入力（空欄の場合は日時で自動生成）"
+          disabled={isProcessing}
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+        />
+      </div>
+
       {/* ドロップゾーン */}
       <div
         onDragOver={handleDragOver}
@@ -286,6 +338,9 @@ export default function FileUpload({
         </p>
         <p className="text-sm text-gray-500">
           またはクリックしてファイルを選択（PDF, JPEG, PNG, HEIC 等）
+        </p>
+        <p className="text-xs text-blue-600 mt-2">
+          ファイルを選択すると自動でアップロード＆OCR処理が開始されます
         </p>
       </div>
 
@@ -352,7 +407,7 @@ export default function FileUpload({
         </div>
       )}
 
-      {/* アクションバー */}
+      {/* ステータスバー */}
       {files.length > 0 && (
         <div className="flex items-center justify-between">
           <div className="text-sm text-gray-500">
@@ -363,29 +418,20 @@ export default function FileUpload({
               </span>
             ) : (
               <span>
-                {files.length} ファイル選択済み
+                {files.length} ファイル
                 {doneCount > 0 && ` (${doneCount} 完了)`}
+                {errorCount > 0 && ` (${errorCount} エラー)`}
               </span>
             )}
           </div>
-          <div className="flex gap-2">
-            {!isProcessing && pendingCount > 0 && (
-              <>
-                <button
-                  onClick={() => setFiles([])}
-                  className="px-4 py-2 text-sm text-gray-600 border rounded-lg hover:bg-gray-50"
-                >
-                  すべてクリア
-                </button>
-                <button
-                  onClick={handleBulkProcess}
-                  className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-                >
-                  アップロード &amp; OCR実行 ({pendingCount}件)
-                </button>
-              </>
-            )}
-          </div>
+          {!isProcessing && doneCount === 0 && files.length > 0 && (
+            <button
+              onClick={() => setFiles([])}
+              className="px-4 py-2 text-sm text-gray-600 border rounded-lg hover:bg-gray-50"
+            >
+              すべてクリア
+            </button>
+          )}
         </div>
       )}
 

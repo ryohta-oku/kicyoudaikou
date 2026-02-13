@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
     const fileType = getFileType(file);
     const title = (formData.get("title") as string) || file.name.replace(/\.[^.]+$/, "");
     const creator = (formData.get("creator") as string) || "";
+    const folderId = (formData.get("folderId") as string) || null;
 
     // ファイルデータをDBに保存（Vercel環境での永続化）
     let document;
@@ -81,11 +82,12 @@ export async function POST(request: NextRequest) {
           fileData: buffer,
           title,
           creator,
+          folderId,
           status: "uploaded",
         },
       });
     } catch {
-      // title/creatorカラムが未マイグレーションの場合にフォールバック
+      // folderId/title/creatorカラムが未マイグレーションの場合にフォールバック
       document = await prisma.document.create({
         data: {
           filename: file.name,

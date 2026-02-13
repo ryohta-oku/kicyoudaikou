@@ -3,84 +3,76 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
-  FileText,
+  FolderOpen,
   Upload,
-  Eye,
-  ArrowRight,
   Trash2,
   Loader2,
-  Download,
+  FileText,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import FileUpload from "@/components/FileUpload";
 
-interface Document {
+interface FolderDocument {
   id: string;
   filename: string;
-  filepath: string;
-  title: string;
-  creator: string;
   status: string;
+}
+
+interface Folder {
+  id: string;
+  name: string;
+  creator: string;
   createdAt: string;
-  pages: { id: string }[];
-  _count: { journalEntries: number };
+  documents: FolderDocument[];
+}
+
+function getFolderStatus(documents: FolderDocument[]): string {
+  if (documents.length === 0) return "uploaded";
+  const statuses = documents.map((d) => d.status);
+  // 優先度順: 処理中 > アップロード済 > OCR完了 > 仕訳済 > 確認済 > エクスポート済
+  if (statuses.some((s) => s === "ocr_processing")) return "ocr_processing";
+  if (statuses.some((s) => s === "uploaded")) return "uploaded";
+  if (statuses.some((s) => s === "ocr_complete")) return "ocr_complete";
+  if (statuses.some((s) => s === "classified")) return "classified";
+  if (statuses.some((s) => s === "reviewed")) return "reviewed";
+  return "exported";
 }
 
 export default function DashboardPage() {
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const fetchDocuments = useCallback(async () => {
+  const fetchFolders = useCallback(async () => {
     try {
-      const res = await fetch("/api/documents");
+      const res = await fetch("/api/folders");
       const data = await res.json();
-      setDocuments(data.documents || []);
+      setFolders(data.folders || []);
     } catch (error) {
-      console.error("Failed to fetch documents:", error);
+      console.error("Failed to fetch folders:", error);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchDocuments();
-  }, [fetchDocuments]);
+    fetchFolders();
+  }, [fetchFolders]);
 
   const handleBulkUploadComplete = () => {
-    // アップロード＋OCR完了後にドキュメント一覧をリフレッシュ
-    fetchDocuments();
+    fetchFolders();
     setShowUpload(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("このドキュメントを削除してもよろしいですか？")) return;
+    if (!confirm("このフォルダとフォルダ内のすべてのドキュメントを削除してもよろしいですか？")) return;
     setDeletingId(id);
     try {
-      await fetch(`/api/documents/${id}`, { method: "DELETE" });
-      setDocuments((prev) => prev.filter((d) => d.id !== id));
+      await fetch(`/api/folders/${id}`, { method: "DELETE" });
+      setFolders((prev) => prev.filter((f) => f.id !== id));
     } finally {
       setDeletingId(null);
-    }
-  };
-
-  const getNextAction = (status: string, id: string) => {
-    switch (status) {
-      case "uploaded":
-        return { href: `/documents/${id}/ocr-review`, label: "OCR処理開始" };
-      case "ocr_processing":
-        return { href: `/documents/${id}/ocr-review`, label: "処理中..." };
-      case "ocr_complete":
-        return { href: `/documents/${id}/ocr-review`, label: "OCR確認" };
-      case "classified":
-        return { href: `/documents/${id}/classify`, label: "仕訳確認" };
-      case "reviewed":
-        return { href: `/documents/${id}/export`, label: "エクスポート" };
-      case "exported":
-        return { href: `/documents/${id}/export`, label: "再エクスポート" };
-      default:
-        return { href: `/documents/${id}/ocr-review`, label: "確認" };
     }
   };
 
@@ -91,7 +83,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">ダッシュボード</h1>
           <p className="text-sm text-gray-500 mt-1">
-            アップロードされたドキュメントの管理
+            アップロードされたフォルダの管理
           </p>
         </div>
         <button
@@ -113,16 +105,16 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ドキュメント一覧 */}
+      {/* フォルダ一覧 */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
         </div>
-      ) : documents.length === 0 ? (
+      ) : folders.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-xl border">
-          <FileText className="mx-auto h-16 w-16 text-gray-300 mb-4" />
+          <FolderOpen className="mx-auto h-16 w-16 text-gray-300 mb-4" />
           <h3 className="text-lg font-medium text-gray-700 mb-2">
-            ドキュメントがありません
+            フォルダがありません
           </h3>
           <p className="text-sm text-gray-500 mb-6">
             PDF・画像ファイルをアップロードして記帳作業を始めましょう
@@ -145,19 +137,16 @@ export default function DashboardPage() {
                     作成日
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">
-                    タイトル
+                    フォルダ名
+                  </th>
+                  <th className="px-4 py-3 text-center font-medium text-gray-600">
+                    ファイル数
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">
-                    ファイル名
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">
-                    申請ステータス
+                    ステータス
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">
                     作成者
-                  </th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-600">
-                    エクスポート
                   </th>
                   <th className="px-4 py-3 text-center font-medium text-gray-600">
                     操作
@@ -165,81 +154,64 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {documents.map((doc) => {
-                  const nextAction = getNextAction(doc.status, doc.id);
-                  const canExport =
-                    doc.status === "reviewed" || doc.status === "exported";
+                {folders.map((folder) => {
+                  const folderStatus = getFolderStatus(folder.documents);
                   return (
-                    <tr key={doc.id} className="border-b hover:bg-gray-50">
+                    <tr key={folder.id} className="border-b hover:bg-gray-50">
                       {/* 作成日 */}
                       <td className="px-4 py-4 text-gray-600 whitespace-nowrap">
-                        {new Date(doc.createdAt).toLocaleDateString("ja-JP")}
+                        {new Date(folder.createdAt).toLocaleDateString("ja-JP")}
                       </td>
-                      {/* タイトル */}
+                      {/* フォルダ名 */}
                       <td className="px-4 py-4">
-                        <span className="font-medium text-gray-900 truncate block max-w-[200px]">
-                          {doc.title || doc.filename.replace(/\.[^.]+$/, "")}
+                        <Link
+                          href={`/folders/${folder.id}`}
+                          className="flex items-center gap-2 group"
+                        >
+                          <FolderOpen className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                          <span className="font-medium text-gray-900 group-hover:text-blue-600 truncate max-w-[250px]">
+                            {folder.name}
+                          </span>
+                        </Link>
+                      </td>
+                      {/* ファイル数 */}
+                      <td className="px-4 py-4 text-center">
+                        <span className="inline-flex items-center gap-1 text-gray-600">
+                          <FileText className="w-3.5 h-3.5" />
+                          {folder.documents.length}
                         </span>
                       </td>
-                      {/* ファイル名 */}
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-red-500 flex-shrink-0" />
-                          <span className="text-gray-600 truncate max-w-[180px]">
-                            {doc.filename}
-                          </span>
-                        </div>
-                      </td>
-                      {/* 申請ステータス */}
+                      {/* ステータス */}
                       <td className="px-4 py-4">
                         <span
                           className={cn(
                             "inline-flex px-2.5 py-1 rounded-full text-xs font-medium",
-                            STATUS_COLORS[doc.status] ||
+                            STATUS_COLORS[folderStatus] ||
                               "bg-gray-100 text-gray-800"
                           )}
                         >
-                          {STATUS_LABELS[doc.status] || doc.status}
+                          {STATUS_LABELS[folderStatus] || folderStatus}
                         </span>
                       </td>
                       {/* 作成者 */}
                       <td className="px-4 py-4 text-gray-600">
-                        {doc.creator || "-"}
-                      </td>
-                      {/* エクスポート */}
-                      <td className="px-4 py-4 text-center">
-                        {canExport ? (
-                          <Link
-                            href={`/documents/${doc.id}/export`}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            CSV出力
-                          </Link>
-                        ) : (
-                          <span className="text-xs text-gray-400">-</span>
-                        )}
+                        {folder.creator || "-"}
                       </td>
                       {/* 操作 */}
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-center gap-2">
                           <Link
-                            href={nextAction.href}
+                            href={`/folders/${folder.id}`}
                             className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           >
-                            {doc.status === "uploaded" ? (
-                              <Eye className="w-4 h-4" />
-                            ) : (
-                              <ArrowRight className="w-4 h-4" />
-                            )}
-                            {nextAction.label}
+                            詳細を見る
                           </Link>
                           <button
-                            onClick={() => handleDelete(doc.id)}
-                            disabled={deletingId === doc.id}
+                            onClick={() => handleDelete(folder.id)}
+                            disabled={deletingId === folder.id}
                             className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                           >
-                            {deletingId === doc.id ? (
+                            {deletingId === folder.id ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
                             ) : (
                               <Trash2 className="w-4 h-4" />
