@@ -16,7 +16,8 @@ const ACCEPTED_TYPES = [
   "image/heif",
 ];
 
-const ACCEPTED_EXTENSIONS = ".pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.tif,.heic,.heif";
+// image/* でHEIC含むすべての画像をファイルダイアログで選択可能にし、選択後にJSでバリデーション
+const ACCEPTED_EXTENSIONS = ".pdf,image/*";
 
 // HEICファイルはブラウザがMIMEタイプを正しく認識しないことがあるため拡張子でもチェック
 function isAcceptedFile(file: File): boolean {
