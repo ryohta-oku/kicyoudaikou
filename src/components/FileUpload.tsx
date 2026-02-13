@@ -95,7 +95,9 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "アップロードに失敗しました");
+        const code = data.code ? `[${data.code}] ` : "";
+        const detail = data.detail ? `\n詳細: ${data.detail}` : "";
+        throw new Error(`${code}${data.error || "アップロードに失敗しました"}${detail}`);
       }
 
       onUploadComplete(data.document.id);
@@ -187,7 +189,7 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-red-600 whitespace-pre-wrap">{error}</p>
         </div>
       )}
     </div>

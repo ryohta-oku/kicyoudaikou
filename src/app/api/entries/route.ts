@@ -8,7 +8,7 @@ export async function PATCH(request: NextRequest) {
     const { id, ...data } = body;
 
     if (!id) {
-      return NextResponse.json({ error: "エントリIDが必要です" }, { status: 400 });
+      return NextResponse.json({ error: "エントリIDが必要です", code: "ENTRY_NO_ID" }, { status: 400 });
     }
 
     const entry = await prisma.journalEntry.update({
@@ -19,7 +19,8 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ entry });
   } catch (error) {
     console.error("Error updating entry:", error);
-    return NextResponse.json({ error: "仕訳の更新に失敗しました" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "仕訳の更新に失敗しました", code: "ENTRY_UPDATE_FAILED", detail }, { status: 500 });
   }
 }
 
@@ -35,7 +36,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ entry });
   } catch (error) {
     console.error("Error creating entry:", error);
-    return NextResponse.json({ error: "仕訳の作成に失敗しました" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "仕訳の作成に失敗しました", code: "ENTRY_CREATE_FAILED", detail }, { status: 500 });
   }
 }
 
@@ -45,7 +47,7 @@ export async function DELETE(request: NextRequest) {
     const { id } = await request.json();
 
     if (!id) {
-      return NextResponse.json({ error: "エントリIDが必要です" }, { status: 400 });
+      return NextResponse.json({ error: "エントリIDが必要です", code: "ENTRY_NO_ID" }, { status: 400 });
     }
 
     await prisma.journalEntry.delete({ where: { id } });
@@ -53,6 +55,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting entry:", error);
-    return NextResponse.json({ error: "仕訳の削除に失敗しました" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "仕訳の削除に失敗しました", code: "ENTRY_DELETE_FAILED", detail }, { status: 500 });
   }
 }

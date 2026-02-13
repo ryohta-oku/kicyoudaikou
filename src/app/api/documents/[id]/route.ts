@@ -16,13 +16,14 @@ export async function GET(
     });
 
     if (!document) {
-      return NextResponse.json({ error: "ドキュメントが見つかりません" }, { status: 404 });
+      return NextResponse.json({ error: "ドキュメントが見つかりません", code: "DOC_NOT_FOUND" }, { status: 404 });
     }
 
     return NextResponse.json({ document });
   } catch (error) {
     console.error("Error fetching document:", error);
-    return NextResponse.json({ error: "ドキュメントの取得に失敗しました" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "ドキュメントの取得に失敗しました", code: "DOC_FETCH_FAILED", detail }, { status: 500 });
   }
 }
 
@@ -42,7 +43,8 @@ export async function PATCH(
     return NextResponse.json({ document });
   } catch (error) {
     console.error("Error updating document:", error);
-    return NextResponse.json({ error: "ドキュメントの更新に失敗しました" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "ドキュメントの更新に失敗しました", code: "DOC_UPDATE_FAILED", detail }, { status: 500 });
   }
 }
 
@@ -58,6 +60,7 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting document:", error);
-    return NextResponse.json({ error: "ドキュメントの削除に失敗しました" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "ドキュメントの削除に失敗しました", code: "DOC_DELETE_FAILED", detail }, { status: 500 });
   }
 }

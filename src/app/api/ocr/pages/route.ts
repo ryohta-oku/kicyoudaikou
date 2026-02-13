@@ -7,7 +7,7 @@ export async function PATCH(request: NextRequest) {
     const { pageId, correctedText, isConfirmed } = await request.json();
 
     if (!pageId) {
-      return NextResponse.json({ error: "ページIDが必要です" }, { status: 400 });
+      return NextResponse.json({ error: "ページIDが必要です", code: "PAGE_NO_ID" }, { status: 400 });
     }
 
     const page = await prisma.documentPage.update({
@@ -21,6 +21,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ page });
   } catch (error) {
     console.error("Error updating page:", error);
-    return NextResponse.json({ error: "ページの更新に失敗しました" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "ページの更新に失敗しました", code: "PAGE_UPDATE_FAILED", detail }, { status: 500 });
   }
 }

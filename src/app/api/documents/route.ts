@@ -16,6 +16,7 @@ export async function GET() {
     return NextResponse.json({ documents });
   } catch (error) {
     console.error("Error fetching documents:", error);
-    return NextResponse.json({ error: "ドキュメントの取得に失敗しました" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "ドキュメントの取得に失敗しました", code: "DOC_LIST_FAILED", detail }, { status: 500 });
   }
 }

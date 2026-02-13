@@ -37,6 +37,8 @@ export default function OCRReviewPage({ params }: { params: Promise<{ id: string
       const data = await res.json();
       if (data.document) {
         setDocument(data.document);
+      } else if (data.code) {
+        setError(`[${data.code}] ${data.error}${data.detail ? `\n詳細: ${data.detail}` : ""}`);
       }
     } catch {
       setError("ドキュメントの取得に失敗しました");
@@ -62,7 +64,9 @@ export default function OCRReviewPage({ params }: { params: Promise<{ id: string
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "OCR処理に失敗しました");
+        const code = data.code ? `[${data.code}] ` : "";
+        const detail = data.detail ? `\n詳細: ${data.detail}` : "";
+        throw new Error(`${code}${data.error || "OCR処理に失敗しました"}${detail}`);
       }
 
       await fetchDocument();
@@ -173,7 +177,7 @@ export default function OCRReviewPage({ params }: { params: Promise<{ id: string
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-red-600 whitespace-pre-wrap">{error}</p>
         </div>
       )}
 

@@ -38,12 +38,12 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File | null;
 
     if (!file) {
-      return NextResponse.json({ error: "ファイルが選択されていません" }, { status: 400 });
+      return NextResponse.json({ error: "ファイルが選択されていません", code: "UPLOAD_NO_FILE" }, { status: 400 });
     }
 
     if (!isAcceptedFile(file)) {
       return NextResponse.json(
-        { error: "PDF または画像ファイル（JPEG, PNG, WebP, GIF, BMP, TIFF, HEIC）をアップロードしてください" },
+        { error: "PDF または画像ファイル（JPEG, PNG, WebP, GIF, BMP, TIFF, HEIC）をアップロードしてください", code: "UPLOAD_INVALID_TYPE" },
         { status: 400 }
       );
     }
@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ document });
   } catch (error) {
     console.error("Upload error:", error);
-    return NextResponse.json({ error: "アップロードに失敗しました" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "アップロードに失敗しました", code: "UPLOAD_FAILED", detail }, { status: 500 });
   }
 }

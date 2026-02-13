@@ -89,6 +89,7 @@ export async function POST() {
     });
   } catch (error) {
     console.error("Error seeding accounts:", error);
-    return NextResponse.json({ error: "勘定科目の登録に失敗しました" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "勘定科目の登録に失敗しました", code: "ACCOUNT_SEED_FAILED", detail }, { status: 500 });
   }
 }

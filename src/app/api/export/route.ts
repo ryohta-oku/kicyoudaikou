@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     };
 
     if (!documentId) {
-      return NextResponse.json({ error: "ドキュメントIDが必要です" }, { status: 400 });
+      return NextResponse.json({ error: "ドキュメントIDが必要です", code: "EXPORT_NO_DOCUMENT_ID" }, { status: 400 });
     }
 
     const entries = await prisma.journalEntry.findMany({
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (entries.length === 0) {
-      return NextResponse.json({ error: "確認済みの仕訳がありません" }, { status: 400 });
+      return NextResponse.json({ error: "確認済みの仕訳がありません", code: "EXPORT_NO_ENTRIES" }, { status: 400 });
     }
 
     const csv = generateCSV(entries, format);
@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Export error:", error);
-    return NextResponse.json({ error: "エクスポートに失敗しました" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "エクスポートに失敗しました", code: "EXPORT_FAILED", detail }, { status: 500 });
   }
 }

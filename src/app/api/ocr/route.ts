@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     const { documentId } = await request.json();
 
     if (!documentId) {
-      return NextResponse.json({ error: "ドキュメントIDが必要です" }, { status: 400 });
+      return NextResponse.json({ error: "ドキュメントIDが必要です", code: "OCR_NO_DOCUMENT_ID" }, { status: 400 });
     }
 
     const document = await prisma.document.findUnique({
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!document) {
-      return NextResponse.json({ error: "ドキュメントが見つかりません" }, { status: 404 });
+      return NextResponse.json({ error: "ドキュメントが見つかりません", code: "OCR_DOCUMENT_NOT_FOUND" }, { status: 404 });
     }
 
     // ステータスを処理中に更新
@@ -83,7 +83,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ pages });
   } catch (error) {
     console.error("OCR error:", error);
-    return NextResponse.json({ error: "OCR処理に失敗しました" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "OCR処理に失敗しました", code: "OCR_FAILED", detail }, { status: 500 });
   }
 }
 

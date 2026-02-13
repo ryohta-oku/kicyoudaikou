@@ -11,7 +11,8 @@ export async function GET() {
     return NextResponse.json({ accounts });
   } catch (error) {
     console.error("Error fetching accounts:", error);
-    return NextResponse.json({ error: "勘定科目の取得に失敗しました" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "勘定科目の取得に失敗しました", code: "ACCOUNT_LIST_FAILED", detail }, { status: 500 });
   }
 }
 
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
     const { code, name, category } = body;
 
     if (!code || !name || !category) {
-      return NextResponse.json({ error: "コード、名前、区分は必須です" }, { status: 400 });
+      return NextResponse.json({ error: "コード、名前、区分は必須です", code: "ACCOUNT_MISSING_FIELDS" }, { status: 400 });
     }
 
     const account = await prisma.account.create({
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ account });
   } catch (error) {
     console.error("Error creating account:", error);
-    return NextResponse.json({ error: "勘定科目の作成に失敗しました" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "勘定科目の作成に失敗しました", code: "ACCOUNT_CREATE_FAILED", detail }, { status: 500 });
   }
 }
