@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 // ページのOCRテキストを更新
 export async function PATCH(request: NextRequest) {
   try {
-    const { pageId, correctedText, isConfirmed } = await request.json();
+    const { pageId, correctedText, isConfirmed, date, registrationNumber, amount, tax, memo } = await request.json();
 
     if (!pageId) {
       return NextResponse.json({ error: "ページIDが必要です", code: "PAGE_NO_ID" }, { status: 400 });
@@ -15,6 +15,11 @@ export async function PATCH(request: NextRequest) {
       data: {
         ...(correctedText !== undefined && { correctedText }),
         ...(isConfirmed !== undefined && { isConfirmed }),
+        ...(date !== undefined && { date }),
+        ...(registrationNumber !== undefined && { registrationNumber }),
+        ...(amount !== undefined && { amount }),
+        ...(tax !== undefined && { tax }),
+        ...(memo !== undefined && { memo }),
       },
     });
 

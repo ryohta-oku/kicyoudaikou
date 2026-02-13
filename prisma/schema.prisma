@@ -48,6 +48,13 @@ model DocumentPage {
   correctedText String  @default("") // ユーザーが修正したテキスト
   isConfirmed   Boolean @default(false)
 
+  // 構造化フィールド（AIで抽出）
+  date               String @default("") // 日付
+  registrationNumber String @default("") // 適格請求書発行事業者登録番号（T始まり）
+  amount             String @default("") // 金額（税込）
+  tax                String @default("") // 消費税
+  memo               String @default("") // メモ
+
   document       Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
   journalEntries JournalEntry[]
 

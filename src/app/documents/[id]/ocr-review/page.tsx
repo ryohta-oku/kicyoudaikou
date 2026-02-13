@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, Loader2, Play, FileText } from "lucide-react";
 import Image from "next/image";
 import Stepper, { WORKFLOW_STEPS } from "@/components/Stepper";
-import OCREditor from "@/components/OCREditor";
+import OCREditor, { type PageUpdateData } from "@/components/OCREditor";
 
 interface Page {
   id: string;
@@ -15,6 +15,11 @@ interface Page {
   ocrText: string;
   correctedText: string;
   isConfirmed: boolean;
+  date: string;
+  registrationNumber: string;
+  amount: string;
+  tax: string;
+  memo: string;
 }
 
 interface Document {
@@ -88,11 +93,11 @@ export default function OCRReviewPage({ params }: { params: Promise<{ id: string
     }
   };
 
-  const handlePageUpdate = async (pageId: string, correctedText: string) => {
+  const handlePageUpdate = async (pageId: string, data: PageUpdateData) => {
     const res = await fetch("/api/ocr/pages", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pageId, correctedText }),
+      body: JSON.stringify({ pageId, ...data }),
     });
 
     if (!res.ok) {
@@ -205,6 +210,8 @@ export default function OCRReviewPage({ params }: { params: Promise<{ id: string
       {hasPages && !ocrProcessing && (
         <OCREditor
           pages={document.pages}
+          documentFileType={document.fileType}
+          documentFilepath={document.filepath}
           onPageUpdate={handlePageUpdate}
           onPageConfirm={handlePageConfirm}
         />

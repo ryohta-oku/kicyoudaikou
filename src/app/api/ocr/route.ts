@@ -155,6 +155,58 @@ async function ocrPdfDirect(pdfBuffer: Buffer, pageCount: number): Promise<strin
   return [fullText];
 }
 
+interface ExtractedFields {
+  date: string;
+  registrationNumber: string;
+  amount: string;
+  tax: string;
+  memo: string;
+}
+
+/**
+ * OCRテキストから構造化フィールドをAIで抽出する
+ */
+async function extractStructuredFields(ocrText: string): Promise<ExtractedFields> {
+  const client = getOpenAIClient();
+
+  const response = await client.chat.completions.create({
+    model: OCR_MODEL,
+    max_tokens: 1024,
+    messages: [
+      {
+        role: "system",
+        content:
+          "あなたは経理書類の解析専門家です。OCRテキストから以下の情報を正確に抽出してJSON形式で返してください。\n" +
+          "- date: 日付（YYYY-MM-DD形式、見つからない場合は空文字）\n" +
+          "- registrationNumber: 適格請求書発行事業者登録番号（Tから始まる番号、見つからない場合は空文字）\n" +
+          "- amount: 金額・税込合計（数字のみ、見つからない場合は空文字）\n" +
+          "- tax: 消費税額（数字のみ、見つからない場合は空文字）\n" +
+          "- memo: 取引先名・品目・摘要など、要約メモ（簡潔に）\n\n" +
+          "必ず有効なJSONのみを返してください。マークダウンや説明文は不要です。",
+      },
+      {
+        role: "user",
+        content: ocrText,
+      },
+    ],
+  });
+
+  const raw = response.choices[0]?.message?.content || "{}";
+  try {
+    const cleaned = raw.replace(/```json?\s*/g, "").replace(/```/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+    return {
+      date: String(parsed.date || ""),
+      registrationNumber: String(parsed.registrationNumber || ""),
+      amount: String(parsed.amount || ""),
+      tax: String(parsed.tax || ""),
+      memo: String(parsed.memo || ""),
+    };
+  } catch {
+    return { date: "", registrationNumber: "", amount: "", tax: "", memo: "" };
+  }
+}
+
 /**
  * プレースホルダー画像を作成する（PDF用）
  */
@@ -229,6 +281,9 @@ export async function POST(request: NextRequest) {
           // 画像データの読み取りに失敗しても続行
         }
 
+        // 構造化フィールドを抽出
+        const fields = await extractStructuredFields(ocrTexts[i]);
+
         const page = await prisma.documentPage.create({
           data: {
             documentId,
@@ -237,6 +292,7 @@ export async function POST(request: NextRequest) {
             imageData,
             ocrText: ocrTexts[i],
             correctedText: ocrTexts[i],
+            ...fields,
           },
         });
 
@@ -281,6 +337,9 @@ export async function POST(request: NextRequest) {
           // 画像データの読み取りに失敗しても続行
         }
 
+        // 構造化フィールドを抽出
+        const fields = await extractStructuredFields(ocrText);
+
         const page = await prisma.documentPage.create({
           data: {
             documentId,
@@ -289,6 +348,7 @@ export async function POST(request: NextRequest) {
             imageData,
             ocrText,
             correctedText: ocrText,
+            ...fields,
           },
         });
 
