@@ -118,7 +118,7 @@ export default function OCREditor({ pages, onPageUpdate, onPageConfirm }: OCREdi
           </div>
           <div className="p-4 overflow-auto max-h-[600px]">
             <Image
-              src={currentPage.imagePath}
+              src={`/api/files?path=${encodeURIComponent(currentPage.imagePath)}`}
               alt={`ページ ${currentPage.pageNumber}`}
               width={800}
               height={1100}

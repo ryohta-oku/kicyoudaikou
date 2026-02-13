@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
+import { getUploadBaseDir } from "@/lib/storage";
 
 const ACCEPTED_MIME_TYPES = [
   "application/pdf",
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
+    const uploadDir = getUploadBaseDir();
     await mkdir(uploadDir, { recursive: true });
 
     const fileId = uuidv4();

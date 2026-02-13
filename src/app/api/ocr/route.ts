@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import path from "path";
 import { mkdir, readFile, copyFile } from "fs/promises";
 import Tesseract from "tesseract.js";
+import { getUploadBaseDir, toPhysicalPath } from "@/lib/storage";
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,8 +27,8 @@ export async function POST(request: NextRequest) {
       data: { status: "ocr_processing" },
     });
 
-    const filePath = path.join(process.cwd(), "public", document.filepath);
-    const imagesDir = path.join(process.cwd(), "public", "uploads", "pages", documentId);
+    const filePath = toPhysicalPath(document.filepath);
+    const imagesDir = path.join(getUploadBaseDir(), "pages", documentId);
     await mkdir(imagesDir, { recursive: true });
 
     let pageImages: string[];
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
     const pages = [];
     for (let i = 0; i < pageImages.length; i++) {
       const imagePath = pageImages[i];
-      const fullImagePath = path.join(process.cwd(), "public", imagePath);
+      const fullImagePath = toPhysicalPath(imagePath);
 
       const result = await Tesseract.recognize(fullImagePath, "jpn+eng", {});
       const ocrText = result.data.text;
