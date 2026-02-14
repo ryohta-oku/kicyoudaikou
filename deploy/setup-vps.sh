@@ -1,6 +1,7 @@
 #!/bin/bash
 # エックスサーバーVPS 初期セットアップスクリプト
 # 使い方: root で SSH ログイン後、このスクリプトを実行
+#   curl -sL https://raw.githubusercontent.com/ryohta-oku/kicyoudaikou/main/deploy/setup-vps.sh | bash
 set -e
 
 echo "=== VPS 初期セットアップ開始 ==="
@@ -38,14 +39,13 @@ echo ">>> アプリディレクトリを作成..."
 mkdir -p /var/www/kicyoudaikou
 chown deploy:deploy /var/www/kicyoudaikou
 
-# 7. bare git リポジトリ作成
-echo ">>> Git bare リポジトリを作成..."
-mkdir -p /home/deploy/repos
-cd /home/deploy/repos
-if [ ! -d "kicyoudaikou.git" ]; then
-    git init --bare kicyoudaikou.git
+# 7. GitHub からリポジトリをクローン
+echo ">>> GitHub からリポジトリをクローン..."
+if [ ! -d "/var/www/kicyoudaikou/.git" ]; then
+    sudo -u deploy git clone https://github.com/ryohta-oku/kicyoudaikou.git /var/www/kicyoudaikou
+else
+    echo "    リポジトリは既にクローン済みです"
 fi
-chown -R deploy:deploy /home/deploy/repos
 
 # 8. ファイアウォール設定
 echo ">>> ファイアウォールを設定..."
@@ -55,21 +55,40 @@ ufw --force enable
 
 # 9. Nginx 設定
 echo ">>> Nginx を設定..."
-# default サイトを無効化
 rm -f /etc/nginx/sites-enabled/default
+cp /var/www/kicyoudaikou/deploy/nginx-kicyoudaikou.conf /etc/nginx/sites-available/kicyoudaikou
+ln -sf /etc/nginx/sites-available/kicyoudaikou /etc/nginx/sites-enabled/kicyoudaikou
+nginx -t && systemctl reload nginx
 
-echo ">>> セットアップ完了！"
+# 10. PM2 を systemd に登録（自動起動）
+echo ">>> PM2 自動起動を設定..."
+env PATH=$PATH:/usr/bin pm2 startup systemd -u deploy --hp /home/deploy
+
+# 11. アップロードディレクトリ作成
+echo ">>> アップロードディレクトリを作成..."
+mkdir -p /var/www/kicyoudaikou/public/uploads
+chown deploy:deploy /var/www/kicyoudaikou/public/uploads
+
 echo ""
-echo "=== 次のステップ ==="
-echo "1. ローカルPCで SSH キーを生成:"
-echo "   ssh-keygen -t ed25519 -C \"your-email@example.com\""
+echo "=== セットアップ完了！ ==="
 echo ""
-echo "2. 公開鍵を VPS に登録:"
-echo "   ssh-copy-id -i ~/.ssh/id_ed25519.pub deploy@162.43.7.199"
+echo "=== 残りの手順（手動で実行してください）==="
 echo ""
-echo "3. .env ファイルを VPS に作成:"
-echo "   ssh deploy@162.43.7.199"
-echo "   nano /var/www/kicyoudaikou/.env"
+echo "1. VPS に .env ファイルを作成:"
+echo "   sudo -u deploy nano /var/www/kicyoudaikou/.env"
+echo "   （.env.production.example を参考に値を設定）"
 echo ""
-echo "4. post-receive フックを設置（ローカルPCで git push 後に自動実行）"
+echo "2. 初回ビルド＆起動:"
+echo "   sudo -u deploy bash -c 'cd /var/www/kicyoudaikou && npm ci && npx prisma generate && npm run build && npx prisma migrate deploy && pm2 start ecosystem.config.cjs'"
+echo ""
+echo "3. GitHub の Secrets を設定（Settings > Secrets and variables > Actions）:"
+echo "   VPS_HOST     = 162.43.7.199"
+echo "   VPS_USER     = deploy"
+echo "   VPS_PORT     = 22"
+echo "   VPS_SSH_KEY  = （SSHの秘密鍵の内容をコピペ）"
+echo ""
+echo "4. GitHub Actions 用の SSH キーを VPS に登録:"
+echo "   ssh-keygen -t ed25519 -C 'github-actions' -f ~/.ssh/github_actions"
+echo "   cat ~/.ssh/github_actions.pub >> /home/deploy/.ssh/authorized_keys"
+echo "   cat ~/.ssh/github_actions  # ← この内容を VPS_SSH_KEY に登録"
 echo ""
