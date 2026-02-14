@@ -30,10 +30,11 @@ interface Folder {
 function getFolderStatus(documents: FolderDocument[]): string {
   if (documents.length === 0) return "uploaded";
   const statuses = documents.map((d) => d.status);
-  // 優先度順: 処理中 > アップロード済 > OCR完了 > 仕訳済 > 確認済 > エクスポート済
+  // 優先度順: 処理中 > アップロード済 > OCR完了 > OCR確認完了 > 仕訳済 > 確認済 > エクスポート済
   if (statuses.some((s) => s === "ocr_processing")) return "ocr_processing";
   if (statuses.some((s) => s === "uploaded")) return "uploaded";
   if (statuses.some((s) => s === "ocr_complete")) return "ocr_complete";
+  if (statuses.some((s) => s === "ocr_confirmed")) return "ocr_confirmed";
   if (statuses.some((s) => s === "classified")) return "classified";
   if (statuses.some((s) => s === "reviewed")) return "reviewed";
   return "exported";

@@ -190,12 +190,20 @@ export default function FolderDetailPage({
 
       // OCR完了済みドキュメントの詳細を並列取得
       const ocrCompleteDocs = folderData.documents.filter(
-        (d: Document) => d.status === "ocr_complete" || d.status === "classified" || d.status === "reviewed" || d.status === "exported"
+        (d: Document) => d.status === "ocr_complete" || d.status === "ocr_confirmed" || d.status === "classified" || d.status === "reviewed" || d.status === "exported"
       );
       if (ocrCompleteDocs.length > 0) {
         setLoadingOcrDocs(true);
         await Promise.all(ocrCompleteDocs.map((d: Document) => fetchDocFullData(d.id)));
         setLoadingOcrDocs(false);
+
+        // ocr_confirmed 以降のドキュメントを fullyConfirmedDocIds に初期登録
+        const confirmedIds = folderData.documents
+          .filter((d: Document) => d.status !== "uploaded" && d.status !== "ocr_processing" && d.status !== "ocr_complete")
+          .map((d: Document) => d.id);
+        if (confirmedIds.length > 0) {
+          setFullyConfirmedDocIds(new Set(confirmedIds));
+        }
       }
 
       // uploaded状態のドキュメントの自動OCR
@@ -265,9 +273,30 @@ export default function FolderDetailPage({
     }
   };
 
-  /** 全ページ確認完了時: fullyConfirmedDocIds に追加 */
-  const handleAllPagesConfirmed = useCallback((docId: string) => {
+  /** 全ページ確認完了時: ステータスを ocr_confirmed に更新 */
+  const handleAllPagesConfirmed = useCallback(async (docId: string) => {
     setFullyConfirmedDocIds((prev) => new Set(prev).add(docId));
+
+    // ドキュメントのステータスを ocr_confirmed に更新
+    try {
+      await fetch(`/api/documents/${docId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "ocr_confirmed" }),
+      });
+      setFolder((prev) =>
+        prev
+          ? {
+              ...prev,
+              documents: prev.documents.map((d) =>
+                d.id === docId ? { ...d, status: "ocr_confirmed" } : d
+              ),
+            }
+          : null
+      );
+    } catch (error) {
+      console.error("Failed to update document status:", error);
+    }
   }, []);
 
   const getNextAction = (status: string, docId: string) => {
@@ -278,6 +307,8 @@ export default function FolderDetailPage({
         return { href: null, label: "処理中..." };
       case "ocr_complete":
         return { href: null, label: "" };
+      case "ocr_confirmed":
+        return { href: `/documents/${docId}/classify`, label: "仕訳分類" };
       case "classified":
         return { href: `/documents/${docId}/classify`, label: "仕訳確認" };
       case "reviewed":
