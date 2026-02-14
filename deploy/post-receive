@@ -1,0 +1,36 @@
+#!/bin/bash
+# post-receive hook: git push で自動デプロイ
+set -e
+
+APP_DIR="/var/www/kicyoudaikou"
+BARE_REPO="/home/deploy/repos/kicyoudaikou.git"
+
+echo "=== デプロイ開始 ==="
+
+# 最新コードをチェックアウト
+echo ">>> コードを展開中..."
+git --work-tree="$APP_DIR" --git-dir="$BARE_REPO" checkout -f
+
+cd "$APP_DIR"
+
+# 依存パッケージをインストール
+echo ">>> npm install..."
+npm ci --production=false
+
+# Prisma クライアント生成
+echo ">>> Prisma generate..."
+npx prisma generate
+
+# Next.js ビルド
+echo ">>> npm run build..."
+npm run build
+
+# DB マイグレーション
+echo ">>> Prisma migrate..."
+npx prisma migrate deploy
+
+# PM2 でアプリを再起動
+echo ">>> PM2 restart..."
+pm2 startOrRestart ecosystem.config.cjs --env production
+
+echo "=== デプロイ完了 ==="
