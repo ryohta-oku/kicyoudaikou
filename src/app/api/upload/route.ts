@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
           format: "JPEG",
           quality: 0.95,
         });
-        finalBuffer = Buffer.from(jpegData);
+        finalBuffer = Buffer.from(new Uint8Array(jpegData as ArrayBuffer));
         finalFilename = `${fileId}.jpg`;
         fileType = "jpeg";
 
