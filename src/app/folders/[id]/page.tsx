@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, use } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   FileText,
@@ -12,8 +13,10 @@ import {
   Download,
   FolderOpen,
   PlayCircle,
+  X,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
+import OCREditor, { type PageUpdateData } from "@/components/OCREditor";
 
 interface Document {
   id: string;
@@ -25,6 +28,29 @@ interface Document {
   createdAt: string;
   pages: { id: string }[];
   _count: { journalEntries: number };
+}
+
+interface Page {
+  id: string;
+  pageNumber: number;
+  imagePath: string;
+  ocrText: string;
+  correctedText: string;
+  isConfirmed: boolean;
+  date: string;
+  registrationNumber: string;
+  amount: string;
+  tax: string;
+  memo: string;
+}
+
+interface FullDocument {
+  id: string;
+  filename: string;
+  filepath: string;
+  fileType: string;
+  status: string;
+  pages: Page[];
 }
 
 interface Folder {
@@ -41,12 +67,17 @@ export default function FolderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const [folder, setFolder] = useState<Folder | null>(null);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [ocrProcessingIds, setOcrProcessingIds] = useState<Set<string>>(new Set());
   const [ocrErrors, setOcrErrors] = useState<Record<string, string>>({});
   const ocrStartedRef = useRef(false);
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  const [selectedDocData, setSelectedDocData] = useState<FullDocument | null>(null);
+  const [loadingDocData, setLoadingDocData] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
 
   const fetchFolder = useCallback(async () => {
     try {
@@ -176,6 +207,67 @@ export default function FolderDetailPage({
     await runOCR(docId);
   };
 
+  /** インラインOCRレビュー用: ドキュメント選択 */
+  const handleSelectForReview = async (docId: string) => {
+    if (selectedDocId === docId) {
+      setSelectedDocId(null);
+      setSelectedDocData(null);
+      return;
+    }
+    setSelectedDocId(docId);
+    setSelectedDocData(null);
+    setLoadingDocData(true);
+    try {
+      const res = await fetch(`/api/documents/${docId}`);
+      const data = await res.json();
+      if (data.document) {
+        setSelectedDocData(data.document);
+      }
+    } catch (error) {
+      console.error("Failed to fetch document:", error);
+    } finally {
+      setLoadingDocData(false);
+    }
+  };
+
+  /** エディタ表示時に自動スクロール */
+  useEffect(() => {
+    if ((selectedDocData || loadingDocData) && editorRef.current) {
+      editorRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [selectedDocData, loadingDocData]);
+
+  /** ページデータ保存 */
+  const handlePageUpdate = async (pageId: string, data: PageUpdateData) => {
+    const res = await fetch("/api/ocr/pages", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pageId, ...data }),
+    });
+    if (!res.ok) {
+      throw new Error("保存に失敗しました");
+    }
+  };
+
+  /** ページ確認 */
+  const handlePageConfirm = async (pageId: string) => {
+    const res = await fetch("/api/ocr/pages", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pageId, isConfirmed: true }),
+    });
+    if (!res.ok) {
+      throw new Error("確認に失敗しました");
+    }
+  };
+
+  /** 全ページ確認完了時 */
+  const handleAllPagesConfirmed = () => {
+    if (selectedDocId) {
+      router.push(`/documents/${selectedDocId}/classify`);
+    }
+  };
+
   const getNextAction = (status: string, docId: string) => {
     switch (status) {
       case "uploaded":
@@ -183,7 +275,7 @@ export default function FolderDetailPage({
       case "ocr_processing":
         return { href: null, label: "処理中..." };
       case "ocr_complete":
-        return { href: `/documents/${docId}/ocr-review`, label: "OCR確認" };
+        return { href: null, label: "OCR確認", action: () => handleSelectForReview(docId) };
       case "classified":
         return { href: `/documents/${docId}/classify`, label: "仕訳確認" };
       case "reviewed":
@@ -316,7 +408,7 @@ export default function FolderDetailPage({
                     doc.status === "reviewed" || doc.status === "exported";
                   const isProcessing = ocrProcessingIds.has(doc.id);
                   return (
-                    <tr key={doc.id} className="border-b hover:bg-gray-50">
+                    <tr key={doc.id} className={cn("border-b hover:bg-gray-50", selectedDocId === doc.id && "bg-blue-50")}>
                       {/* 作成日 */}
                       <td className="px-4 py-4 text-gray-600 whitespace-nowrap">
                         {new Date(doc.createdAt).toLocaleDateString("ja-JP")}
@@ -412,6 +504,44 @@ export default function FolderDetailPage({
               </tbody>
             </table>
           </div>
+
+          {/* インラインOCRエディタ */}
+          {selectedDocId && (
+            <div ref={editorRef} className="mt-6 bg-white rounded-xl border overflow-hidden">
+              <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
+                <h3 className="text-sm font-medium text-gray-700">
+                  OCR確認: {folder.documents.find((d) => d.id === selectedDocId)?.filename}
+                </h3>
+                <button
+                  onClick={() => { setSelectedDocId(null); setSelectedDocData(null); }}
+                  className="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-4">
+                {loadingDocData ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                    <span className="ml-2 text-sm text-gray-500">データを読み込み中...</span>
+                  </div>
+                ) : selectedDocData && selectedDocData.pages.length > 0 ? (
+                  <OCREditor
+                    pages={selectedDocData.pages}
+                    documentFileType={selectedDocData.fileType}
+                    documentFilepath={selectedDocData.filepath}
+                    onPageUpdate={handlePageUpdate}
+                    onPageConfirm={handlePageConfirm}
+                    onAllPagesConfirmed={handleAllPagesConfirmed}
+                  />
+                ) : selectedDocData ? (
+                  <div className="text-center py-12 text-gray-500">
+                    ページデータがありません
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
