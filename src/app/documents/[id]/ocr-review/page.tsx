@@ -216,6 +216,7 @@ export default function OCRReviewPage({ params }: { params: Promise<{ id: string
           documentFilepath={document.filepath}
           onPageUpdate={handlePageUpdate}
           onPageConfirm={handlePageConfirm}
+          onAllPagesConfirmed={() => router.push(`/documents/${id}/classify`)}
         />
       )}
 

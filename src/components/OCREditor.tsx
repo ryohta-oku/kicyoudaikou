@@ -25,6 +25,7 @@ interface OCREditorProps {
   documentFilepath: string;
   onPageUpdate: (pageId: string, data: PageUpdateData) => Promise<void>;
   onPageConfirm: (pageId: string) => Promise<void>;
+  onAllPagesConfirmed?: () => void;
 }
 
 export interface PageUpdateData {
@@ -42,6 +43,7 @@ export default function OCREditor({
   documentFilepath,
   onPageUpdate,
   onPageConfirm,
+  onAllPagesConfirmed,
 }: OCREditorProps) {
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [editedTexts, setEditedTexts] = useState<Record<string, string>>(() => {
@@ -113,7 +115,13 @@ export default function OCREditor({
     try {
       await onPageUpdate(pageId, getPageData(pageId));
       await onPageConfirm(pageId);
-      setConfirmedPages((prev) => ({ ...prev, [pageId]: true }));
+      setConfirmedPages((prev) => {
+        const updated = { ...prev, [pageId]: true };
+        if (onAllPagesConfirmed && pages.every((p) => updated[p.id])) {
+          onAllPagesConfirmed();
+        }
+        return updated;
+      });
     } finally {
       setSavingPages((prev) => ({ ...prev, [pageId]: false }));
     }
