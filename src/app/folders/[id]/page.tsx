@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, use } from "react";
+import { useEffect, useState, useCallback, useRef, use } from "react";
 import Link from "next/link";
 import {
   FileText,
@@ -11,6 +11,7 @@ import {
   Loader2,
   Download,
   FolderOpen,
+  PlayCircle,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 
@@ -43,22 +44,117 @@ export default function FolderDetailPage({
   const [folder, setFolder] = useState<Folder | null>(null);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [ocrProcessingIds, setOcrProcessingIds] = useState<Set<string>>(new Set());
+  const [ocrErrors, setOcrErrors] = useState<Record<string, string>>({});
+  const ocrStartedRef = useRef(false);
 
   const fetchFolder = useCallback(async () => {
     try {
       const res = await fetch(`/api/folders/${id}`);
       const data = await res.json();
       setFolder(data.folder || null);
+      return data.folder as Folder | null;
     } catch (error) {
       console.error("Failed to fetch folder:", error);
+      return null;
     } finally {
       setLoading(false);
     }
   }, [id]);
 
+  /** 1件のドキュメントのOCRを実行 */
+  const runOCR = useCallback(async (docId: string) => {
+    setOcrProcessingIds((prev) => new Set(prev).add(docId));
+    setOcrErrors((prev) => {
+      const next = { ...prev };
+      delete next[docId];
+      return next;
+    });
+
+    // ステータスをUIで即座に反映
+    setFolder((prev) =>
+      prev
+        ? {
+            ...prev,
+            documents: prev.documents.map((d) =>
+              d.id === docId ? { ...d, status: "ocr_processing" } : d
+            ),
+          }
+        : null
+    );
+
+    try {
+      const res = await fetch("/api/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId: docId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const detail = data.detail ? ` (${data.detail})` : "";
+        throw new Error(`${data.error || "OCR処理に失敗しました"}${detail}`);
+      }
+
+      // 成功: ステータスを更新
+      setFolder((prev) =>
+        prev
+          ? {
+              ...prev,
+              documents: prev.documents.map((d) =>
+                d.id === docId ? { ...d, status: "ocr_complete" } : d
+              ),
+            }
+          : null
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "OCR失敗";
+      setOcrErrors((prev) => ({ ...prev, [docId]: message }));
+
+      // エラー: ステータスをuploadedに戻す
+      setFolder((prev) =>
+        prev
+          ? {
+              ...prev,
+              documents: prev.documents.map((d) =>
+                d.id === docId ? { ...d, status: "uploaded" } : d
+              ),
+            }
+          : null
+      );
+    } finally {
+      setOcrProcessingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(docId);
+        return next;
+      });
+    }
+  }, []);
+
+  /** uploaded状態のドキュメントを順次OCR実行 */
+  const startAutoOCR = useCallback(
+    async (docs: Document[]) => {
+      const uploadedDocs = docs.filter((d) => d.status === "uploaded");
+      for (const doc of uploadedDocs) {
+        await runOCR(doc.id);
+      }
+    },
+    [runOCR]
+  );
+
+  // 初回ロード時に自動OCR開始
   useEffect(() => {
-    fetchFolder();
-  }, [fetchFolder]);
+    fetchFolder().then((folderData) => {
+      if (folderData && !ocrStartedRef.current) {
+        const uploadedDocs = folderData.documents.filter(
+          (d: Document) => d.status === "uploaded"
+        );
+        if (uploadedDocs.length > 0) {
+          ocrStartedRef.current = true;
+          startAutoOCR(folderData.documents);
+        }
+      }
+    });
+  }, [fetchFolder, startAutoOCR]);
 
   const handleDeleteDocument = async (docId: string) => {
     if (!confirm("このドキュメントを削除してもよろしいですか？")) return;
@@ -75,12 +171,17 @@ export default function FolderDetailPage({
     }
   };
 
+  /** 手動でOCRを再実行 */
+  const handleManualOCR = async (docId: string) => {
+    await runOCR(docId);
+  };
+
   const getNextAction = (status: string, docId: string) => {
     switch (status) {
       case "uploaded":
-        return { href: `/documents/${docId}/ocr-review`, label: "OCR処理開始" };
+        return { href: null, label: "OCR処理開始", action: () => handleManualOCR(docId) };
       case "ocr_processing":
-        return { href: `/documents/${docId}/ocr-review`, label: "処理中..." };
+        return { href: null, label: "処理中..." };
       case "ocr_complete":
         return { href: `/documents/${docId}/ocr-review`, label: "OCR確認" };
       case "classified":
@@ -93,6 +194,14 @@ export default function FolderDetailPage({
         return { href: `/documents/${docId}/ocr-review`, label: "確認" };
     }
   };
+
+  const isAnyProcessing = ocrProcessingIds.size > 0;
+  const processedCount = folder
+    ? folder.documents.filter(
+        (d) => d.status !== "uploaded" && d.status !== "ocr_processing"
+      ).length
+    : 0;
+  const totalCount = folder?.documents.length || 0;
 
   if (loading) {
     return (
@@ -133,6 +242,42 @@ export default function FolderDetailPage({
         </span>
       </div>
 
+      {/* OCR処理中バナー */}
+      {isAnyProcessing && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
+          <Loader2 className="w-5 h-5 animate-spin text-blue-600 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-blue-900">
+              OCR処理中... ({processedCount}/{totalCount} 完了)
+            </p>
+            <p className="text-xs text-blue-700 mt-0.5">
+              処理が完了するまでこのページでお待ちください
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* OCRエラー表示 */}
+      {Object.keys(ocrErrors).length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-sm font-medium text-red-900 mb-2">OCR処理でエラーが発生しました</p>
+          {Object.entries(ocrErrors).map(([docId, error]) => {
+            const doc = folder.documents.find((d) => d.id === docId);
+            return (
+              <div key={docId} className="flex items-center justify-between text-xs text-red-700 py-1">
+                <span>{doc?.filename || docId}: {error}</span>
+                <button
+                  onClick={() => handleManualOCR(docId)}
+                  className="text-red-600 hover:text-red-800 font-medium ml-2"
+                >
+                  再試行
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* ドキュメント一覧 */}
       {folder.documents.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-xl border">
@@ -169,6 +314,7 @@ export default function FolderDetailPage({
                   const nextAction = getNextAction(doc.status, doc.id);
                   const canExport =
                     doc.status === "reviewed" || doc.status === "exported";
+                  const isProcessing = ocrProcessingIds.has(doc.id);
                   return (
                     <tr key={doc.id} className="border-b hover:bg-gray-50">
                       {/* 作成日 */}
@@ -186,15 +332,22 @@ export default function FolderDetailPage({
                       </td>
                       {/* ステータス */}
                       <td className="px-4 py-4">
-                        <span
-                          className={cn(
-                            "inline-flex px-2.5 py-1 rounded-full text-xs font-medium",
-                            STATUS_COLORS[doc.status] ||
-                              "bg-gray-100 text-gray-800"
+                        <div className="flex items-center gap-2">
+                          {isProcessing && (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
                           )}
-                        >
-                          {STATUS_LABELS[doc.status] || doc.status}
-                        </span>
+                          <span
+                            className={cn(
+                              "inline-flex px-2.5 py-1 rounded-full text-xs font-medium",
+                              STATUS_COLORS[doc.status] ||
+                                "bg-gray-100 text-gray-800"
+                            )}
+                          >
+                            {isProcessing
+                              ? "OCR処理中..."
+                              : STATUS_LABELS[doc.status] || doc.status}
+                          </span>
+                        </div>
                       </td>
                       {/* エクスポート */}
                       <td className="px-4 py-4 text-center">
@@ -213,20 +366,36 @@ export default function FolderDetailPage({
                       {/* 操作 */}
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-center gap-2">
-                          <Link
-                            href={nextAction.href}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          >
-                            {doc.status === "uploaded" ? (
-                              <Eye className="w-4 h-4" />
-                            ) : (
+                          {nextAction.href ? (
+                            <Link
+                              href={nextAction.href}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
                               <ArrowRight className="w-4 h-4" />
-                            )}
-                            {nextAction.label}
-                          </Link>
+                              {nextAction.label}
+                            </Link>
+                          ) : nextAction.action ? (
+                            <button
+                              onClick={nextAction.action}
+                              disabled={isProcessing}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              {isProcessing ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <PlayCircle className="w-4 h-4" />
+                              )}
+                              {nextAction.label}
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-400">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              {nextAction.label}
+                            </span>
+                          )}
                           <button
                             onClick={() => handleDeleteDocument(doc.id)}
-                            disabled={deletingId === doc.id}
+                            disabled={deletingId === doc.id || isProcessing}
                             className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                           >
                             {deletingId === doc.id ? (

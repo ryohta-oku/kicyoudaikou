@@ -40,7 +40,7 @@ function isImageFile(file: File): boolean {
   return ext === "heic" || ext === "heif";
 }
 
-type FileStatus = "pending" | "uploading" | "uploaded" | "ocr_processing" | "ocr_complete" | "error";
+type FileStatus = "pending" | "uploading" | "uploaded" | "error";
 
 interface FileItem {
   file: File;
@@ -50,8 +50,8 @@ interface FileItem {
 }
 
 interface FileUploadProps {
-  /** 一括アップロード完了コールバック（ドキュメントIDの配列を返す） */
-  onBulkUploadComplete?: (documentIds: string[]) => void;
+  /** 一括アップロード完了コールバック（フォルダIDとドキュメントIDの配列を返す） */
+  onBulkUploadComplete?: (folderId: string, documentIds: string[]) => void;
   /** 単体アップロード完了コールバック（後方互換） */
   onUploadComplete?: (documentId: string) => void;
 }
@@ -148,20 +148,6 @@ export default function FileUpload({
     return data.document.id;
   };
 
-  /** 1ファイルのOCRを実行 */
-  const runOCR = async (documentId: string): Promise<void> => {
-    const res = await fetch("/api/ocr", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ documentId }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      const detail = data.detail ? ` (${data.detail})` : "";
-      throw new Error(`${data.error || "OCR処理に失敗しました"}${detail}`);
-    }
-  };
-
   const updateFileStatus = (
     index: number,
     updates: Partial<FileItem>
@@ -171,7 +157,7 @@ export default function FileUpload({
     );
   };
 
-  /** 一括アップロード → 順次OCR（自動実行） */
+  /** 一括アップロード（OCRはフォルダ詳細ページで自動実行） */
   const handleBulkProcess = async () => {
     if (files.length === 0) return;
 
@@ -182,10 +168,11 @@ export default function FileUpload({
     setError(null);
 
     const documentIds: string[] = [];
+    let folderId: string | null = null;
 
     try {
       // Step 0: フォルダを作成
-      const folderId = await createFolder(name);
+      folderId = await createFolder(name);
 
       // Step 1: 全ファイルをアップロード
       for (let i = 0; i < files.length; i++) {
@@ -202,48 +189,27 @@ export default function FileUpload({
           });
         }
       }
-
-      // Step 2: アップロード成功したファイルのOCRを順次自動実行
-      for (let i = 0; i < files.length; i++) {
-        const currentFile = await new Promise<FileItem>((resolve) => {
-          setFiles((prev) => {
-            resolve(prev[i]);
-            return prev;
-          });
-        });
-
-        if (currentFile.status !== "uploaded" || !currentFile.documentId) continue;
-
-        updateFileStatus(i, { status: "ocr_processing" });
-        try {
-          await runOCR(currentFile.documentId);
-          updateFileStatus(i, { status: "ocr_complete" });
-        } catch (err) {
-          updateFileStatus(i, {
-            status: "error",
-            error: err instanceof Error ? err.message : "OCR失敗",
-          });
-        }
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "処理に失敗しました");
     }
 
     setIsProcessing(false);
 
-    // コールバック
-    if (documentIds.length === 1 && onUploadComplete) {
-      onUploadComplete(documentIds[0]);
-    }
-    if (onBulkUploadComplete && documentIds.length > 0) {
-      onBulkUploadComplete(documentIds);
+    // コールバック（フォルダページへの遷移をトリガー）
+    if (folderId && documentIds.length > 0) {
+      if (documentIds.length === 1 && onUploadComplete) {
+        onUploadComplete(documentIds[0]);
+      }
+      if (onBulkUploadComplete) {
+        onBulkUploadComplete(folderId, documentIds);
+      }
     }
   };
 
   const hasPendingFiles = files.some((f) => f.status === "pending");
 
   const doneCount = files.filter(
-    (f) => f.status === "ocr_complete"
+    (f) => f.status === "uploaded"
   ).length;
   const errorCount = files.filter((f) => f.status === "error").length;
 
@@ -254,10 +220,6 @@ export default function FileUpload({
       case "uploading":
         return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />;
       case "uploaded":
-        return <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />;
-      case "ocr_processing":
-        return <Loader2 className="w-4 h-4 animate-spin text-orange-500" />;
-      case "ocr_complete":
         return <CheckCircle2 className="w-4 h-4 text-green-500" />;
       case "error":
         return <AlertCircle className="w-4 h-4 text-red-500" />;
@@ -271,10 +233,6 @@ export default function FileUpload({
       case "uploading":
         return "アップロード中...";
       case "uploaded":
-        return "OCR待ち";
-      case "ocr_processing":
-        return "OCR処理中...";
-      case "ocr_complete":
         return "完了";
       case "error":
         return "エラー";
@@ -361,7 +319,7 @@ export default function FileUpload({
                     "whitespace-nowrap",
                     item.status === "error"
                       ? "text-red-600"
-                      : item.status === "ocr_complete"
+                      : item.status === "uploaded"
                       ? "text-green-600"
                       : "text-gray-500"
                   )}

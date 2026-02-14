@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   FolderOpen,
@@ -39,6 +40,7 @@ function getFolderStatus(documents: FolderDocument[]): string {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
@@ -60,9 +62,9 @@ export default function DashboardPage() {
     fetchFolders();
   }, [fetchFolders]);
 
-  const handleBulkUploadComplete = () => {
-    fetchFolders();
-    setShowUpload(false);
+  const handleBulkUploadComplete = (folderId: string) => {
+    // アップロード完了後、フォルダ詳細ページへ遷移（OCRはそこで自動開始）
+    router.push(`/folders/${folderId}`);
   };
 
   const handleDelete = async (id: string) => {
