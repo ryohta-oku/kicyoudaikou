@@ -1,19 +1,16 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, use } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   FileText,
   ArrowLeft,
-  Eye,
   ArrowRight,
   Trash2,
   Loader2,
   Download,
   FolderOpen,
   PlayCircle,
-  X,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import OCREditor, { type PageUpdateData } from "@/components/OCREditor";
@@ -67,17 +64,15 @@ export default function FolderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const router = useRouter();
   const [folder, setFolder] = useState<Folder | null>(null);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [ocrProcessingIds, setOcrProcessingIds] = useState<Set<string>>(new Set());
   const [ocrErrors, setOcrErrors] = useState<Record<string, string>>({});
   const ocrStartedRef = useRef(false);
-  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
-  const [selectedDocData, setSelectedDocData] = useState<FullDocument | null>(null);
-  const [loadingDocData, setLoadingDocData] = useState(false);
-  const editorRef = useRef<HTMLDivElement>(null);
+  const [ocrDocsData, setOcrDocsData] = useState<Record<string, FullDocument>>({});
+  const [loadingOcrDocs, setLoadingOcrDocs] = useState(false);
+  const [fullyConfirmedDocIds, setFullyConfirmedDocIds] = useState<Set<string>>(new Set());
 
   const fetchFolder = useCallback(async () => {
     try {
@@ -92,6 +87,19 @@ export default function FolderDetailPage({
       setLoading(false);
     }
   }, [id]);
+
+  /** 1件のドキュメント詳細を取得し ocrDocsData に追加 */
+  const fetchDocFullData = useCallback(async (docId: string) => {
+    try {
+      const res = await fetch(`/api/documents/${docId}`);
+      const data = await res.json();
+      if (data.document) {
+        setOcrDocsData((prev) => ({ ...prev, [docId]: data.document }));
+      }
+    } catch (error) {
+      console.error("Failed to fetch document:", error);
+    }
+  }, []);
 
   /** 1件のドキュメントのOCRを実行 */
   const runOCR = useCallback(async (docId: string) => {
@@ -137,6 +145,9 @@ export default function FolderDetailPage({
             }
           : null
       );
+
+      // OCR完了したドキュメントの詳細を取得してリストに追加
+      await fetchDocFullData(docId);
     } catch (err) {
       const message = err instanceof Error ? err.message : "OCR失敗";
       setOcrErrors((prev) => ({ ...prev, [docId]: message }));
@@ -159,7 +170,7 @@ export default function FolderDetailPage({
         return next;
       });
     }
-  }, []);
+  }, [fetchDocFullData]);
 
   /** uploaded状態のドキュメントを順次OCR実行 */
   const startAutoOCR = useCallback(
@@ -172,10 +183,23 @@ export default function FolderDetailPage({
     [runOCR]
   );
 
-  // 初回ロード時に自動OCR開始
+  // 初回ロード時に自動OCR開始 & OCR完了ドキュメントの詳細を一括取得
   useEffect(() => {
-    fetchFolder().then((folderData) => {
-      if (folderData && !ocrStartedRef.current) {
+    fetchFolder().then(async (folderData) => {
+      if (!folderData) return;
+
+      // OCR完了済みドキュメントの詳細を並列取得
+      const ocrCompleteDocs = folderData.documents.filter(
+        (d: Document) => d.status === "ocr_complete" || d.status === "classified" || d.status === "reviewed" || d.status === "exported"
+      );
+      if (ocrCompleteDocs.length > 0) {
+        setLoadingOcrDocs(true);
+        await Promise.all(ocrCompleteDocs.map((d: Document) => fetchDocFullData(d.id)));
+        setLoadingOcrDocs(false);
+      }
+
+      // uploaded状態のドキュメントの自動OCR
+      if (!ocrStartedRef.current) {
         const uploadedDocs = folderData.documents.filter(
           (d: Document) => d.status === "uploaded"
         );
@@ -185,7 +209,7 @@ export default function FolderDetailPage({
         }
       }
     });
-  }, [fetchFolder, startAutoOCR]);
+  }, [fetchFolder, startAutoOCR, fetchDocFullData]);
 
   const handleDeleteDocument = async (docId: string) => {
     if (!confirm("このドキュメントを削除してもよろしいですか？")) return;
@@ -197,6 +221,16 @@ export default function FolderDetailPage({
           ? { ...prev, documents: prev.documents.filter((d) => d.id !== docId) }
           : null
       );
+      setOcrDocsData((prev) => {
+        const next = { ...prev };
+        delete next[docId];
+        return next;
+      });
+      setFullyConfirmedDocIds((prev) => {
+        const next = new Set(prev);
+        next.delete(docId);
+        return next;
+      });
     } finally {
       setDeletingId(null);
     }
@@ -206,36 +240,6 @@ export default function FolderDetailPage({
   const handleManualOCR = async (docId: string) => {
     await runOCR(docId);
   };
-
-  /** インラインOCRレビュー用: ドキュメント選択 */
-  const handleSelectForReview = async (docId: string) => {
-    if (selectedDocId === docId) {
-      setSelectedDocId(null);
-      setSelectedDocData(null);
-      return;
-    }
-    setSelectedDocId(docId);
-    setSelectedDocData(null);
-    setLoadingDocData(true);
-    try {
-      const res = await fetch(`/api/documents/${docId}`);
-      const data = await res.json();
-      if (data.document) {
-        setSelectedDocData(data.document);
-      }
-    } catch (error) {
-      console.error("Failed to fetch document:", error);
-    } finally {
-      setLoadingDocData(false);
-    }
-  };
-
-  /** エディタ表示時に自動スクロール */
-  useEffect(() => {
-    if ((selectedDocData || loadingDocData) && editorRef.current) {
-      editorRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, [selectedDocData, loadingDocData]);
 
   /** ページデータ保存 */
   const handlePageUpdate = async (pageId: string, data: PageUpdateData) => {
@@ -261,12 +265,10 @@ export default function FolderDetailPage({
     }
   };
 
-  /** 全ページ確認完了時 */
-  const handleAllPagesConfirmed = () => {
-    if (selectedDocId) {
-      router.push(`/documents/${selectedDocId}/classify`);
-    }
-  };
+  /** 全ページ確認完了時: fullyConfirmedDocIds に追加 */
+  const handleAllPagesConfirmed = useCallback((docId: string) => {
+    setFullyConfirmedDocIds((prev) => new Set(prev).add(docId));
+  }, []);
 
   const getNextAction = (status: string, docId: string) => {
     switch (status) {
@@ -275,7 +277,7 @@ export default function FolderDetailPage({
       case "ocr_processing":
         return { href: null, label: "処理中..." };
       case "ocr_complete":
-        return { href: null, label: "OCR確認", action: () => handleSelectForReview(docId) };
+        return { href: null, label: "" };
       case "classified":
         return { href: `/documents/${docId}/classify`, label: "仕訳確認" };
       case "reviewed":
@@ -408,7 +410,7 @@ export default function FolderDetailPage({
                     doc.status === "reviewed" || doc.status === "exported";
                   const isProcessing = ocrProcessingIds.has(doc.id);
                   return (
-                    <tr key={doc.id} className={cn("border-b hover:bg-gray-50", selectedDocId === doc.id && "bg-blue-50")}>
+                    <tr key={doc.id} className="border-b hover:bg-gray-50">
                       {/* 作成日 */}
                       <td className="px-4 py-4 text-gray-600 whitespace-nowrap">
                         {new Date(doc.createdAt).toLocaleDateString("ja-JP")}
@@ -458,7 +460,7 @@ export default function FolderDetailPage({
                       {/* 操作 */}
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-center gap-2">
-                          {nextAction.href ? (
+                          {nextAction.label === "" ? null : nextAction.href ? (
                             <Link
                               href={nextAction.href}
                               className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -505,43 +507,61 @@ export default function FolderDetailPage({
             </table>
           </div>
 
-          {/* インラインOCRエディタ */}
-          {selectedDocId && (
-            <div ref={editorRef} className="mt-6 bg-white rounded-xl border overflow-hidden">
-              <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
-                <h3 className="text-sm font-medium text-gray-700">
-                  OCR確認: {folder.documents.find((d) => d.id === selectedDocId)?.filename}
-                </h3>
-                <button
-                  onClick={() => { setSelectedDocId(null); setSelectedDocData(null); }}
-                  className="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="p-4">
-                {loadingDocData ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                    <span className="ml-2 text-sm text-gray-500">データを読み込み中...</span>
+        </div>
+      )}
+
+      {/* OCR内容確認セクション */}
+      {folder.documents.some((d) => ocrDocsData[d.id]) && (
+        <section className="space-y-4">
+          <h2 className="text-lg font-bold text-gray-900">OCR内容確認</h2>
+          {folder.documents
+            .filter((d) => ocrDocsData[d.id])
+            .map((doc) => {
+              const fullDoc = ocrDocsData[doc.id];
+              return (
+                <div key={doc.id} className="bg-white rounded-xl border overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-red-500" />
+                      <h3 className="text-sm font-medium text-gray-700">{doc.filename}</h3>
+                    </div>
+                    {fullyConfirmedDocIds.has(doc.id) && (
+                      <Link
+                        href={`/documents/${doc.id}/classify`}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      >
+                        仕訳分類へ
+                        <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    )}
                   </div>
-                ) : selectedDocData && selectedDocData.pages.length > 0 ? (
-                  <OCREditor
-                    pages={selectedDocData.pages}
-                    documentFileType={selectedDocData.fileType}
-                    documentFilepath={selectedDocData.filepath}
-                    onPageUpdate={handlePageUpdate}
-                    onPageConfirm={handlePageConfirm}
-                    onAllPagesConfirmed={handleAllPagesConfirmed}
-                  />
-                ) : selectedDocData ? (
-                  <div className="text-center py-12 text-gray-500">
-                    ページデータがありません
+                  <div className="p-4">
+                    {fullDoc.pages.length > 0 ? (
+                      <OCREditor
+                        pages={fullDoc.pages}
+                        documentFileType={fullDoc.fileType}
+                        documentFilepath={fullDoc.filepath}
+                        onPageUpdate={handlePageUpdate}
+                        onPageConfirm={handlePageConfirm}
+                        onAllPagesConfirmed={() => handleAllPagesConfirmed(doc.id)}
+                      />
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        ページデータがありません
+                      </div>
+                    )}
                   </div>
-                ) : null}
-              </div>
-            </div>
-          )}
+                </div>
+              );
+            })}
+        </section>
+      )}
+
+      {/* OCRデータ読み込み中 */}
+      {loadingOcrDocs && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+          <span className="ml-2 text-sm text-gray-500">OCRデータを読み込み中...</span>
         </div>
       )}
     </div>
