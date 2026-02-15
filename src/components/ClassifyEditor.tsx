@@ -274,12 +274,12 @@ export default function ClassifyEditor({
                   {/* AIが選んだコードがマスターにない場合も選択肢に表示 */}
                   {currentEntry.accountCode && !accounts.find((a) => a.code === currentEntry.accountCode) && (
                     <option value={currentEntry.accountCode}>
-                      {currentEntry.accountCode}: {currentEntry.accountName}
+                      {currentEntry.accountName || currentEntry.accountCode}
                     </option>
                   )}
                   {accounts.map((a) => (
                     <option key={a.code} value={a.code}>
-                      {a.code}: {a.name}（{a.category}）
+                      {a.name}
                     </option>
                   ))}
                 </select>
