@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 
-const publicPaths = ["/login"];
+const publicPaths = ["/login", "/setup-password"];
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const { status } = useSession();

@@ -55,9 +55,9 @@ export default function AdminPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
-  const [addPassword, setAddPassword] = useState("");
   const [addRole, setAddRole] = useState("user");
   const [adding, setAdding] = useState(false);
+  const [setupUrl, setSetupUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "authenticated" && !isAdminOrInstructor) {
@@ -184,12 +184,13 @@ export default function AdminPage() {
     e.preventDefault();
     setAdding(true);
     setMessage(null);
+    setSetupUrl(null);
 
     try {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: addName.trim(), email: addEmail.trim(), password: addPassword, role: addRole }),
+        body: JSON.stringify({ name: addName.trim(), email: addEmail.trim(), role: addRole }),
       });
       const data = await res.json();
 
@@ -202,9 +203,15 @@ export default function AdminPage() {
       setShowAddForm(false);
       setAddName("");
       setAddEmail("");
-      setAddPassword("");
       setAddRole("user");
-      setMessage({ type: "success", text: `「${data.user.name}」を追加しました` });
+
+      if (data.emailSent) {
+        setMessage({ type: "success", text: `「${data.user.name}」を追加しました。招待メールを送信しました。` });
+      } else if (data.setupUrl) {
+        // SMTP未設定時：URLを表示
+        setSetupUrl(data.setupUrl);
+        setMessage({ type: "success", text: `「${data.user.name}」を追加しました。SMTP未設定のため、以下のURLをご本人にお伝えください。` });
+      }
     } catch {
       setMessage({ type: "error", text: "追加に失敗しました" });
     } finally {
@@ -241,6 +248,25 @@ export default function AdminPage() {
           <p className={cn("text-sm", message.type === "success" ? "text-green-700" : "text-red-700")}>
             {message.text}
           </p>
+          {setupUrl && (
+            <div className="mt-3 p-3 bg-white border border-green-300 rounded-lg">
+              <p className="text-xs text-gray-500 mb-1">パスワード設定URL（ご本人にお伝えください）:</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs bg-gray-50 px-3 py-2 rounded border break-all select-all">
+                  {setupUrl}
+                </code>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(setupUrl);
+                    setMessage({ type: "success", text: "URLをコピーしました" });
+                  }}
+                  className="shrink-0 px-3 py-2 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                >
+                  コピー
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -276,17 +302,6 @@ export default function AdminPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">パスワード</label>
-                <input
-                  type="text"
-                  required
-                  value={addPassword}
-                  onChange={(e) => setAddPassword(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="6文字以上"
-                />
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">権限</label>
                 <select
                   value={addRole}
@@ -310,7 +325,7 @@ export default function AdminPage() {
               </button>
               <button
                 type="button"
-                onClick={() => { setShowAddForm(false); setAddName(""); setAddEmail(""); setAddPassword(""); setAddRole("user"); }}
+                onClick={() => { setShowAddForm(false); setAddName(""); setAddEmail(""); setAddRole("user"); }}
                 className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
               >
                 キャンセル

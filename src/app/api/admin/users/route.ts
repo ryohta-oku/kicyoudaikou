@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { sendInviteEmail } from "@/lib/email";
 
 async function requireAdminOrInstructor() {
   const session = await auth();
@@ -30,20 +32,16 @@ export async function GET() {
   }
 }
 
-// ユーザー新規作成
+// ユーザー新規作成（招待メール送信）
 export async function POST(request: NextRequest) {
   const { error } = await requireAdminOrInstructor();
   if (error) return error;
 
   try {
-    const { email, password, name, role } = await request.json();
+    const { email, name, role } = await request.json();
 
-    if (!email || !password || !name) {
-      return NextResponse.json({ error: "全ての項目を入力してください" }, { status: 400 });
-    }
-
-    if (password.length < 6) {
-      return NextResponse.json({ error: "パスワードは6文字以上で入力してください" }, { status: 400 });
+    if (!email || !name) {
+      return NextResponse.json({ error: "名前とメールアドレスを入力してください" }, { status: 400 });
     }
 
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -52,14 +50,32 @@ export async function POST(request: NextRequest) {
     }
 
     const userRole = ["admin", "instructor", "user"].includes(role) ? role : "user";
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const inviteToken = randomUUID();
+    const inviteTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24時間後
+
+    // パスワード未設定状態で作成（ログイン不可）
+    const placeholderPassword = await bcrypt.hash(randomUUID(), 10);
 
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, plainPassword: password, name, role: userRole },
+      data: {
+        email,
+        password: placeholderPassword,
+        name,
+        role: userRole,
+        inviteToken,
+        inviteTokenExpiry,
+      },
       select: { id: true, email: true, name: true, role: true, plainPassword: true, createdAt: true },
     });
 
-    return NextResponse.json({ user });
+    // 招待メール送信
+    const emailResult = await sendInviteEmail(email, name, inviteToken);
+
+    return NextResponse.json({
+      user,
+      emailSent: !emailResult.consoleOnly,
+      setupUrl: emailResult.consoleOnly ? emailResult.setupUrl : undefined,
+    });
   } catch (err) {
     console.error("Admin user create error:", err);
     return NextResponse.json({ error: "作成に失敗しました" }, { status: 500 });
