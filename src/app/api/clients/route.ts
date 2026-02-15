@@ -82,8 +82,8 @@ export async function DELETE(request: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
     }
-    if (session.user.role !== "admin") {
-      return NextResponse.json({ error: "管理者権限が必要です" }, { status: 403 });
+    if (session.user.role !== "admin" && session.user.role !== "instructor") {
+      return NextResponse.json({ error: "管理者または指導者権限が必要です" }, { status: 403 });
     }
 
     const { id } = await request.json();

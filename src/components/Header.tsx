@@ -253,7 +253,10 @@ export default function Header() {
             <div className="flex items-center gap-3 pl-3 border-l border-gray-200">
               <div className="flex items-center gap-1.5 text-sm text-gray-600">
                 {session.user.role === "admin" && (
-                  <Shield className="h-4 w-4 text-amber-500" />
+                  <Shield className="h-4 w-4 text-amber-500" title="管理者" />
+                )}
+                {session.user.role === "instructor" && (
+                  <Shield className="h-4 w-4 text-green-500" title="指導者" />
                 )}
                 <span className="max-w-[120px] truncate">{session.user.email}</span>
               </div>

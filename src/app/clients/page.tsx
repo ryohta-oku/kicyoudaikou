@@ -23,7 +23,7 @@ interface ClientWithCounts {
 
 export default function ClientsPage() {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "admin";
+  const canDelete = session?.user?.role === "admin" || session?.user?.role === "instructor";
   const [clients, setClients] = useState<ClientWithCounts[]>([]);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -248,7 +248,7 @@ export default function ClientsPage() {
                 <th className="px-6 py-3 text-left font-medium text-gray-600">得意先名</th>
                 <th className="px-6 py-3 text-left font-medium text-gray-600">フォルダ数</th>
                 <th className="px-6 py-3 text-left font-medium text-gray-600">補助科目数</th>
-                {isAdmin && (
+                {canDelete && (
                   <th className="px-6 py-3 text-left font-medium text-gray-600">操作</th>
                 )}
               </tr>
@@ -261,7 +261,7 @@ export default function ClientsPage() {
                     <td className="px-6 py-3 font-medium text-gray-900">{client.name}</td>
                     <td className="px-6 py-3 text-gray-500">{client._count.folders}</td>
                     <td className="px-6 py-3 text-gray-500">{client._count.subAccounts}</td>
-                    {isAdmin && (
+                    {canDelete && (
                       <td className="px-6 py-3">
                         <button
                           onClick={() => handleDelete(client)}
