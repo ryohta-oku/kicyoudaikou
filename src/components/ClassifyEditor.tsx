@@ -254,22 +254,6 @@ export default function ClassifyEditor({
               </div>
             </div>
             <div className="p-4 space-y-3">
-              {/* 日付 */}
-              <FieldRow
-                label="日付"
-                value={String(getFieldValue("date"))}
-                placeholder="YYYY-MM-DD"
-                disabled={isDisabled}
-                onChange={(v) => handleFieldChange("date", v)}
-              />
-              {/* 摘要 */}
-              <FieldRow
-                label="摘要"
-                value={String(getFieldValue("description"))}
-                placeholder="取引の説明"
-                disabled={isDisabled}
-                onChange={(v) => handleFieldChange("description", v)}
-              />
               {/* 勘定科目 */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">勘定科目</label>
@@ -287,6 +271,12 @@ export default function ClassifyEditor({
                   className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
                 >
                   <option value="">-- 選択してください --</option>
+                  {/* AIが選んだコードがマスターにない場合も選択肢に表示 */}
+                  {currentEntry.accountCode && !accounts.find((a) => a.code === currentEntry.accountCode) && (
+                    <option value={currentEntry.accountCode}>
+                      {currentEntry.accountCode}: {currentEntry.accountName}
+                    </option>
+                  )}
                   {accounts.map((a) => (
                     <option key={a.code} value={a.code}>
                       {a.code}: {a.name}（{a.category}）
@@ -326,22 +316,6 @@ export default function ClassifyEditor({
                   />
                 )}
               </div>
-              {/* 借方金額 */}
-              <FieldRow
-                label="借方金額"
-                value={String(getFieldValue("debitAmount"))}
-                placeholder="0"
-                disabled={isDisabled}
-                onChange={(v) => handleFieldChange("debitAmount", v)}
-              />
-              {/* 貸方金額 */}
-              <FieldRow
-                label="貸方金額"
-                value={String(getFieldValue("creditAmount"))}
-                placeholder="0"
-                disabled={isDisabled}
-                onChange={(v) => handleFieldChange("creditAmount", v)}
-              />
               {/* 税率区分 */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">税率区分</label>
@@ -418,30 +392,3 @@ export default function ClassifyEditor({
   );
 }
 
-function FieldRow({
-  label,
-  value,
-  placeholder,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  disabled: boolean;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-        placeholder={placeholder}
-      />
-    </div>
-  );
-}
