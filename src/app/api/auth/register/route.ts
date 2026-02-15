@@ -4,12 +4,19 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, name } = await request.json();
+    const { email, password, name, inviteCode } = await request.json();
 
-    if (!email || !password || !name) {
+    if (!email || !password || !name || !inviteCode) {
       return NextResponse.json(
         { error: "全ての項目を入力してください" },
         { status: 400 }
+      );
+    }
+
+    if (inviteCode !== process.env.INVITE_CODE) {
+      return NextResponse.json(
+        { error: "招待コードが正しくありません" },
+        { status: 403 }
       );
     }
 
