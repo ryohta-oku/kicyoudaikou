@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Building2, AlertTriangle, ArrowRightLeft } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { Loader2, Building2, AlertTriangle, ArrowRightLeft, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Client {
@@ -21,10 +22,13 @@ interface ClientWithCounts {
 }
 
 export default function ClientsPage() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "admin";
   const [clients, setClients] = useState<ClientWithCounts[]>([]);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [merging, setMerging] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   // 各グループで選択中の統合先ID
   const [selectedTargets, setSelectedTargets] = useState<Record<string, string>>({});
@@ -96,6 +100,36 @@ export default function ClientsPage() {
       setMessage({ type: "error", text: msg });
     } finally {
       setMerging(null);
+    }
+  };
+
+  const handleDelete = async (client: ClientWithCounts) => {
+    if (!confirm(`「${client.name}」を削除しますか？この操作は取り消せません。`)) {
+      return;
+    }
+
+    setDeleting(client.id);
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/clients", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: client.id }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "削除に失敗しました");
+      }
+
+      setMessage({ type: "success", text: `「${client.name}」を削除しました` });
+      await fetchData();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "削除に失敗しました";
+      setMessage({ type: "error", text: msg });
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -214,16 +248,48 @@ export default function ClientsPage() {
                 <th className="px-6 py-3 text-left font-medium text-gray-600">得意先名</th>
                 <th className="px-6 py-3 text-left font-medium text-gray-600">フォルダ数</th>
                 <th className="px-6 py-3 text-left font-medium text-gray-600">補助科目数</th>
+                {isAdmin && (
+                  <th className="px-6 py-3 text-left font-medium text-gray-600">操作</th>
+                )}
               </tr>
             </thead>
             <tbody>
-              {clients.map((client) => (
-                <tr key={client.id} className="border-b hover:bg-gray-50">
-                  <td className="px-6 py-3 font-medium text-gray-900">{client.name}</td>
-                  <td className="px-6 py-3 text-gray-500">{client._count.folders}</td>
-                  <td className="px-6 py-3 text-gray-500">{client._count.subAccounts}</td>
-                </tr>
-              ))}
+              {clients.map((client) => {
+                const hasRelations = client._count.folders > 0 || client._count.subAccounts > 0;
+                return (
+                  <tr key={client.id} className="border-b hover:bg-gray-50">
+                    <td className="px-6 py-3 font-medium text-gray-900">{client.name}</td>
+                    <td className="px-6 py-3 text-gray-500">{client._count.folders}</td>
+                    <td className="px-6 py-3 text-gray-500">{client._count.subAccounts}</td>
+                    {isAdmin && (
+                      <td className="px-6 py-3">
+                        <button
+                          onClick={() => handleDelete(client)}
+                          disabled={hasRelations || deleting === client.id}
+                          title={
+                            hasRelations
+                              ? "フォルダまたは補助科目が紐づいているため削除できません"
+                              : "削除"
+                          }
+                          className={cn(
+                            "flex items-center gap-1 px-2.5 py-1.5 rounded-md text-sm transition-colors",
+                            hasRelations
+                              ? "text-gray-300 cursor-not-allowed"
+                              : "text-red-600 hover:bg-red-50"
+                          )}
+                        >
+                          {deleting === client.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                          削除
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

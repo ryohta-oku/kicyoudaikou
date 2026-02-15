@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
+import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { FileText, Home, Settings, Building2, Plus, ChevronDown, Search } from "lucide-react";
+import { FileText, Home, Settings, Building2, Plus, ChevronDown, Search, Shield, LogOut } from "lucide-react";
 import { getSelectedClientId, setSelectedClientId } from "@/lib/client";
 
 interface Client {
@@ -13,6 +14,7 @@ interface Client {
 }
 
 export default function Header() {
+  const { data: session, status } = useSession();
   const pathname = usePathname();
   const router = useRouter();
   const [clients, setClients] = useState<Client[]>([]);
@@ -29,8 +31,10 @@ export default function Header() {
   ];
 
   useEffect(() => {
-    fetchClients();
-  }, []);
+    if (status === "authenticated") {
+      fetchClients();
+    }
+  }, [status]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -48,6 +52,11 @@ export default function Header() {
       inputRef.current.focus();
     }
   }, [isOpen]);
+
+  // 未認証時はヘッダー非表示
+  if (status !== "authenticated") {
+    return null;
+  }
 
   const fetchClients = async () => {
     try {
@@ -217,27 +226,46 @@ export default function Header() {
             </div>
           </div>
 
-          <nav className="flex items-center gap-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+          <div className="flex items-center gap-4">
+            <nav className="flex items-center gap-1">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-blue-50 text-blue-700"
+                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* ユーザー情報 */}
+            <div className="flex items-center gap-3 pl-3 border-l border-gray-200">
+              <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                {session.user.role === "admin" && (
+                  <Shield className="h-4 w-4 text-amber-500" />
+                )}
+                <span className="max-w-[120px] truncate">{session.user.email}</span>
+              </div>
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="flex items-center gap-1 px-2 py-1.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                title="ログアウト"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </header>

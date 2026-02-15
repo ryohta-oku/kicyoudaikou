@@ -7,6 +7,17 @@ datasource db {
   provider = "sqlite"
 }
 
+// ユーザー（認証用）
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("user") // "admin" or "user"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // 得意先（クライアント）
 // ※ Prisma内部の "client" プロパティとの衝突を避けるため Company をモデル名として使用
 model Company {
