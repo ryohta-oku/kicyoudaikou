@@ -716,11 +716,19 @@ export default function FolderDetailPage({
       {/* OCR内容確認セクション */}
       {folder.documents.some((d) => ocrDocsData[d.id]) && (() => {
         const ocrDocs = folder.documents.filter((d) => ocrDocsData[d.id]);
-        const confirmedCount = ocrDocs.filter((d) => fullyConfirmedDocIds.has(d.id)).length;
+
+        // ocrDocsData のページ状態から直接確認状態を判定（より信頼性が高い）
+        const isDocFullyConfirmed = (docId: string) => {
+          const docData = ocrDocsData[docId];
+          if (!docData || docData.pages.length === 0) return false;
+          return docData.pages.every((p) => p.isConfirmed) || fullyConfirmedDocIds.has(docId);
+        };
+
+        const confirmedCount = ocrDocs.filter((d) => isDocFullyConfirmed(d.id)).length;
         const unconfirmedCount = ocrDocs.length - confirmedCount;
         const filteredDocs = ocrDocs.filter((d) => {
-          if (ocrTab === "confirmed") return fullyConfirmedDocIds.has(d.id);
-          if (ocrTab === "unconfirmed") return !fullyConfirmedDocIds.has(d.id);
+          if (ocrTab === "confirmed") return isDocFullyConfirmed(d.id);
+          if (ocrTab === "unconfirmed") return !isDocFullyConfirmed(d.id);
           return true;
         });
 
@@ -791,7 +799,7 @@ export default function FolderDetailPage({
                     <div className="bg-gray-50 px-4 py-3 border-b flex items-center gap-2">
                       <FileText className="w-4 h-4 text-red-500" />
                       <h3 className="text-sm font-medium text-gray-700">{doc.filename}</h3>
-                      {fullyConfirmedDocIds.has(doc.id) && (
+                      {isDocFullyConfirmed(doc.id) && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
                           確認完了
                         </span>
@@ -804,7 +812,23 @@ export default function FolderDetailPage({
                           documentFileType={fullDoc.fileType}
                           documentFilepath={fullDoc.filepath}
                           onPageUpdate={handlePageUpdate}
-                          onPageConfirm={handlePageConfirm}
+                          onPageConfirm={async (pageId) => {
+                            await handlePageConfirm(pageId);
+                            // 親の ocrDocsData を更新して確認状態を反映
+                            setOcrDocsData((prev) => {
+                              const docData = prev[doc.id];
+                              if (!docData) return prev;
+                              return {
+                                ...prev,
+                                [doc.id]: {
+                                  ...docData,
+                                  pages: docData.pages.map((p) =>
+                                    p.id === pageId ? { ...p, isConfirmed: true } : p
+                                  ),
+                                },
+                              };
+                            });
+                          }}
                           onAllPagesConfirmed={() => handleAllPagesConfirmed(doc.id)}
                         />
                       ) : (
