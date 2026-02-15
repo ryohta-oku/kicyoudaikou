@@ -69,10 +69,10 @@ async function main() {
 
   // デフォルトクライアント「（未分類）」を作成
   console.log("デフォルトクライアントを作成中...");
-  const existingClients = await prisma.client.findMany();
+  const existingClients = await prisma.company.findMany();
   let defaultClient;
   if (existingClients.length === 0) {
-    defaultClient = await prisma.client.create({
+    defaultClient = await prisma.company.create({
       data: { name: "（未分類）" },
     });
     console.log(`デフォルトクライアント「${defaultClient.name}」を作成しました`);

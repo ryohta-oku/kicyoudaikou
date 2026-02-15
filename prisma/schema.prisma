@@ -8,7 +8,8 @@ datasource db {
 }
 
 // 得意先（クライアント）
-model Client {
+// ※ Prisma内部の "client" プロパティとの衝突を避けるため Company をモデル名として使用
+model Company {
   id        String   @id @default(uuid())
   name      String
   createdAt DateTime @default(now())
@@ -16,6 +17,8 @@ model Client {
 
   folders     Folder[]
   subAccounts SubAccount[]
+
+  @@map("Client")
 }
 
 // フォルダ（アップロード時にファイルをグループ化）
@@ -27,7 +30,7 @@ model Folder {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  client    Client?    @relation(fields: [clientId], references: [id])
+  client    Company?   @relation(fields: [clientId], references: [id])
   documents Document[]
 }
 
@@ -116,7 +119,7 @@ model SubAccount {
   clientId  String?
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  client  Client? @relation(fields: [clientId], references: [id])
+  client  Company? @relation(fields: [clientId], references: [id])
 
   @@unique([accountId, code, clientId])
 }

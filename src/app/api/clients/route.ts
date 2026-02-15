@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    const clients = await prisma.client.findMany({
+    const clients = await prisma.company.findMany({
       orderBy: { createdAt: "asc" },
     });
 
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const client = await prisma.client.create({
+    const client = await prisma.company.create({
       data: { name: name.trim() },
     });
 
