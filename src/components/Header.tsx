@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { FileText, Home, Settings, Building2, Plus, ChevronDown } from "lucide-react";
+import { FileText, Home, Settings, Building2, Plus, ChevronDown, Search } from "lucide-react";
 import { getSelectedClientId, setSelectedClientId } from "@/lib/client";
 
 interface Client {
@@ -18,9 +18,9 @@ export default function Header() {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [showAddInput, setShowAddInput] = useState(false);
-  const [newName, setNewName] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const navItems = [
     { href: "/", label: "ダッシュボード", icon: Home },
@@ -35,13 +35,18 @@ export default function Header() {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsOpen(false);
-        setShowAddInput(false);
-        setNewName("");
+        setSearchQuery("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isOpen]);
 
   const fetchClients = async () => {
     try {
@@ -66,8 +71,8 @@ export default function Header() {
     setSelectedId(clientId);
     setSelectedClientId(clientId);
     setIsOpen(false);
+    setSearchQuery("");
     router.refresh();
-    // ページをリロードして全データを再取得
     window.location.reload();
   };
 
@@ -81,22 +86,21 @@ export default function Header() {
   };
 
   const handleAdd = async () => {
-    if (!newName.trim()) return;
+    const name = searchQuery.trim();
+    if (!name) return;
     try {
-      const { res, data } = await createClient(newName.trim(), false);
+      const { res, data } = await createClient(name, false);
 
       if (res.status === 409 && data.code === "CLIENT_SIMILAR_EXISTS") {
         const names = data.similarClients.map((c: { name: string }) => c.name).join("\n  ");
         const confirmed = confirm(
-          `以下の類似する得意先が既に登録されています:\n  ${names}\n\nそれでも「${newName.trim()}」を追加しますか？`
+          `以下の類似する得意先が既に登録されています:\n  ${names}\n\nそれでも「${name}」を追加しますか？`
         );
         if (!confirmed) return;
 
-        const { res: res2, data: data2 } = await createClient(newName.trim(), true);
+        const { res: res2, data: data2 } = await createClient(name, true);
         if (res2.ok && data2.client) {
           setClients((prev) => [...prev, data2.client]);
-          setNewName("");
-          setShowAddInput(false);
           handleSelect(data2.client.id);
         }
         return;
@@ -104,8 +108,6 @@ export default function Header() {
 
       if (res.ok && data.client) {
         setClients((prev) => [...prev, data.client]);
-        setNewName("");
-        setShowAddInput(false);
         handleSelect(data.client.id);
       }
     } catch (error) {
@@ -114,6 +116,17 @@ export default function Header() {
   };
 
   const selectedClient = clients.find((c) => c.id === selectedId);
+
+  // 検索クエリでフィルタ
+  const query = searchQuery.trim().toLowerCase();
+  const filteredClients = query
+    ? clients.filter((c) => c.name.toLowerCase().includes(query))
+    : clients;
+
+  // 完全一致する既存得意先があるか（追加ボタン表示判定用）
+  const hasExactMatch = query
+    ? clients.some((c) => c.name.toLowerCase() === query)
+    : true;
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -129,67 +142,77 @@ export default function Header() {
             </Link>
 
             {/* 得意先セレクタ */}
-            {clients.length > 0 && (
-              <div className="relative" ref={dropdownRef}>
-                <button
-                  onClick={() => setIsOpen(!isOpen)}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 transition-colors"
-                >
-                  <Building2 className="h-4 w-4 text-gray-500" />
-                  <span className="max-w-[150px] truncate">{selectedClient?.name || "得意先を選択"}</span>
-                  <ChevronDown className={cn("h-3.5 w-3.5 text-gray-400 transition-transform", isOpen && "rotate-180")} />
-                </button>
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 transition-colors"
+              >
+                <Building2 className="h-4 w-4 text-gray-500" />
+                <span className="max-w-[150px] truncate">{selectedClient?.name || "得意先を選択"}</span>
+                <ChevronDown className={cn("h-3.5 w-3.5 text-gray-400 transition-transform", isOpen && "rotate-180")} />
+              </button>
 
-                {isOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50">
-                    {clients.map((client) => (
-                      <button
-                        key={client.id}
-                        onClick={() => handleSelect(client.id)}
-                        className={cn(
-                          "w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors",
-                          client.id === selectedId
-                            ? "bg-blue-50 text-blue-700 font-medium"
-                            : "text-gray-700"
-                        )}
-                      >
-                        {client.name}
-                      </button>
-                    ))}
-
-                    <div className="border-t border-gray-100 mt-1 pt-1">
-                      {showAddInput ? (
-                        <div className="px-3 py-2 flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={newName}
-                            onChange={(e) => setNewName(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-                            placeholder="得意先名"
-                            autoFocus
-                            className="flex-1 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                          <button
-                            onClick={handleAdd}
-                            className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700"
-                          >
-                            追加
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setShowAddInput(true)}
-                          className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-2"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                          得意先を追加
-                        </button>
-                      )}
+              {isOpen && (
+                <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                  {/* 検索窓 */}
+                  <div className="p-2 border-b border-gray-100">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !hasExactMatch && query) {
+                            handleAdd();
+                          }
+                        }}
+                        placeholder="得意先を検索..."
+                        className="w-full pl-8 pr-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      />
                     </div>
                   </div>
-                )}
-              </div>
-            )}
+
+                  {/* 候補リスト */}
+                  <div className="max-h-60 overflow-y-auto py-1">
+                    {filteredClients.length > 0 ? (
+                      filteredClients.map((client) => (
+                        <button
+                          key={client.id}
+                          onClick={() => handleSelect(client.id)}
+                          className={cn(
+                            "w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors",
+                            client.id === selectedId
+                              ? "bg-blue-50 text-blue-700 font-medium"
+                              : "text-gray-700"
+                          )}
+                        >
+                          {client.name}
+                        </button>
+                      ))
+                    ) : query ? (
+                      <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                        一致する得意先がありません
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* 追加ボタン（検索クエリがあり、完全一致がない場合のみ表示） */}
+                  {query && !hasExactMatch && (
+                    <div className="border-t border-gray-100 p-1">
+                      <button
+                        onClick={handleAdd}
+                        className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-md transition-colors flex items-center gap-2"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        「{searchQuery.trim()}」を追加
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <nav className="flex items-center gap-1">
