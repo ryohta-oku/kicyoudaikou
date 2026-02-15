@@ -1,41 +1,29 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-function getTransporter() {
-  const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT || 587);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-
-  if (!host || !user || !pass) {
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  });
+function getResend() {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return null;
+  return new Resend(apiKey);
 }
 
 export async function sendInviteEmail(to: string, name: string, token: string) {
   const appUrl = process.env.APP_URL || "http://localhost:3000";
   const setupUrl = `${appUrl}/setup-password?token=${token}`;
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@example.com";
+  const from = process.env.RESEND_FROM || "記帳代行ツール <onboarding@resend.dev>";
 
-  const transporter = getTransporter();
+  const resend = getResend();
 
-  if (!transporter) {
-    // SMTP未設定の場合はコンソールに出力（開発用）
-    console.log("=== 招待メール（SMTP未設定のためコンソール出力） ===");
+  if (!resend) {
+    // API Key未設定の場合はコンソールに出力（開発用）
+    console.log("=== 招待メール（RESEND_API_KEY未設定のためコンソール出力） ===");
     console.log(`宛先: ${to}`);
     console.log(`名前: ${name}`);
     console.log(`パスワード設定URL: ${setupUrl}`);
-    console.log("================================================");
+    console.log("============================================================");
     return { success: true, consoleOnly: true, setupUrl };
   }
 
-  await transporter.sendMail({
+  await resend.emails.send({
     from,
     to,
     subject: "【記帳代行ツール】パスワードを設定してください",
