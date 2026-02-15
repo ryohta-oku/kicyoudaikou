@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Header from "@/components/Header";
 import SessionProvider from "@/components/SessionProvider";
+import AuthGuard from "@/components/AuthGuard";
 
 export const metadata: Metadata = {
   title: "記帳代行ツール",
@@ -17,10 +18,12 @@ export default function RootLayout({
     <html lang="ja">
       <body className="antialiased bg-gray-50 min-h-screen font-sans">
         <SessionProvider>
-          <Header />
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {children}
-          </main>
+          <AuthGuard>
+            <Header />
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              {children}
+            </main>
+          </AuthGuard>
         </SessionProvider>
       </body>
     </html>
