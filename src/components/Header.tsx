@@ -89,6 +89,7 @@ export default function Header() {
   const handleAdd = async () => {
     const name = searchQuery.trim();
     if (!name) return;
+    if (!confirm(`「${name}」を得意先として追加しますか？`)) return;
     try {
       const { res, data } = await createClient(name, false);
 
@@ -165,8 +166,8 @@ export default function Header() {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && !hasExactMatch && query) {
-                            handleAdd();
+                          if (e.key === "Enter") {
+                            e.preventDefault();
                           }
                         }}
                         placeholder="得意先を検索..."
