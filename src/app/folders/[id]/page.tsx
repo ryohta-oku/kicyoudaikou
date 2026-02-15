@@ -308,7 +308,7 @@ export default function FolderDetailPage({
       case "ocr_complete":
         return { href: null, label: "" };
       case "ocr_confirmed":
-        return { href: `/documents/${docId}/classify`, label: "仕訳分類" };
+        return { href: null, label: "" };
       case "classified":
         return { href: `/documents/${docId}/classify`, label: "仕訳確認" };
       case "reviewed":
@@ -544,26 +544,34 @@ export default function FolderDetailPage({
       {/* OCR内容確認セクション */}
       {folder.documents.some((d) => ocrDocsData[d.id]) && (
         <section className="space-y-4">
-          <h2 className="text-lg font-bold text-gray-900">OCR内容確認</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-gray-900">OCR内容確認</h2>
+            {folder.documents.length > 0 &&
+              folder.documents.every((d) =>
+                d.status !== "uploaded" && d.status !== "ocr_processing" && d.status !== "ocr_complete"
+              ) && (
+              <Link
+                href={`/documents/${folder.documents[0].id}/classify`}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+              >
+                一括仕訳分類へ
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            )}
+          </div>
           {folder.documents
             .filter((d) => ocrDocsData[d.id])
             .map((doc) => {
               const fullDoc = ocrDocsData[doc.id];
               return (
                 <div key={doc.id} className="bg-white rounded-xl border overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-red-500" />
-                      <h3 className="text-sm font-medium text-gray-700">{doc.filename}</h3>
-                    </div>
+                  <div className="bg-gray-50 px-4 py-3 border-b flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-red-500" />
+                    <h3 className="text-sm font-medium text-gray-700">{doc.filename}</h3>
                     {fullyConfirmedDocIds.has(doc.id) && (
-                      <Link
-                        href={`/documents/${doc.id}/classify`}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      >
-                        仕訳分類へ
-                        <ArrowRight className="w-4 h-4" />
-                      </Link>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+                        確認完了
+                      </span>
                     )}
                   </div>
                   <div className="p-4">
