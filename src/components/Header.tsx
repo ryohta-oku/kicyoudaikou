@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { FileText, Home, Settings, Building2, Plus, ChevronDown, Search, Shield, LogOut, Menu, User } from "lucide-react";
+import { FileText, Home, Settings, Building2, Plus, ChevronDown, Search, Shield, LogOut, Menu, User, ShieldCheck } from "lucide-react";
 import { getSelectedClientId, setSelectedClientId } from "@/lib/client";
 
 interface Client {
@@ -283,9 +283,19 @@ export default function Header() {
                     <User className="h-4 w-4" />
                     アカウント情報
                   </Link>
+                  {session.user.role === "admin" && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <ShieldCheck className="h-4 w-4" />
+                      管理画面
+                    </Link>
+                  )}
                   <button
                     onClick={() => signOut({ callbackUrl: "/login" })}
-                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors border-t border-gray-100"
                   >
                     <LogOut className="h-4 w-4" />
                     ログアウト
