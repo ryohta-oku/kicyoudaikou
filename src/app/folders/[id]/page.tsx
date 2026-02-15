@@ -96,6 +96,7 @@ export default function FolderDetailPage({
   const [ocrDocsData, setOcrDocsData] = useState<Record<string, FullDocument>>({});
   const [loadingOcrDocs, setLoadingOcrDocs] = useState(false);
   const [fullyConfirmedDocIds, setFullyConfirmedDocIds] = useState<Set<string>>(new Set());
+  const confirmedProcessedRef = useRef<Set<string>>(new Set());
   const [ocrTab, setOcrTab] = useState<"all" | "confirmed" | "unconfirmed">("all");
 
   // 仕訳分類セクション
@@ -365,6 +366,20 @@ export default function FolderDetailPage({
       console.error("Failed to update document status:", error);
     }
   }, []);
+
+  // ocrDocsData の変更を監視して、全ページ確認済みのドキュメントを自動検出
+  useEffect(() => {
+    Object.entries(ocrDocsData).forEach(([docId, doc]) => {
+      if (
+        doc.pages.length > 0 &&
+        doc.pages.every((p) => p.isConfirmed) &&
+        !confirmedProcessedRef.current.has(docId)
+      ) {
+        confirmedProcessedRef.current.add(docId);
+        handleAllPagesConfirmed(docId);
+      }
+    });
+  }, [ocrDocsData, handleAllPagesConfirmed]);
 
   /** 1件のドキュメントのAI分類を実行 */
   const runClassifyDoc = useCallback(async (docId: string) => {
@@ -709,32 +724,29 @@ export default function FolderDetailPage({
           return true;
         });
 
+        const allOcrConfirmed = ocrDocs.length > 0 && unconfirmedCount === 0;
+
         return (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900">OCR内容確認</h2>
-              {folder.documents.length > 0 &&
-                folder.documents.every((d) =>
-                  d.status !== "uploaded" && d.status !== "ocr_processing" && d.status !== "ocr_complete"
-                ) && (
-                <button
-                  onClick={handleBulkClassify}
-                  disabled={classifyingDocIds.size > 0}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:bg-gray-400"
-                >
-                  {classifyingDocIds.size > 0 ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      分類中...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      一括仕訳分類
-                    </>
-                  )}
-                </button>
-              )}
+              <button
+                onClick={handleBulkClassify}
+                disabled={!allOcrConfirmed || classifyingDocIds.size > 0}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                {classifyingDocIds.size > 0 ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    分類中...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    一括仕訳分類
+                  </>
+                )}
+              </button>
             </div>
 
             {/* タブ */}

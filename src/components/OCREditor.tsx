@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Check, RotateCcw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
@@ -74,14 +74,6 @@ export default function OCREditor({
     });
     return initial;
   });
-
-  // マウント時に全ページ確認済みなら親に通知
-  useEffect(() => {
-    if (onAllPagesConfirmed && pages.every((p) => p.isConfirmed)) {
-      onAllPagesConfirmed();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const currentPage = pages[currentPageIndex];
 
