@@ -115,13 +115,15 @@ export default function OCREditor({
     try {
       await onPageUpdate(pageId, getPageData(pageId));
       await onPageConfirm(pageId);
+      let allDone = false;
       setConfirmedPages((prev) => {
         const updated = { ...prev, [pageId]: true };
-        if (onAllPagesConfirmed && pages.every((p) => updated[p.id])) {
-          onAllPagesConfirmed();
-        }
+        allDone = pages.every((p) => updated[p.id]);
         return updated;
       });
+      if (allDone && onAllPagesConfirmed) {
+        onAllPagesConfirmed();
+      }
     } finally {
       setSavingPages((prev) => ({ ...prev, [pageId]: false }));
     }
