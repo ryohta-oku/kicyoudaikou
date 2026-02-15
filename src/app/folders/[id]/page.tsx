@@ -73,6 +73,7 @@ export default function FolderDetailPage({
   const [ocrDocsData, setOcrDocsData] = useState<Record<string, FullDocument>>({});
   const [loadingOcrDocs, setLoadingOcrDocs] = useState(false);
   const [fullyConfirmedDocIds, setFullyConfirmedDocIds] = useState<Set<string>>(new Set());
+  const [ocrTab, setOcrTab] = useState<"all" | "confirmed" | "unconfirmed">("all");
 
   const fetchFolder = useCallback(async () => {
     try {
@@ -542,59 +543,105 @@ export default function FolderDetailPage({
       )}
 
       {/* OCR内容確認セクション */}
-      {folder.documents.some((d) => ocrDocsData[d.id]) && (
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-gray-900">OCR内容確認</h2>
-            {folder.documents.length > 0 &&
-              folder.documents.every((d) =>
-                d.status !== "uploaded" && d.status !== "ocr_processing" && d.status !== "ocr_complete"
-              ) && (
-              <Link
-                href={`/documents/${folder.documents[0].id}/classify`}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-              >
-                一括仕訳分類へ
-                <ArrowRight className="w-4 h-4" />
-              </Link>
+      {folder.documents.some((d) => ocrDocsData[d.id]) && (() => {
+        const ocrDocs = folder.documents.filter((d) => ocrDocsData[d.id]);
+        const confirmedCount = ocrDocs.filter((d) => fullyConfirmedDocIds.has(d.id)).length;
+        const unconfirmedCount = ocrDocs.length - confirmedCount;
+        const filteredDocs = ocrDocs.filter((d) => {
+          if (ocrTab === "confirmed") return fullyConfirmedDocIds.has(d.id);
+          if (ocrTab === "unconfirmed") return !fullyConfirmedDocIds.has(d.id);
+          return true;
+        });
+
+        return (
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900">OCR内容確認</h2>
+              {folder.documents.length > 0 &&
+                folder.documents.every((d) =>
+                  d.status !== "uploaded" && d.status !== "ocr_processing" && d.status !== "ocr_complete"
+                ) && (
+                <Link
+                  href={`/documents/${folder.documents[0].id}/classify`}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                >
+                  一括仕訳分類へ
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              )}
+            </div>
+
+            {/* タブ */}
+            <div className="flex gap-1 border-b">
+              {([
+                { key: "all", label: "すべて", count: ocrDocs.length },
+                { key: "confirmed", label: "OCR確認完了", count: confirmedCount },
+                { key: "unconfirmed", label: "未完了", count: unconfirmedCount },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setOcrTab(tab.key)}
+                  className={cn(
+                    "px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px",
+                    ocrTab === tab.key
+                      ? "border-blue-600 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  {tab.label}
+                  <span className={cn(
+                    "ml-1.5 px-1.5 py-0.5 text-xs rounded-full",
+                    ocrTab === tab.key
+                      ? "bg-blue-100 text-blue-700"
+                      : "bg-gray-100 text-gray-600"
+                  )}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {filteredDocs.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 text-sm">
+                該当するドキュメントはありません
+              </div>
+            ) : (
+              filteredDocs.map((doc) => {
+                const fullDoc = ocrDocsData[doc.id];
+                return (
+                  <div key={doc.id} className="bg-white rounded-xl border overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-3 border-b flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-red-500" />
+                      <h3 className="text-sm font-medium text-gray-700">{doc.filename}</h3>
+                      {fullyConfirmedDocIds.has(doc.id) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+                          確認完了
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      {fullDoc.pages.length > 0 ? (
+                        <OCREditor
+                          pages={fullDoc.pages}
+                          documentFileType={fullDoc.fileType}
+                          documentFilepath={fullDoc.filepath}
+                          onPageUpdate={handlePageUpdate}
+                          onPageConfirm={handlePageConfirm}
+                          onAllPagesConfirmed={() => handleAllPagesConfirmed(doc.id)}
+                        />
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          ページデータがありません
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
             )}
-          </div>
-          {folder.documents
-            .filter((d) => ocrDocsData[d.id])
-            .map((doc) => {
-              const fullDoc = ocrDocsData[doc.id];
-              return (
-                <div key={doc.id} className="bg-white rounded-xl border overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-3 border-b flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-red-500" />
-                    <h3 className="text-sm font-medium text-gray-700">{doc.filename}</h3>
-                    {fullyConfirmedDocIds.has(doc.id) && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
-                        確認完了
-                      </span>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    {fullDoc.pages.length > 0 ? (
-                      <OCREditor
-                        pages={fullDoc.pages}
-                        documentFileType={fullDoc.fileType}
-                        documentFilepath={fullDoc.filepath}
-                        onPageUpdate={handlePageUpdate}
-                        onPageConfirm={handlePageConfirm}
-                        onAllPagesConfirmed={() => handleAllPagesConfirmed(doc.id)}
-                      />
-                    ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        ページデータがありません
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-        </section>
-      )}
+          </section>
+        );
+      })()}
 
       {/* OCRデータ読み込み中 */}
       {loadingOcrDocs && (
