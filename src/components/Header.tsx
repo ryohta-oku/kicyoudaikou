@@ -283,7 +283,7 @@ export default function Header() {
                     <User className="h-4 w-4" />
                     アカウント情報
                   </Link>
-                  {session.user.role === "admin" && (
+                  {(session.user.role === "admin" || session.user.role === "instructor") && (
                     <Link
                       href="/admin"
                       onClick={() => setIsMenuOpen(false)}

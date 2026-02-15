@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Loader2, Trash2, KeyRound, Shield, Users, Eye, EyeOff, Pencil } from "lucide-react";
+import { Loader2, Trash2, Shield, Users, Eye, EyeOff, Pencil, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UserInfo {
@@ -36,12 +36,11 @@ const ROLE_COLORS: Record<string, string> = {
 export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const isAdmin = session?.user?.role === "admin";
+  const isAdminOrInstructor = isAdmin || session?.user?.role === "instructor";
+
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [inviteCode, setInviteCode] = useState("");
-  const [editingCode, setEditingCode] = useState(false);
-  const [newCode, setNewCode] = useState("");
-  const [savingCode, setSavingCode] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [changingRole, setChangingRole] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -52,30 +51,31 @@ export default function AdminPage() {
   const [newPassword, setNewPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
 
-  useEffect(() => {
-    if (status === "authenticated" && session?.user?.role !== "admin") {
-      router.replace("/");
-    }
-  }, [status, session, router]);
+  // ユーザー追加
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [addEmail, setAddEmail] = useState("");
+  const [addPassword, setAddPassword] = useState("");
+  const [addRole, setAddRole] = useState("user");
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
-    if (status === "authenticated" && session?.user?.role === "admin") {
+    if (status === "authenticated" && !isAdminOrInstructor) {
+      router.replace("/");
+    }
+  }, [status, isAdminOrInstructor, router]);
+
+  useEffect(() => {
+    if (status === "authenticated" && isAdminOrInstructor) {
       fetchData();
     }
-  }, [status, session]);
+  }, [status, isAdminOrInstructor]);
 
   const fetchData = async () => {
     try {
-      const [usersRes, codeRes] = await Promise.all([
-        fetch("/api/admin/users"),
-        fetch("/api/admin/invite-code"),
-      ]);
-      const usersData = await usersRes.json();
-      const codeData = await codeRes.json();
-
-      setUsers(usersData.users || []);
-      setInviteCode(codeData.inviteCode || "");
-      setNewCode(codeData.inviteCode || "");
+      const res = await fetch("/api/admin/users");
+      const data = await res.json();
+      setUsers(data.users || []);
     } finally {
       setLoading(false);
     }
@@ -137,34 +137,6 @@ export default function AdminPage() {
     }
   };
 
-  const handleSaveCode = async () => {
-    if (!newCode.trim()) return;
-    setSavingCode(true);
-    setMessage(null);
-
-    try {
-      const res = await fetch("/api/admin/invite-code", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inviteCode: newCode.trim() }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setMessage({ type: "error", text: data.error });
-        return;
-      }
-
-      setInviteCode(data.inviteCode);
-      setEditingCode(false);
-      setMessage({ type: "success", text: "招待コードを変更しました" });
-    } catch {
-      setMessage({ type: "error", text: "変更に失敗しました" });
-    } finally {
-      setSavingCode(false);
-    }
-  };
-
   const togglePasswordVisibility = (userId: string) => {
     setVisiblePasswords((prev) => {
       const next = new Set(prev);
@@ -208,6 +180,38 @@ export default function AdminPage() {
     }
   };
 
+  const handleAddUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdding(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: addName.trim(), email: addEmail.trim(), password: addPassword, role: addRole }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMessage({ type: "error", text: data.error });
+        return;
+      }
+
+      setUsers((prev) => [...prev, data.user]);
+      setShowAddForm(false);
+      setAddName("");
+      setAddEmail("");
+      setAddPassword("");
+      setAddRole("user");
+      setMessage({ type: "success", text: `「${data.user.name}」を追加しました` });
+    } catch {
+      setMessage({ type: "error", text: "追加に失敗しました" });
+    } finally {
+      setAdding(false);
+    }
+  };
+
   if (status === "loading" || loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -216,7 +220,7 @@ export default function AdminPage() {
     );
   }
 
-  if (session?.user?.role !== "admin") {
+  if (!isAdminOrInstructor) {
     return null;
   }
 
@@ -224,7 +228,7 @@ export default function AdminPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">管理画面</h1>
-        <p className="text-sm text-gray-500 mt-1">ユーザー管理・招待コード設定</p>
+        <p className="text-sm text-gray-500 mt-1">ユーザー管理</p>
       </div>
 
       {message && (
@@ -240,52 +244,89 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* 招待コード */}
-      <div className="bg-white border rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <KeyRound className="h-5 w-5 text-gray-400" />
-          <h2 className="text-lg font-semibold text-gray-900">招待コード</h2>
+      {/* ユーザー追加 */}
+      {showAddForm ? (
+        <div className="bg-white border rounded-xl p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-gray-400" />
+            ユーザー追加
+          </h2>
+          <form onSubmit={handleAddUser} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">名前</label>
+                <input
+                  type="text"
+                  required
+                  value={addName}
+                  onChange={(e) => setAddName(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="山田 太郎"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">メールアドレス</label>
+                <input
+                  type="email"
+                  required
+                  value={addEmail}
+                  onChange={(e) => setAddEmail(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="example@mail.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">パスワード</label>
+                <input
+                  type="text"
+                  required
+                  value={addPassword}
+                  onChange={(e) => setAddPassword(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="6文字以上"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">権限</label>
+                <select
+                  value={addRole}
+                  onChange={(e) => setAddRole(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {ROLE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                disabled={adding}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+              >
+                {adding && <Loader2 className="h-4 w-4 animate-spin" />}
+                追加
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowAddForm(false); setAddName(""); setAddEmail(""); setAddPassword(""); setAddRole("user"); }}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
+              >
+                キャンセル
+              </button>
+            </div>
+          </form>
         </div>
-
-        {editingCode ? (
-          <div className="flex items-center gap-3">
-            <input
-              type="text"
-              value={newCode}
-              onChange={(e) => setNewCode(e.target.value)}
-              className="flex-1 max-w-sm px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              autoFocus
-            />
-            <button
-              onClick={handleSaveCode}
-              disabled={savingCode || !newCode.trim()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
-            >
-              {savingCode && <Loader2 className="h-4 w-4 animate-spin" />}
-              保存
-            </button>
-            <button
-              onClick={() => { setEditingCode(false); setNewCode(inviteCode); }}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
-            >
-              取消
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-4">
-            <code className="px-3 py-1.5 bg-gray-100 rounded-lg text-sm font-mono text-gray-800">
-              {inviteCode}
-            </code>
-            <button
-              onClick={() => setEditingCode(true)}
-              className="text-sm text-blue-600 hover:underline"
-            >
-              変更
-            </button>
-          </div>
-        )}
-        <p className="text-xs text-gray-400 mt-2">新規登録時にこのコードの入力が必要です</p>
-      </div>
+      ) : (
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+        >
+          <UserPlus className="h-4 w-4" />
+          ユーザーを追加
+        </button>
+      )}
 
       {/* ユーザー一覧 */}
       <div className="bg-white border rounded-xl overflow-hidden">
@@ -307,9 +348,11 @@ export default function AdminPage() {
           </thead>
           <tbody>
             {users.map((user) => {
-              const isMe = user.id === session.user.id;
+              const isMe = user.id === session!.user.id;
               const isPasswordVisible = visiblePasswords.has(user.id);
               const isEditingPw = editingPassword === user.id;
+              // 指導者は管理者を削除不可
+              const canDelete = !isMe && !(session!.user.role === "instructor" && user.role === "admin");
               return (
                 <tr key={user.id} className="border-b hover:bg-gray-50">
                   <td className="px-6 py-3 font-medium text-gray-900">
@@ -371,9 +414,9 @@ export default function AdminPage() {
                     )}
                   </td>
                   <td className="px-6 py-3">
-                    {isMe ? (
+                    {isMe || !isAdmin ? (
                       <span className={cn("inline-block text-xs font-medium px-2.5 py-1 rounded-full border", ROLE_COLORS[user.role])}>
-                        <Shield className="inline h-3 w-3 mr-1 -mt-0.5" />
+                        {(isMe || user.role === "admin") && <Shield className="inline h-3 w-3 mr-1 -mt-0.5" />}
                         {ROLE_LABELS[user.role]}
                       </span>
                     ) : (
@@ -404,9 +447,7 @@ export default function AdminPage() {
                     {new Date(user.createdAt).toLocaleDateString("ja-JP")}
                   </td>
                   <td className="px-6 py-3">
-                    {isMe ? (
-                      <span className="text-xs text-gray-400">-</span>
-                    ) : (
+                    {canDelete ? (
                       <button
                         onClick={() => handleDelete(user)}
                         disabled={deleting === user.id}
@@ -419,6 +460,8 @@ export default function AdminPage() {
                         )}
                         削除
                       </button>
+                    ) : (
+                      <span className="text-xs text-gray-400">-</span>
                     )}
                   </td>
                 </tr>

@@ -93,11 +93,8 @@ export default function LoginPage() {
             ログイン
           </button>
 
-          <p className="text-center text-sm text-gray-500">
-            アカウントをお持ちでない方は{" "}
-            <Link href="/register" className="text-blue-600 hover:underline">
-              新規登録
-            </Link>
+          <p className="text-center text-sm text-gray-400">
+            アカウントは管理者が作成します
           </p>
         </form>
       </div>
