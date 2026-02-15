@@ -25,6 +25,7 @@ export default function Header() {
   const navItems = [
     { href: "/", label: "ダッシュボード", icon: Home },
     { href: "/accounts", label: "勘定科目管理", icon: Settings },
+    { href: "/clients", label: "得意先管理", icon: Building2 },
   ];
 
   useEffect(() => {
