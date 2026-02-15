@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { FileText, Home, Settings, Building2, Plus, ChevronDown, Search, Shield, LogOut } from "lucide-react";
+import { FileText, Home, Settings, Building2, Plus, ChevronDown, Search, Shield, LogOut, Menu, User } from "lucide-react";
 import { getSelectedClientId, setSelectedClientId } from "@/lib/client";
 
 interface Client {
@@ -20,8 +20,10 @@ export default function Header() {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const navItems = [
@@ -41,6 +43,9 @@ export default function Header() {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsOpen(false);
         setSearchQuery("");
+      }
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setIsMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -249,24 +254,44 @@ export default function Header() {
               })}
             </nav>
 
-            {/* ユーザー情報 */}
-            <div className="flex items-center gap-3 pl-3 border-l border-gray-200">
-              <div className="flex items-center gap-1.5 text-sm text-gray-600">
+            {/* ハンバーガーメニュー */}
+            <div className="relative pl-3 border-l border-gray-200" ref={menuRef}>
+              <button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="flex items-center gap-2 p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
                 {session.user.role === "admin" && (
-                  <Shield className="h-4 w-4 text-amber-500" title="管理者" />
+                  <Shield className="h-4 w-4 text-amber-500" />
                 )}
                 {session.user.role === "instructor" && (
-                  <Shield className="h-4 w-4 text-green-500" title="指導者" />
+                  <Shield className="h-4 w-4 text-green-500" />
                 )}
-                <span className="max-w-[120px] truncate">{session.user.email}</span>
-              </div>
-              <button
-                onClick={() => signOut({ callbackUrl: "/login" })}
-                className="flex items-center gap-1 px-2 py-1.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
-                title="ログアウト"
-              >
-                <LogOut className="h-4 w-4" />
+                <Menu className="h-5 w-5" />
               </button>
+
+              {isMenuOpen && (
+                <div className="absolute top-full right-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+                  <div className="px-4 py-2 border-b border-gray-100">
+                    <p className="text-sm font-medium text-gray-900 truncate">{session.user.name}</p>
+                    <p className="text-xs text-gray-500 truncate">{session.user.email}</p>
+                  </div>
+                  <Link
+                    href="/account"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <User className="h-4 w-4" />
+                    アカウント情報
+                  </Link>
+                  <button
+                    onClick={() => signOut({ callbackUrl: "/login" })}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    ログアウト
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
