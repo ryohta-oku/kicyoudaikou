@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 
@@ -19,7 +20,7 @@ export async function GET() {
 
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
+      select: { id: true, email: true, name: true, role: true, plainPassword: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     });
     return NextResponse.json({ users });
@@ -34,10 +35,28 @@ export async function PUT(request: NextRequest) {
   if (error) return error;
 
   try {
-    const { userId, role } = await request.json();
+    const { userId, role, newPassword } = await request.json();
 
-    if (!userId || !role) {
-      return NextResponse.json({ error: "ユーザーIDと権限を指定してください" }, { status: 400 });
+    if (!userId) {
+      return NextResponse.json({ error: "ユーザーIDを指定してください" }, { status: 400 });
+    }
+
+    // パスワード変更
+    if (newPassword) {
+      if (newPassword.length < 6) {
+        return NextResponse.json({ error: "パスワードは6文字以上で入力してください" }, { status: 400 });
+      }
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await prisma.user.update({
+        where: { id: userId },
+        data: { password: hashedPassword, plainPassword: newPassword },
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    // 権限変更
+    if (!role) {
+      return NextResponse.json({ error: "権限を指定してください" }, { status: 400 });
     }
 
     if (!["admin", "instructor", "user"].includes(role)) {
@@ -52,7 +71,7 @@ export async function PUT(request: NextRequest) {
     const user = await prisma.user.update({
       where: { id: userId },
       data: { role },
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
+      select: { id: true, email: true, name: true, role: true, plainPassword: true, createdAt: true },
     });
 
     return NextResponse.json({ user });

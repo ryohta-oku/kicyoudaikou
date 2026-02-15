@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Loader2, Trash2, KeyRound, Shield, Users } from "lucide-react";
+import { Loader2, Trash2, KeyRound, Shield, Users, Eye, EyeOff, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UserInfo {
@@ -11,6 +11,7 @@ interface UserInfo {
   email: string;
   name: string;
   role: string;
+  plainPassword: string;
   createdAt: string;
 }
 
@@ -44,6 +45,12 @@ export default function AdminPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [changingRole, setChangingRole] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // パスワード表示/編集
+  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
+  const [editingPassword, setEditingPassword] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role !== "admin") {
@@ -158,6 +165,49 @@ export default function AdminPage() {
     }
   };
 
+  const togglePasswordVisibility = (userId: string) => {
+    setVisiblePasswords((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  };
+
+  const handleSavePassword = async (userId: string) => {
+    if (!newPassword.trim()) return;
+    setSavingPassword(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, newPassword: newPassword.trim() }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMessage({ type: "error", text: data.error });
+        return;
+      }
+
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, plainPassword: newPassword.trim() } : u))
+      );
+      setEditingPassword(null);
+      setNewPassword("");
+      setMessage({ type: "success", text: "パスワードを変更しました" });
+    } catch {
+      setMessage({ type: "error", text: "変更に失敗しました" });
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
   if (status === "loading" || loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -249,6 +299,7 @@ export default function AdminPage() {
             <tr className="border-b bg-gray-50/50">
               <th className="px-6 py-3 text-left font-medium text-gray-600">名前</th>
               <th className="px-6 py-3 text-left font-medium text-gray-600">メールアドレス</th>
+              <th className="px-6 py-3 text-left font-medium text-gray-600">パスワード</th>
               <th className="px-6 py-3 text-left font-medium text-gray-600">権限</th>
               <th className="px-6 py-3 text-left font-medium text-gray-600">登録日</th>
               <th className="px-6 py-3 text-left font-medium text-gray-600">操作</th>
@@ -257,6 +308,8 @@ export default function AdminPage() {
           <tbody>
             {users.map((user) => {
               const isMe = user.id === session.user.id;
+              const isPasswordVisible = visiblePasswords.has(user.id);
+              const isEditingPw = editingPassword === user.id;
               return (
                 <tr key={user.id} className="border-b hover:bg-gray-50">
                   <td className="px-6 py-3 font-medium text-gray-900">
@@ -268,6 +321,55 @@ export default function AdminPage() {
                     </div>
                   </td>
                   <td className="px-6 py-3 text-gray-500">{user.email}</td>
+                  <td className="px-6 py-3">
+                    {isEditingPw ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          className="w-32 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          placeholder="新しいパスワード"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleSavePassword(user.id)}
+                          disabled={savingPassword || !newPassword.trim()}
+                          className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          {savingPassword ? <Loader2 className="h-3 w-3 animate-spin" /> : "保存"}
+                        </button>
+                        <button
+                          onClick={() => { setEditingPassword(null); setNewPassword(""); }}
+                          className="px-2 py-1 text-gray-500 hover:bg-gray-100 rounded text-xs"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-sm text-gray-700">
+                          {isPasswordVisible
+                            ? (user.plainPassword || "(未保存)")
+                            : "••••••••"}
+                        </span>
+                        <button
+                          onClick={() => togglePasswordVisibility(user.id)}
+                          className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                          title={isPasswordVisible ? "非表示" : "表示"}
+                        >
+                          {isPasswordVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </button>
+                        <button
+                          onClick={() => { setEditingPassword(user.id); setNewPassword(""); }}
+                          className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                          title="変更"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </td>
                   <td className="px-6 py-3">
                     {isMe ? (
                       <span className={cn("inline-block text-xs font-medium px-2.5 py-1 rounded-full border", ROLE_COLORS[user.role])}>
