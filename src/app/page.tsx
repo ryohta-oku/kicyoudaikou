@@ -9,6 +9,7 @@ import {
   Trash2,
   Loader2,
   FileText,
+  AlertTriangle,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
@@ -47,6 +48,17 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [duplicateCount, setDuplicateCount] = useState(0);
+
+  const fetchDuplicates = useCallback(async () => {
+    try {
+      const res = await fetch("/api/clients/duplicates");
+      const data = await res.json();
+      setDuplicateCount((data.groups || []).length);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const fetchFolders = useCallback(async () => {
     try {
@@ -64,7 +76,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchFolders();
-  }, [fetchFolders]);
+    fetchDuplicates();
+  }, [fetchFolders, fetchDuplicates]);
 
   const handleBulkUploadComplete = (folderId: string) => {
     // アップロード完了後、フォルダ詳細ページへ遷移（OCRはそこで自動開始）
@@ -100,6 +113,19 @@ export default function DashboardPage() {
           ファイルをアップロード
         </button>
       </div>
+
+      {/* 重複アラート */}
+      {duplicateCount > 0 && (
+        <Link
+          href="/clients"
+          className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 hover:bg-amber-100 transition-colors"
+        >
+          <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+          <span className="text-sm text-amber-800">
+            重複の可能性がある得意先が <strong>{duplicateCount} グループ</strong>あります。得意先管理ページで確認・統合できます。
+          </span>
+        </Link>
+      )}
 
       {/* アップロードエリア */}
       {showUpload && (
