@@ -71,15 +71,37 @@ export default function Header() {
     window.location.reload();
   };
 
+  const createClient = async (name: string, force: boolean) => {
+    const res = await fetch("/api/clients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, force }),
+    });
+    return { res, data: await res.json() };
+  };
+
   const handleAdd = async () => {
     if (!newName.trim()) return;
     try {
-      const res = await fetch("/api/clients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim() }),
-      });
-      const data = await res.json();
+      const { res, data } = await createClient(newName.trim(), false);
+
+      if (res.status === 409 && data.code === "CLIENT_SIMILAR_EXISTS") {
+        const names = data.similarClients.map((c: { name: string }) => c.name).join("\n  ");
+        const confirmed = confirm(
+          `以下の類似する得意先が既に登録されています:\n  ${names}\n\nそれでも「${newName.trim()}」を追加しますか？`
+        );
+        if (!confirmed) return;
+
+        const { res: res2, data: data2 } = await createClient(newName.trim(), true);
+        if (res2.ok && data2.client) {
+          setClients((prev) => [...prev, data2.client]);
+          setNewName("");
+          setShowAddInput(false);
+          handleSelect(data2.client.id);
+        }
+        return;
+      }
+
       if (res.ok && data.client) {
         setClients((prev) => [...prev, data.client]);
         setNewName("");
