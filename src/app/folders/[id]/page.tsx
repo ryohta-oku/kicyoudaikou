@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   FileText,
   ArrowLeft,
@@ -15,7 +16,6 @@ import {
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import OCREditor, { type PageUpdateData } from "@/components/OCREditor";
-import JournalEntryTable from "@/components/JournalEntryTable";
 
 interface Document {
   id: string;
@@ -52,27 +52,6 @@ interface FullDocument {
   pages: Page[];
 }
 
-interface JournalEntry {
-  id: string;
-  date: string;
-  description: string;
-  accountCode: string;
-  accountName: string;
-  subAccountCode: string;
-  subAccountName: string;
-  debitAmount: number;
-  creditAmount: number;
-  taxRate: string;
-  aiSuggested: boolean;
-  isConfirmed: boolean;
-}
-
-interface Account {
-  code: string;
-  name: string;
-  category: string;
-}
-
 interface Folder {
   id: string;
   name: string;
@@ -87,6 +66,7 @@ export default function FolderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const [folder, setFolder] = useState<Folder | null>(null);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -98,13 +78,6 @@ export default function FolderDetailPage({
   const [fullyConfirmedDocIds, setFullyConfirmedDocIds] = useState<Set<string>>(new Set());
   const confirmedProcessedRef = useRef<Set<string>>(new Set());
   const [ocrTab, setOcrTab] = useState<"all" | "confirmed" | "unconfirmed">("all");
-
-  // 仕訳分類セクション
-  const [showClassifySection, setShowClassifySection] = useState(false);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [classifyData, setClassifyData] = useState<Record<string, JournalEntry[]>>({});
-  const [classifyingDocIds, setClassifyingDocIds] = useState<Set<string>>(new Set());
-  const [classifyError, setClassifyError] = useState<string | null>(null);
 
   const fetchFolder = useCallback(async () => {
     try {
@@ -130,30 +103,6 @@ export default function FolderDetailPage({
       }
     } catch (error) {
       console.error("Failed to fetch document:", error);
-    }
-  }, []);
-
-  /** 勘定科目マスター取得 */
-  const fetchAccounts = useCallback(async () => {
-    try {
-      const res = await fetch("/api/accounts");
-      const data = await res.json();
-      setAccounts(data.accounts || []);
-    } catch {
-      // optional
-    }
-  }, []);
-
-  /** 1件のドキュメントの仕訳データを取得 */
-  const fetchDocEntries = useCallback(async (docId: string) => {
-    try {
-      const res = await fetch(`/api/documents/${docId}`);
-      const data = await res.json();
-      if (data.document) {
-        setClassifyData((prev) => ({ ...prev, [docId]: data.document.journalEntries || [] }));
-      }
-    } catch (error) {
-      console.error("Failed to fetch entries:", error);
     }
   }, []);
 
@@ -260,18 +209,6 @@ export default function FolderDetailPage({
         if (confirmedIds.length > 0) {
           setFullyConfirmedDocIds(new Set(confirmedIds));
         }
-
-        // classified 以降のドキュメントがあれば仕訳セクションを自動表示
-        const classifiedDocs = folderData.documents.filter(
-          (d: Document) => d.status === "classified" || d.status === "reviewed" || d.status === "exported"
-        );
-        if (classifiedDocs.length > 0) {
-          setShowClassifySection(true);
-          const accRes = await fetch("/api/accounts");
-          const accData = await accRes.json();
-          setAccounts(accData.accounts || []);
-          await Promise.all(classifiedDocs.map((d: Document) => fetchDocEntries(d.id)));
-        }
       }
 
       // uploaded状態のドキュメントの自動OCR
@@ -285,7 +222,7 @@ export default function FolderDetailPage({
         }
       }
     });
-  }, [fetchFolder, startAutoOCR, fetchDocFullData, fetchDocEntries]);
+  }, [fetchFolder, startAutoOCR, fetchDocFullData]);
 
   const handleDeleteDocument = async (docId: string) => {
     if (!confirm("このドキュメントを削除してもよろしいですか？")) return;
@@ -381,96 +318,6 @@ export default function FolderDetailPage({
     });
   }, [ocrDocsData, handleAllPagesConfirmed]);
 
-  /** 1件のドキュメントのAI分類を実行 */
-  const runClassifyDoc = useCallback(async (docId: string) => {
-    setClassifyingDocIds((prev) => new Set(prev).add(docId));
-    try {
-      const res = await fetch("/api/classify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documentId: docId }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "仕訳分類に失敗しました");
-      }
-      await fetchDocEntries(docId);
-      // ステータスを classified に更新
-      setFolder((prev) =>
-        prev
-          ? {
-              ...prev,
-              documents: prev.documents.map((d) =>
-                d.id === docId ? { ...d, status: "classified" } : d
-              ),
-            }
-          : null
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "仕訳分類に失敗しました";
-      setClassifyError(message);
-    } finally {
-      setClassifyingDocIds((prev) => {
-        const next = new Set(prev);
-        next.delete(docId);
-        return next;
-      });
-    }
-  }, [fetchDocEntries]);
-
-  /** 一括仕訳分類を実行 */
-  const handleBulkClassify = async () => {
-    setShowClassifySection(true);
-    setClassifyError(null);
-    await fetchAccounts();
-
-    const eligibleDocs = folder?.documents.filter(
-      (d) => d.status === "ocr_confirmed" || d.status === "classified" || d.status === "reviewed"
-    ) || [];
-
-    for (const doc of eligibleDocs) {
-      // 既に分類済みの場合はデータ取得のみ
-      if (doc.status === "classified" || doc.status === "reviewed") {
-        await fetchDocEntries(doc.id);
-      } else {
-        await runClassifyDoc(doc.id);
-      }
-    }
-  };
-
-  /** 仕訳エントリー更新 */
-  const handleEntryUpdate = useCallback(async (docId: string, entryId: string, data: Partial<JournalEntry>) => {
-    const res = await fetch("/api/entries", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: entryId, ...data }),
-    });
-    if (!res.ok) throw new Error("更新に失敗しました");
-    await fetchDocEntries(docId);
-  }, [fetchDocEntries]);
-
-  /** 仕訳エントリー削除 */
-  const handleEntryDelete = useCallback(async (docId: string, entryId: string) => {
-    const res = await fetch("/api/entries", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: entryId }),
-    });
-    if (!res.ok) throw new Error("削除に失敗しました");
-    await fetchDocEntries(docId);
-  }, [fetchDocEntries]);
-
-  /** 仕訳エントリー追加 */
-  const handleEntryAdd = useCallback(async (docId: string, data: Partial<JournalEntry>) => {
-    const res = await fetch("/api/entries", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error("追加に失敗しました");
-    await fetchDocEntries(docId);
-  }, [fetchDocEntries]);
-
   const getNextAction = (status: string, docId: string) => {
     switch (status) {
       case "uploaded":
@@ -482,7 +329,7 @@ export default function FolderDetailPage({
       case "ocr_confirmed":
         return { href: null, label: "" };
       case "classified":
-        return { href: null, label: "" };
+        return { href: `/folders/${id}/classify`, label: "仕訳確認" };
       case "reviewed":
         return { href: `/documents/${docId}/export`, label: "エクスポート" };
       case "exported":
@@ -739,21 +586,12 @@ export default function FolderDetailPage({
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900">OCR内容確認</h2>
               <button
-                onClick={handleBulkClassify}
-                disabled={!allOcrConfirmed || classifyingDocIds.size > 0}
+                onClick={() => router.push(`/folders/${id}/classify`)}
+                disabled={!allOcrConfirmed}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
-                {classifyingDocIds.size > 0 ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    分類中...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    一括仕訳分類
-                  </>
-                )}
+                <Sparkles className="w-4 h-4" />
+                一括仕訳分類
               </button>
             </div>
 
@@ -851,103 +689,6 @@ export default function FolderDetailPage({
           <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
           <span className="ml-2 text-sm text-gray-500">OCRデータを読み込み中...</span>
         </div>
-      )}
-
-      {/* 仕訳分類セクション */}
-      {showClassifySection && (
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-gray-900">AI仕訳分類</h2>
-            <button
-              onClick={handleBulkClassify}
-              disabled={classifyingDocIds.size > 0}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors disabled:bg-gray-400"
-            >
-              {classifyingDocIds.size > 0 ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  分類中...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  全件再分類
-                </>
-              )}
-            </button>
-          </div>
-
-          {classifyError && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-sm text-red-600">{classifyError}</p>
-            </div>
-          )}
-
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-sm text-yellow-800">
-              <span className="font-medium">AIが推測した勘定科目</span>には「AI」タグが表示されています。
-              内容を確認し、必要に応じて修正してから「確認」ボタンを押してください。
-            </p>
-          </div>
-
-          {folder.documents
-            .filter((d) => classifyData[d.id] || classifyingDocIds.has(d.id))
-            .map((doc) => {
-              const entries = classifyData[doc.id] || [];
-              const isClassifying = classifyingDocIds.has(doc.id);
-              const allConfirmed = entries.length > 0 && entries.every((e) => e.isConfirmed);
-
-              return (
-                <div key={doc.id} className="bg-white rounded-xl border overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-red-500" />
-                      <h3 className="text-sm font-medium text-gray-700">{doc.filename}</h3>
-                      {allConfirmed && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
-                          全件確認済
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => runClassifyDoc(doc.id)}
-                      disabled={isClassifying}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      {isClassifying ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-3.5 h-3.5" />
-                      )}
-                      再分類
-                    </button>
-                  </div>
-                  <div className="p-4">
-                    {isClassifying && entries.length === 0 ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                        <span className="ml-2 text-sm text-gray-500">AI分類中...</span>
-                      </div>
-                    ) : entries.length > 0 ? (
-                      <JournalEntryTable
-                        entries={entries}
-                        accounts={accounts}
-                        editable={true}
-                        onUpdate={(entryId, data) => handleEntryUpdate(doc.id, entryId, data)}
-                        onDelete={(entryId) => handleEntryDelete(doc.id, entryId)}
-                        onAdd={(data) => handleEntryAdd(doc.id, data)}
-                        documentId={doc.id}
-                      />
-                    ) : (
-                      <div className="text-center py-8 text-gray-500 text-sm">
-                        仕訳データがありません
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-        </section>
       )}
     </div>
   );

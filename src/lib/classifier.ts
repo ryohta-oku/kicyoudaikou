@@ -17,6 +17,8 @@ export interface ParsedJournalEntry {
   accountName: string;
   subAccountCode: string;
   subAccountName: string;
+  taxRate: string;
+  reasoning: string;
   confidence: number;
 }
 
@@ -67,6 +69,8 @@ export async function classifyWithAI(ocrText: string): Promise<ParsedJournalEntr
       "accountName": "勘定科目名",
       "subAccountCode": "補助科目コード（不明なら空文字）",
       "subAccountName": "補助科目名（不明なら空文字）",
+      "taxRate": "税率区分（課税10%, 課税8%, 非課税, 不課税, 免税 のいずれか）",
+      "reasoning": "この勘定科目を選んだ理由（日本語1-2文）",
       "confidence": 信頼度（0.0〜1.0）
     }
   ]
@@ -75,6 +79,8 @@ export async function classifyWithAI(ocrText: string): Promise<ParsedJournalEntr
 ルール:
 - 日付が見つからない場合は空文字""にする
 - 金額は税込み総額を使用する。見つからない場合は0
+- reasoningには、なぜその勘定科目を選んだかを日本語1-2文で説明する
+- taxRateには、課税10%, 課税8%, 非課税, 不課税, 免税 のいずれかを選ぶ
 - 勘定科目は以下の一般的な科目から選ぶ:
   7121: 旅費交通費, 7131: 接待交際費, 7141: 通信費, 7151: 消耗品費,
   7161: 水道光熱費, 7171: 地代家賃, 7181: 保険料, 7191: 修繕費,
@@ -107,6 +113,8 @@ export async function classifyWithAI(ocrText: string): Promise<ParsedJournalEntr
         accountName: String(e.accountName || ""),
         subAccountCode: String(e.subAccountCode || ""),
         subAccountName: String(e.subAccountName || ""),
+        taxRate: String(e.taxRate || ""),
+        reasoning: String(e.reasoning || ""),
         confidence: Number(e.confidence) || 0,
       })
     );

@@ -68,7 +68,9 @@ export async function POST(request: NextRequest) {
             subAccountName: item.subAccountName,
             debitAmount: item.amount,
             creditAmount: 0,
+            taxRate: item.taxRate || "",
             aiSuggested: true,
+            aiReasoning: item.reasoning,
             isConfirmed: false,
           },
         });
