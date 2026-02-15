@@ -7,14 +7,27 @@ datasource db {
   provider = "sqlite"
 }
 
+// 得意先（クライアント）
+model Client {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  folders     Folder[]
+  subAccounts SubAccount[]
+}
+
 // フォルダ（アップロード時にファイルをグループ化）
 model Folder {
   id        String   @id @default(uuid())
   name      String
   creator   String   @default("")
+  clientId  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  client    Client?    @relation(fields: [clientId], references: [id])
   documents Document[]
 }
 
@@ -96,12 +109,14 @@ model Account {
 
 // 補助科目マスター
 model SubAccount {
-  id        String @id @default(uuid())
+  id        String  @id @default(uuid())
   accountId String
   code      String
   name      String
+  clientId  String?
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  client  Client? @relation(fields: [clientId], references: [id])
 
-  @@unique([accountId, code])
+  @@unique([accountId, code, clientId])
 }

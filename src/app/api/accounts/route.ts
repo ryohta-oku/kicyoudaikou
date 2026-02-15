@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const clientId = request.nextUrl.searchParams.get("clientId");
+
     const accounts = await prisma.account.findMany({
-      include: { subAccounts: true },
+      include: {
+        subAccounts: clientId
+          ? { where: { clientId } }
+          : true,
+      },
       orderBy: { code: "asc" },
     });
 

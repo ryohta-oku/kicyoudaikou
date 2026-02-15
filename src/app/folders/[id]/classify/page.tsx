@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, use } from "react";
 import Link from "next/link";
+import { getSelectedClientId } from "@/lib/client";
 import {
   FileText,
   ArrowLeft,
@@ -64,7 +65,9 @@ export default function ClassifyPage({
 
   /** 勘定科目マスター取得 */
   const fetchAccounts = useCallback(async () => {
-    const res = await fetch("/api/accounts");
+    const clientId = getSelectedClientId();
+    const url = clientId ? `/api/accounts?clientId=${clientId}` : "/api/accounts";
+    const res = await fetch(url);
     const data = await res.json();
     return (data.accounts || []) as Account[];
   }, []);

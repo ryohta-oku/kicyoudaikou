@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Loader2, Sparkles } from "lucide-react";
+import { getSelectedClientId } from "@/lib/client";
 import Stepper, { WORKFLOW_STEPS } from "@/components/Stepper";
 import JournalEntryTable from "@/components/JournalEntryTable";
 
@@ -62,7 +63,9 @@ export default function ClassifyPage({ params }: { params: Promise<{ id: string 
 
   const fetchAccounts = async () => {
     try {
-      const res = await fetch("/api/accounts");
+      const clientId = getSelectedClientId();
+      const url = clientId ? `/api/accounts?clientId=${clientId}` : "/api/accounts";
+      const res = await fetch(url);
       const data = await res.json();
       setAccounts(data.accounts || []);
     } catch {

@@ -13,6 +13,7 @@ import {
   Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getSelectedClientId } from "@/lib/client";
 
 const ACCEPTED_TYPES = [
   "application/pdf",
@@ -122,10 +123,11 @@ export default function FileUpload({
 
   /** フォルダを作成 */
   const createFolder = async (name: string): Promise<string> => {
+    const clientId = getSelectedClientId();
     const res = await fetch("/api/folders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, clientId }),
     });
     const data = await res.json();
     if (!res.ok) {

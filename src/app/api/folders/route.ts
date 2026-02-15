@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const clientId = request.nextUrl.searchParams.get("clientId");
+
     const folders = await prisma.folder.findMany({
+      where: clientId ? { clientId } : undefined,
       include: {
         documents: {
           select: {
@@ -29,7 +32,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, creator } = await request.json();
+    const { name, creator, clientId } = await request.json();
 
     if (!name || name.trim() === "") {
       return NextResponse.json(
@@ -42,6 +45,7 @@ export async function POST(request: NextRequest) {
       data: {
         name: name.trim(),
         creator: creator || "",
+        clientId: clientId || null,
       },
     });
 

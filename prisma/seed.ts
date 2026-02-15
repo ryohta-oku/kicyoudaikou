@@ -66,6 +66,33 @@ async function main() {
 
   const count = await prisma.account.count();
   console.log(`完了: ${count} 件の勘定科目を登録しました`);
+
+  // デフォルトクライアント「（未分類）」を作成
+  console.log("デフォルトクライアントを作成中...");
+  const existingClients = await prisma.client.findMany();
+  let defaultClient;
+  if (existingClients.length === 0) {
+    defaultClient = await prisma.client.create({
+      data: { name: "（未分類）" },
+    });
+    console.log(`デフォルトクライアント「${defaultClient.name}」を作成しました`);
+  } else {
+    defaultClient = existingClients[0];
+    console.log(`既存クライアント「${defaultClient.name}」を使用します`);
+  }
+
+  // 既存の Folder/SubAccount に clientId を設定
+  const foldersUpdated = await prisma.folder.updateMany({
+    where: { clientId: null },
+    data: { clientId: defaultClient.id },
+  });
+  console.log(`${foldersUpdated.count} 件のフォルダに clientId を設定しました`);
+
+  const subAccountsUpdated = await prisma.subAccount.updateMany({
+    where: { clientId: null },
+    data: { clientId: defaultClient.id },
+  });
+  console.log(`${subAccountsUpdated.count} 件の補助科目に clientId を設定しました`);
 }
 
 main()

@@ -11,6 +11,7 @@ import {
   FileText,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
+import { getSelectedClientId } from "@/lib/client";
 import FileUpload from "@/components/FileUpload";
 
 interface FolderDocument {
@@ -49,7 +50,9 @@ export default function DashboardPage() {
 
   const fetchFolders = useCallback(async () => {
     try {
-      const res = await fetch("/api/folders");
+      const clientId = getSelectedClientId();
+      const url = clientId ? `/api/folders?clientId=${clientId}` : "/api/folders";
+      const res = await fetch(url);
       const data = await res.json();
       setFolders(data.folders || []);
     } catch (error) {

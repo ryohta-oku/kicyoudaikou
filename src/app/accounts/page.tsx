@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Plus, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getSelectedClientId } from "@/lib/client";
 
 interface Account {
   id: string;
@@ -33,7 +34,9 @@ export default function AccountsPage() {
 
   const fetchAccounts = async () => {
     try {
-      const res = await fetch("/api/accounts");
+      const clientId = getSelectedClientId();
+      const url = clientId ? `/api/accounts?clientId=${clientId}` : "/api/accounts";
+      const res = await fetch(url);
       const data = await res.json();
       setAccounts(data.accounts || []);
     } finally {
