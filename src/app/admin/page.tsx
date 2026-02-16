@@ -55,6 +55,7 @@ export default function AdminPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
+  const [addPassword, setAddPassword] = useState("");
   const [addRole, setAddRole] = useState("user");
   const [adding, setAdding] = useState(false);
   const [setupUrl, setSetupUrl] = useState<string | null>(null);
@@ -190,7 +191,7 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: addName.trim(), email: addEmail.trim(), role: addRole }),
+        body: JSON.stringify({ name: addName.trim(), email: addEmail.trim(), role: addRole, password: addPassword || undefined }),
       });
       const data = await res.json();
 
@@ -203,14 +204,16 @@ export default function AdminPage() {
       setShowAddForm(false);
       setAddName("");
       setAddEmail("");
+      setAddPassword("");
       setAddRole("user");
 
-      if (data.emailSent) {
+      if (data.mode === "password") {
+        setMessage({ type: "success", text: `「${data.user.name}」を追加しました（パスワード設定済み）。` });
+      } else if (data.emailSent) {
         setMessage({ type: "success", text: `「${data.user.name}」を追加しました。招待メールを送信しました。` });
       } else if (data.setupUrl) {
-        // SMTP未設定時：URLを表示
         setSetupUrl(data.setupUrl);
-        setMessage({ type: "success", text: `「${data.user.name}」を追加しました。SMTP未設定のため、以下のURLをご本人にお伝えください。` });
+        setMessage({ type: "success", text: `「${data.user.name}」を追加しました。RESEND_API_KEY未設定のため、以下のURLをご本人にお伝えください。` });
       }
     } catch {
       setMessage({ type: "error", text: "追加に失敗しました" });
@@ -302,6 +305,16 @@ export default function AdminPage() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">パスワード</label>
+                <input
+                  type="text"
+                  value={addPassword}
+                  onChange={(e) => setAddPassword(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="空欄なら招待メール送信"
+                />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">権限</label>
                 <select
                   value={addRole}
@@ -325,7 +338,7 @@ export default function AdminPage() {
               </button>
               <button
                 type="button"
-                onClick={() => { setShowAddForm(false); setAddName(""); setAddEmail(""); setAddRole("user"); }}
+                onClick={() => { setShowAddForm(false); setAddName(""); setAddEmail(""); setAddPassword(""); setAddRole("user"); }}
                 className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
               >
                 キャンセル

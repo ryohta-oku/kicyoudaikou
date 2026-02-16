@@ -38,10 +38,14 @@ export async function POST(request: NextRequest) {
   if (error) return error;
 
   try {
-    const { email, name, role } = await request.json();
+    const { email, name, role, password } = await request.json();
 
     if (!email || !name) {
       return NextResponse.json({ error: "名前とメールアドレスを入力してください" }, { status: 400 });
+    }
+
+    if (password && password.length < 6) {
+      return NextResponse.json({ error: "パスワードは6文字以上で入力してください" }, { status: 400 });
     }
 
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -50,10 +54,27 @@ export async function POST(request: NextRequest) {
     }
 
     const userRole = ["admin", "instructor", "user"].includes(role) ? role : "user";
+
+    if (password) {
+      // パスワード指定あり：即ログイン可能な状態で作成
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const user = await prisma.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          plainPassword: password,
+          name,
+          role: userRole,
+        },
+        select: { id: true, email: true, name: true, role: true, plainPassword: true, createdAt: true },
+      });
+
+      return NextResponse.json({ user, mode: "password" });
+    }
+
+    // パスワード未指定：招待メールフロー
     const inviteToken = randomUUID();
     const inviteTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24時間後
-
-    // パスワード未設定状態で作成（ログイン不可）
     const placeholderPassword = await bcrypt.hash(randomUUID(), 10);
 
     const user = await prisma.user.create({
@@ -73,6 +94,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       user,
+      mode: "invite",
       emailSent: !emailResult.consoleOnly,
       setupUrl: emailResult.consoleOnly ? emailResult.setupUrl : undefined,
     });
