@@ -67,8 +67,8 @@ export async function classifyWithAI(ocrText: string): Promise<ParsedJournalEntr
       "amount": 金額（数値）,
       "accountCode": "勘定科目コード",
       "accountName": "勘定科目名",
-      "subAccountCode": "補助科目コード（不明なら空文字）",
-      "subAccountName": "補助科目名（不明なら空文字）",
+      "subAccountCode": "補助科目コード（マスターに存在する場合のみ。なければ空文字）",
+      "subAccountName": "補助科目名（取引先名・店舗名など。必ず推測して入力すること）",
       "taxRate": "税率区分（課税10%, 課税8%, 非課税, 不課税, 免税 のいずれか）",
       "reasoning": "この勘定科目を選んだ理由（日本語1-2文）",
       "confidence": 信頼度（0.0〜1.0）
@@ -88,7 +88,12 @@ export async function classifyWithAI(ocrText: string): Promise<ParsedJournalEntr
   7231: 新聞図書費, 7241: 車両費, 7299: 雑費,
   4111: 売上高, 1111: 現金, 1121: 普通預金
 - 判断に迷う場合はconfidenceを低くする（0.5以下）
-- テキストに仕訳情報がない場合はentriesを空配列にする${accountMaster}`,
+- テキストに仕訳情報がない場合はentriesを空配列にする
+- 【重要】補助科目（subAccountName）は取引先名・店舗名・支払先名を推測して必ず入力すること。
+  例: レシートの店名「スターバックス」→ subAccountName: "スターバックス"
+  例: 請求書の発行元「株式会社ABC」→ subAccountName: "株式会社ABC"
+  例: 領収書の宛先が「タクシー代」で店名が「日本交通」→ subAccountName: "日本交通"
+  マスターに該当する補助科目がある場合はそのコードと名前を使用し、なければsubAccountCodeは空文字でsubAccountNameだけ入力する。${accountMaster}`,
       },
       {
         role: "user",
