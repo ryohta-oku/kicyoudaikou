@@ -161,7 +161,7 @@ export default function JournalEntryTable({
   };
 
   return (
-    <div className="bg-white border rounded-xl overflow-hidden">
+    <div className="bg-white border rounded-xl">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>

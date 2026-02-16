@@ -243,8 +243,8 @@ export default function ClassifyEditor({
         {/* 右側: 仕訳フィールド + AI理由 */}
         <div className="space-y-4">
           {/* 仕訳項目 */}
-          <div className="bg-white border rounded-xl overflow-hidden">
-            <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
+          <div className="bg-white border rounded-xl">
+            <div className="bg-gray-50 px-4 py-3 border-b rounded-t-xl flex items-center justify-between">
               <h3 className="text-sm font-medium text-gray-700">仕訳項目</h3>
               <div className="flex items-center gap-2">
                 {currentEntry.aiSuggested && (
