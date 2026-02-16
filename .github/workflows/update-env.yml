@@ -1,0 +1,70 @@
+name: Update VPS .env
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-env:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update .env via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script_stop: true
+          script: |
+            ENV_FILE="/var/www/kicyoudaikou/.env"
+
+            echo "=== 現在の .env の項目一覧（値は非表示） ==="
+            grep -oP '^[A-Z_]+' "$ENV_FILE" || true
+            echo ""
+
+            # RESEND_API_KEY を追加（なければ）
+            if ! grep -q "^RESEND_API_KEY" "$ENV_FILE"; then
+              echo '' >> "$ENV_FILE"
+              echo '# Resend（メール認証用）' >> "$ENV_FILE"
+              echo 'RESEND_API_KEY="re_8XQPe29r_4nnm7BiVDa3UvFjHV8u9CQdj"' >> "$ENV_FILE"
+              echo ">>> RESEND_API_KEY を追加しました"
+            else
+              echo ">>> RESEND_API_KEY は既に設定済み"
+            fi
+
+            # RESEND_FROM を追加（なければ）
+            if ! grep -q "^RESEND_FROM" "$ENV_FILE"; then
+              echo 'RESEND_FROM="記帳代行ツール <noreply@coco-star.jp>"' >> "$ENV_FILE"
+              echo ">>> RESEND_FROM を追加しました"
+            else
+              echo ">>> RESEND_FROM は既に設定済み"
+            fi
+
+            # APP_URL の確認
+            APP_URL_VALUE=$(grep "^APP_URL" "$ENV_FILE" | cut -d'"' -f2)
+            echo ""
+            echo ">>> 現在の APP_URL: $APP_URL_VALUE"
+            if echo "$APP_URL_VALUE" | grep -q "localhost"; then
+              echo "⚠ APP_URL が localhost です。本番URLに変更が必要です"
+            fi
+
+            # NEXTAUTH_SECRET の確認
+            SECRET_VALUE=$(grep "^NEXTAUTH_SECRET" "$ENV_FILE" | cut -d'"' -f2)
+            if [ "$SECRET_VALUE" = "dev-secret-change-in-production" ]; then
+              # 本番用のランダムシークレットを生成して置換
+              NEW_SECRET=$(openssl rand -base64 32)
+              sed -i "s|NEXTAUTH_SECRET=\"dev-secret-change-in-production\"|NEXTAUTH_SECRET=\"$NEW_SECRET\"|" "$ENV_FILE"
+              echo ">>> NEXTAUTH_SECRET を本番用に更新しました"
+            else
+              echo ">>> NEXTAUTH_SECRET は設定済み"
+            fi
+
+            echo ""
+            echo "=== 更新後の .env 項目一覧 ==="
+            grep -oP '^[A-Z_]+' "$ENV_FILE" || true
+
+            # PM2 再起動して反映
+            cd /var/www/kicyoudaikou
+            pm2 startOrRestart ecosystem.config.cjs --env production
+            echo ""
+            echo "=== PM2 再起動完了 ==="
