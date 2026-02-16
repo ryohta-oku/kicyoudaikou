@@ -12,7 +12,7 @@ export async function GET(
       include: {
         documents: {
           include: {
-            pages: { select: { id: true } },
+            pages: { select: { id: true, imagePath: true, pageNumber: true }, orderBy: { pageNumber: "asc" } },
             _count: { select: { journalEntries: true } },
             journalEntries: {
               orderBy: { date: "asc" },

@@ -15,12 +15,15 @@ import {
   Sparkles,
   Check,
   Pencil,
+  X,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS, formatCurrency } from "@/lib/utils";
+import Image from "next/image";
 import OCREditor, { type PageUpdateData } from "@/components/OCREditor";
 
 interface JournalEntryData {
   id: string;
+  pageId: string | null;
   date: string;
   description: string;
   accountCode: string;
@@ -31,6 +34,7 @@ interface JournalEntryData {
   creditAmount: number;
   taxRate: string;
   aiSuggested: boolean;
+  aiReasoning: string;
   isConfirmed: boolean;
 }
 
@@ -38,11 +42,12 @@ interface Document {
   id: string;
   filename: string;
   filepath: string;
+  fileType: string;
   title: string;
   creator: string;
   status: string;
   createdAt: string;
-  pages: { id: string }[];
+  pages: { id: string; imagePath: string; pageNumber: number }[];
   _count: { journalEntries: number };
   journalEntries: JournalEntryData[];
 }
@@ -92,6 +97,7 @@ export default function FolderDetailPage({
   const [ocrErrors, setOcrErrors] = useState<Record<string, string>>({});
   const ocrStartedRef = useRef(false);
   const [ocrDocsData, setOcrDocsData] = useState<Record<string, FullDocument>>({});
+  const [detailEntry, setDetailEntry] = useState<(JournalEntryData & { documentId: string; filename: string; filepath: string; fileType: string; pages: { id: string; imagePath: string; pageNumber: number }[] }) | null>(null);
   const [loadingOcrDocs, setLoadingOcrDocs] = useState(false);
   const [fullyConfirmedDocIds, setFullyConfirmedDocIds] = useState<Set<string>>(new Set());
   const confirmedProcessedRef = useRef<Set<string>>(new Set());
@@ -594,6 +600,9 @@ export default function FolderDetailPage({
             ...entry,
             documentId: doc.id,
             filename: doc.filename,
+            filepath: doc.filepath,
+            fileType: doc.fileType || (doc.filename.endsWith(".pdf") ? "pdf" : "image"),
+            pages: doc.pages,
           }))
         );
 
@@ -637,6 +646,7 @@ export default function FolderDetailPage({
                       <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">税区分</th>
                       <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">確認</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">ファイル</th>
+                      <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -695,6 +705,14 @@ export default function FolderDetailPage({
                           <span className="text-xs text-gray-500 truncate max-w-[120px] block">
                             {entry.filename}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={() => setDetailEntry(entry)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200"
+                          >
+                            詳細
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -825,6 +843,154 @@ export default function FolderDetailPage({
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
           <span className="ml-2 text-sm text-gray-500">OCRデータを読み込み中...</span>
+        </div>
+      )}
+
+      {/* 仕訳詳細モーダル */}
+      {detailEntry && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setDetailEntry(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* モーダルヘッダー */}
+            <div className="flex items-center justify-between px-6 py-4 border-b bg-gray-50">
+              <h3 className="text-lg font-bold text-gray-900">仕訳詳細</h3>
+              <button
+                onClick={() => setDetailEntry(null)}
+                className="p-1.5 text-gray-500 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* モーダルコンテンツ */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
+                {/* 左側: 元画像 */}
+                <div className="border-r">
+                  <div className="bg-gray-50 px-4 py-2 border-b">
+                    <p className="text-xs font-medium text-gray-500">
+                      元ファイル: {detailEntry.filename}
+                    </p>
+                  </div>
+                  <div className="p-4">
+                    {detailEntry.fileType === "pdf" ? (
+                      <iframe
+                        src={`/api/files?path=${encodeURIComponent(detailEntry.filepath)}`}
+                        className="w-full border rounded"
+                        style={{ height: "500px" }}
+                        title="PDF"
+                      />
+                    ) : (() => {
+                      const matchedPage = detailEntry.pageId
+                        ? detailEntry.pages.find((p) => p.id === detailEntry.pageId)
+                        : detailEntry.pages[0];
+                      return matchedPage ? (
+                        <div className="overflow-auto max-h-[500px]">
+                          <Image
+                            src={`/api/files?path=${encodeURIComponent(matchedPage.imagePath)}`}
+                            alt={`ページ ${matchedPage.pageNumber}`}
+                            width={600}
+                            height={850}
+                            className="w-full h-auto border rounded"
+                            unoptimized
+                          />
+                        </div>
+                      ) : (
+                        <div className="text-center py-12 text-gray-400 text-sm">
+                          画像がありません
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {/* 右側: 仕訳情報 */}
+                <div className="p-6 space-y-4">
+                  {/* ステータス */}
+                  <div className="flex items-center gap-2">
+                    {detailEntry.isConfirmed ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2.5 py-1 rounded-full">
+                        <Check className="w-3 h-3" />
+                        確認済
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+                        未確認
+                      </span>
+                    )}
+                    {detailEntry.aiSuggested && (
+                      <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full">
+                        AI推測
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 仕訳情報テーブル */}
+                  <dl className="divide-y divide-gray-100">
+                    <div className="py-3 grid grid-cols-3 gap-4">
+                      <dt className="text-sm font-medium text-gray-500">日付</dt>
+                      <dd className="text-sm text-gray-900 col-span-2">{detailEntry.date || "-"}</dd>
+                    </div>
+                    <div className="py-3 grid grid-cols-3 gap-4">
+                      <dt className="text-sm font-medium text-gray-500">摘要</dt>
+                      <dd className="text-sm text-gray-900 col-span-2">{detailEntry.description || "-"}</dd>
+                    </div>
+                    <div className="py-3 grid grid-cols-3 gap-4">
+                      <dt className="text-sm font-medium text-gray-500">勘定科目</dt>
+                      <dd className="text-sm text-gray-900 col-span-2">{detailEntry.accountName || "-"}</dd>
+                    </div>
+                    <div className="py-3 grid grid-cols-3 gap-4">
+                      <dt className="text-sm font-medium text-gray-500">補助科目</dt>
+                      <dd className="text-sm text-gray-900 col-span-2">{detailEntry.subAccountName || "-"}</dd>
+                    </div>
+                    <div className="py-3 grid grid-cols-3 gap-4">
+                      <dt className="text-sm font-medium text-gray-500">借方金額</dt>
+                      <dd className="text-sm text-gray-900 col-span-2 font-mono">
+                        {detailEntry.debitAmount > 0 ? formatCurrency(detailEntry.debitAmount) : "-"}
+                      </dd>
+                    </div>
+                    <div className="py-3 grid grid-cols-3 gap-4">
+                      <dt className="text-sm font-medium text-gray-500">貸方金額</dt>
+                      <dd className="text-sm text-gray-900 col-span-2 font-mono">
+                        {detailEntry.creditAmount > 0 ? formatCurrency(detailEntry.creditAmount) : "-"}
+                      </dd>
+                    </div>
+                    <div className="py-3 grid grid-cols-3 gap-4">
+                      <dt className="text-sm font-medium text-gray-500">税区分</dt>
+                      <dd className="text-sm text-gray-900 col-span-2">{detailEntry.taxRate || "-"}</dd>
+                    </div>
+                  </dl>
+
+                  {/* AI分類理由 */}
+                  {detailEntry.aiReasoning && (
+                    <div className="mt-4">
+                      <h4 className="text-sm font-medium text-gray-500 mb-2">AI分類理由</h4>
+                      <div className="text-sm text-gray-700 bg-amber-50 border border-amber-200 rounded-lg p-3 whitespace-pre-wrap">
+                        {detailEntry.aiReasoning}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* アクション */}
+                  <div className="pt-4 flex gap-2">
+                    <Link
+                      href={`/folders/${id}/classify`}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+                      onClick={() => setDetailEntry(null)}
+                    >
+                      <Pencil className="w-4 h-4" />
+                      仕訳確認・編集
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
