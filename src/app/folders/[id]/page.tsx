@@ -18,8 +18,21 @@ import {
   X,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS, formatCurrency } from "@/lib/utils";
+import { getSelectedClientId } from "@/lib/client";
 import Image from "next/image";
 import OCREditor, { type PageUpdateData } from "@/components/OCREditor";
+import SubAccountCombobox from "@/components/SubAccountCombobox";
+
+interface AccountData {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  subAccounts: { id: string; code: string; name: string }[];
+}
+
+const CATEGORY_ORDER = ["費用", "資産", "負債", "収益", "純資産"];
+const TAX_RATE_OPTIONS = ["課税10%", "課税8%", "非課税", "不課税", "免税"];
 
 interface JournalEntryData {
   id: string;
@@ -98,6 +111,9 @@ export default function FolderDetailPage({
   const ocrStartedRef = useRef(false);
   const [ocrDocsData, setOcrDocsData] = useState<Record<string, FullDocument>>({});
   const [detailEntry, setDetailEntry] = useState<(JournalEntryData & { documentId: string; filename: string; filepath: string; fileType: string; pages: { id: string; imagePath: string; pageNumber: number }[] }) | null>(null);
+  const [editForm, setEditForm] = useState<Partial<JournalEntryData>>({});
+  const [savingEntry, setSavingEntry] = useState(false);
+  const [accounts, setAccounts] = useState<AccountData[]>([]);
   const [loadingOcrDocs, setLoadingOcrDocs] = useState(false);
   const [fullyConfirmedDocIds, setFullyConfirmedDocIds] = useState<Set<string>>(new Set());
   const confirmedProcessedRef = useRef<Set<string>>(new Set());
@@ -115,6 +131,64 @@ export default function FolderDetailPage({
       setLoading(false);
     }
   }, [id]);
+
+  /** 勘定科目マスター取得 */
+  const fetchAccounts = useCallback(async () => {
+    const clientId = getSelectedClientId();
+    const url = clientId ? `/api/accounts?clientId=${clientId}` : "/api/accounts";
+    const res = await fetch(url);
+    const data = await res.json();
+    setAccounts((data.accounts || []) as AccountData[]);
+  }, []);
+
+  /** 詳細モーダルを開く */
+  const openDetail = useCallback((entry: typeof detailEntry) => {
+    if (!entry) return;
+    setDetailEntry(entry);
+    setEditForm({
+      date: entry.date,
+      description: entry.description,
+      accountCode: entry.accountCode,
+      accountName: entry.accountName,
+      subAccountCode: entry.subAccountCode,
+      subAccountName: entry.subAccountName,
+      debitAmount: entry.debitAmount,
+      creditAmount: entry.creditAmount,
+      taxRate: entry.taxRate,
+    });
+    // accounts未取得なら取得
+    if (accounts.length === 0) fetchAccounts();
+  }, [accounts.length, fetchAccounts]);
+
+  /** 仕訳エントリ更新 */
+  const handleUpdateEntry = useCallback(async () => {
+    if (!detailEntry) return;
+    setSavingEntry(true);
+    try {
+      const payload: Record<string, unknown> = { id: detailEntry.id };
+      for (const [key, value] of Object.entries(editForm)) {
+        if (key === "debitAmount" || key === "creditAmount") {
+          payload[key] = Number(value) || 0;
+        } else {
+          payload[key] = value;
+        }
+      }
+      const res = await fetch("/api/entries", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("更新に失敗しました");
+
+      // フォルダデータを再取得して反映
+      await fetchFolder();
+      setDetailEntry(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "更新に失敗しました");
+    } finally {
+      setSavingEntry(false);
+    }
+  }, [detailEntry, editForm, fetchFolder]);
 
   /** 1件のドキュメント詳細を取得し ocrDocsData に追加 */
   const fetchDocFullData = useCallback(async (docId: string) => {
@@ -708,7 +782,7 @@ export default function FolderDetailPage({
                         </td>
                         <td className="px-4 py-3 text-center">
                           <button
-                            onClick={() => setDetailEntry(entry)}
+                            onClick={() => openDetail(entry)}
                             className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200"
                           >
                             詳細
@@ -909,8 +983,8 @@ export default function FolderDetailPage({
                   </div>
                 </div>
 
-                {/* 右側: 仕訳情報 */}
-                <div className="p-6 space-y-4">
+                {/* 右側: 仕訳編集フォーム */}
+                <div className="p-6 space-y-4 overflow-y-auto">
                   {/* ステータス */}
                   <div className="flex items-center gap-2">
                     {detailEntry.isConfirmed ? (
@@ -930,62 +1004,157 @@ export default function FolderDetailPage({
                     )}
                   </div>
 
-                  {/* 仕訳情報テーブル */}
-                  <dl className="divide-y divide-gray-100">
-                    <div className="py-3 grid grid-cols-3 gap-4">
-                      <dt className="text-sm font-medium text-gray-500">日付</dt>
-                      <dd className="text-sm text-gray-900 col-span-2">{detailEntry.date || "-"}</dd>
+                  {/* 編集フォーム */}
+                  <div className="space-y-3">
+                    {/* 日付 */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">日付</label>
+                      <input
+                        type="date"
+                        value={editForm.date || ""}
+                        onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
                     </div>
-                    <div className="py-3 grid grid-cols-3 gap-4">
-                      <dt className="text-sm font-medium text-gray-500">摘要</dt>
-                      <dd className="text-sm text-gray-900 col-span-2">{detailEntry.description || "-"}</dd>
+
+                    {/* 摘要 */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">摘要</label>
+                      <input
+                        type="text"
+                        value={editForm.description || ""}
+                        onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
                     </div>
-                    <div className="py-3 grid grid-cols-3 gap-4">
-                      <dt className="text-sm font-medium text-gray-500">勘定科目</dt>
-                      <dd className="text-sm text-gray-900 col-span-2">{detailEntry.accountName || "-"}</dd>
+
+                    {/* 勘定科目 */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">勘定科目</label>
+                      <select
+                        value={editForm.accountCode || ""}
+                        onChange={(e) => {
+                          const acc = accounts.find((a) => a.code === e.target.value);
+                          setEditForm({
+                            ...editForm,
+                            accountCode: e.target.value,
+                            accountName: acc?.name || "",
+                            subAccountCode: "",
+                            subAccountName: "",
+                          });
+                        }}
+                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">-- 選択してください --</option>
+                        {CATEGORY_ORDER.map((category) => {
+                          const catAccounts = accounts.filter((a) => a.category === category);
+                          if (catAccounts.length === 0) return null;
+                          return (
+                            <optgroup key={category} label={category}>
+                              {catAccounts.map((a) => (
+                                <option key={a.code} value={a.code}>{a.name}</option>
+                              ))}
+                            </optgroup>
+                          );
+                        })}
+                        {accounts
+                          .filter((a) => !CATEGORY_ORDER.includes(a.category))
+                          .map((a) => (
+                            <option key={a.code} value={a.code}>{a.name}</option>
+                          ))}
+                      </select>
                     </div>
-                    <div className="py-3 grid grid-cols-3 gap-4">
-                      <dt className="text-sm font-medium text-gray-500">補助科目</dt>
-                      <dd className="text-sm text-gray-900 col-span-2">{detailEntry.subAccountName || "-"}</dd>
+
+                    {/* 補助科目 */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">補助科目</label>
+                      {(() => {
+                        const selectedAcc = accounts.find((a) => a.code === editForm.accountCode);
+                        return (
+                          <SubAccountCombobox
+                            subAccounts={selectedAcc?.subAccounts || []}
+                            value={editForm.subAccountCode || ""}
+                            valueName={editForm.subAccountName || ""}
+                            onChange={(code, name) =>
+                              setEditForm({ ...editForm, subAccountCode: code, subAccountName: name })
+                            }
+                            accountId={selectedAcc?.id || ""}
+                            clientId={getSelectedClientId()}
+                            onSubAccountAdded={fetchAccounts}
+                          />
+                        );
+                      })()}
                     </div>
-                    <div className="py-3 grid grid-cols-3 gap-4">
-                      <dt className="text-sm font-medium text-gray-500">借方金額</dt>
-                      <dd className="text-sm text-gray-900 col-span-2 font-mono">
-                        {detailEntry.debitAmount > 0 ? formatCurrency(detailEntry.debitAmount) : "-"}
-                      </dd>
+
+                    {/* 借方金額 */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">借方金額</label>
+                      <input
+                        type="number"
+                        value={editForm.debitAmount || 0}
+                        onChange={(e) => setEditForm({ ...editForm, debitAmount: parseInt(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border rounded-lg text-sm text-right font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
                     </div>
-                    <div className="py-3 grid grid-cols-3 gap-4">
-                      <dt className="text-sm font-medium text-gray-500">貸方金額</dt>
-                      <dd className="text-sm text-gray-900 col-span-2 font-mono">
-                        {detailEntry.creditAmount > 0 ? formatCurrency(detailEntry.creditAmount) : "-"}
-                      </dd>
+
+                    {/* 貸方金額 */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">貸方金額</label>
+                      <input
+                        type="number"
+                        value={editForm.creditAmount || 0}
+                        onChange={(e) => setEditForm({ ...editForm, creditAmount: parseInt(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border rounded-lg text-sm text-right font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
                     </div>
-                    <div className="py-3 grid grid-cols-3 gap-4">
-                      <dt className="text-sm font-medium text-gray-500">税区分</dt>
-                      <dd className="text-sm text-gray-900 col-span-2">{detailEntry.taxRate || "-"}</dd>
+
+                    {/* 税区分 */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">税区分</label>
+                      <select
+                        value={editForm.taxRate || ""}
+                        onChange={(e) => setEditForm({ ...editForm, taxRate: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">-- 選択してください --</option>
+                        {TAX_RATE_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
                     </div>
-                  </dl>
+                  </div>
 
                   {/* AI分類理由 */}
                   {detailEntry.aiReasoning && (
-                    <div className="mt-4">
-                      <h4 className="text-sm font-medium text-gray-500 mb-2">AI分類理由</h4>
-                      <div className="text-sm text-gray-700 bg-amber-50 border border-amber-200 rounded-lg p-3 whitespace-pre-wrap">
+                    <div>
+                      <h4 className="text-xs font-medium text-gray-500 mb-1">AI分類理由</h4>
+                      <div className="text-xs text-gray-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 whitespace-pre-wrap">
                         {detailEntry.aiReasoning}
                       </div>
                     </div>
                   )}
 
-                  {/* アクション */}
-                  <div className="pt-4 flex gap-2">
-                    <Link
-                      href={`/folders/${id}/classify`}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
-                      onClick={() => setDetailEntry(null)}
+                  {/* アクションボタン */}
+                  <div className="pt-2 flex gap-2">
+                    <button
+                      onClick={handleUpdateEntry}
+                      disabled={savingEntry}
+                      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                     >
-                      <Pencil className="w-4 h-4" />
-                      仕訳確認・編集
-                    </Link>
+                      {savingEntry ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Check className="w-4 h-4" />
+                      )}
+                      更新
+                    </button>
+                    <button
+                      onClick={() => setDetailEntry(null)}
+                      disabled={savingEntry}
+                      className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                    >
+                      キャンセル
+                    </button>
                   </div>
                 </div>
               </div>
