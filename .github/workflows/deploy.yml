@@ -22,22 +22,6 @@ jobs:
 
             echo "=== デプロイ開始 ==="
 
-            # .env にResend設定を追加（なければ）
-            ENV_FILE="/var/www/kicyoudaikou/.env"
-            if ! grep -q "^RESEND_API_KEY" "$ENV_FILE"; then
-              echo '' >> "$ENV_FILE"
-              echo '# Resend（メール認証用）' >> "$ENV_FILE"
-              echo 'RESEND_API_KEY="re_8XQPe29r_4nnm7BiVDa3UvFjHV8u9CQdj"' >> "$ENV_FILE"
-              echo 'RESEND_FROM="記帳代行ツール <noreply@coco-star.jp>"' >> "$ENV_FILE"
-              echo ">>> RESEND設定を追加しました"
-            fi
-            # NEXTAUTH_SECRETが仮の値なら本番用に更新
-            if grep -q 'dev-secret-change-in-production' "$ENV_FILE"; then
-              NEW_SECRET=$(openssl rand -base64 32)
-              sed -i "s|dev-secret-change-in-production|$NEW_SECRET|" "$ENV_FILE"
-              echo ">>> NEXTAUTH_SECRETを本番用に更新しました"
-            fi
-
             # 最新コードを取得
             echo ">>> git pull..."
             git pull origin main
