@@ -46,14 +46,20 @@ jobs:
             echo ">>> PM2 restart..."
             pm2 startOrRestart ecosystem.config.cjs --env production
 
-            echo "=== デプロイ完了 ==="
+            # NEXTAUTH_SECRET がなければ追加
+            if ! grep -q "^NEXTAUTH_SECRET" /var/www/kicyoudaikou/.env; then
+              NEW_SECRET=$(openssl rand -base64 32)
+              echo "NEXTAUTH_SECRET=\"$NEW_SECRET\"" >> /var/www/kicyoudaikou/.env
+              echo ">>> NEXTAUTH_SECRET を追加しました"
+            fi
 
-            # アプリの状態確認
-            echo "=== PM2 ステータス ==="
-            pm2 status
-            echo "=== PM2 ログ（最新50行） ==="
-            pm2 logs --nostream --lines 50
-            echo "=== .env の項目確認（値は非表示） ==="
-            grep -oP '^[A-Z_]+' /var/www/kicyoudaikou/.env
-            echo "=== APP_URL の値 ==="
-            grep "^APP_URL" /var/www/kicyoudaikou/.env
+            # APP_URL がなければ追加
+            if ! grep -q "^APP_URL" /var/www/kicyoudaikou/.env; then
+              echo 'APP_URL="http://162.43.7.199"' >> /var/www/kicyoudaikou/.env
+              echo ">>> APP_URL を追加しました"
+            fi
+
+            # PM2 再起動
+            pm2 startOrRestart ecosystem.config.cjs --env production
+
+            echo "=== デプロイ完了 ==="
