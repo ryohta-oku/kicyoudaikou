@@ -16,33 +16,13 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
-          script_stop: true
           script: |
+            set -e
             cd /var/www/kicyoudaikou
 
             echo "=== デプロイ開始 ==="
 
-            # 最新コードを取得
-            echo ">>> git pull..."
-            git pull origin main
-
-            # 依存パッケージをインストール
-            echo ">>> npm ci..."
-            npm ci --production=false
-
-            # Prisma クライアント生成
-            echo ">>> Prisma generate..."
-            npx prisma generate
-
-            # Next.js ビルド
-            echo ">>> npm run build..."
-            npm run build
-
-            # DB マイグレーション
-            echo ">>> Prisma migrate..."
-            npx prisma migrate deploy
-
-            # .env に必要な環境変数を追加（なければ追加）
+            # .env に必要な環境変数を追加（ビルド前に実行）
             echo ">>> .env チェック..."
 
             if ! grep -q "^NEXTAUTH_SECRET" /var/www/kicyoudaikou/.env; then
@@ -66,17 +46,45 @@ jobs:
               echo ">>> RESEND_FROM を追加しました"
             fi
 
+            echo ">>> .env キー一覧:"
+            grep -E "^[A-Z_]+=" /var/www/kicyoudaikou/.env | sed 's/=.*/=***/'
+
+            # 最新コードを取得
+            echo ">>> git pull..."
+            git pull origin main
+
+            # 依存パッケージをインストール
+            echo ">>> npm ci..."
+            npm ci --production=false
+
+            # Prisma クライアント生成
+            echo ">>> Prisma generate..."
+            npx prisma generate
+
+            # Next.js ビルド
+            echo ">>> npm run build..."
+            npm run build
+
+            # ビルド確認
+            if [ ! -d ".next" ]; then
+              echo "エラー: .next ディレクトリが見つかりません。ビルドが失敗しています。"
+              exit 1
+            fi
+            echo ">>> ビルド成功（.next ディレクトリ確認OK）"
+
+            # DB マイグレーション
+            echo ">>> Prisma migrate..."
+            npx prisma migrate deploy
+
             # PM2 でアプリを再起動
             echo ">>> PM2 restart..."
             pm2 startOrRestart ecosystem.config.cjs --env production
 
-            # 起動確認（少し待ってからステータスとログを表示）
+            # 起動確認
             sleep 5
             echo ">>> PM2 status:"
             pm2 status
             echo ">>> PM2 logs (最新20行):"
             pm2 logs --nostream --lines 20
-            echo ">>> .env の内容（値はマスク）:"
-            grep -E "^[A-Z_]+=" /var/www/kicyoudaikou/.env | sed 's/=.*/=***/'
 
             echo "=== デプロイ完了 ==="
