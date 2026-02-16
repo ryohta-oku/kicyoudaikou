@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { sendInviteEmail } from "@/lib/email";
+import { sendVerificationEmail } from "@/lib/email";
 
 async function requireAdminOrInstructor() {
   const session = await auth();
@@ -75,16 +75,15 @@ export async function POST(request: NextRequest) {
       select: { id: true, email: true, name: true, role: true, plainPassword: true, createdAt: true },
     });
 
-    // 招待メール送信（失敗してもユーザー作成は成功とする）
+    // 認証メール送信（失敗してもユーザー作成は成功とする）
     let emailSent = false;
     let setupUrl: string | undefined;
     try {
-      const emailResult = await sendInviteEmail(email, name, inviteToken);
+      const emailResult = await sendVerificationEmail(email, name, inviteToken);
       emailSent = !emailResult.consoleOnly;
       setupUrl = emailResult.consoleOnly ? emailResult.setupUrl : undefined;
     } catch (emailErr) {
       console.error("Email send failed:", emailErr);
-      // メール失敗時はsetupUrlを手動で生成
       const appUrl = process.env.APP_URL || "http://localhost:3000";
       setupUrl = `${appUrl}/setup-password?token=${inviteToken}`;
     }

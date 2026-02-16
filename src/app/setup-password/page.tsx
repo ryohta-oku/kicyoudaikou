@@ -13,9 +13,11 @@ export default function SetupPasswordPage() {
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  const [hasPassword, setHasPassword] = useState(false);
   const [error, setError] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [wantsChange, setWantsChange] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -34,6 +36,7 @@ export default function SetupPasswordPage() {
         } else {
           setUserName(data.user.name);
           setUserEmail(data.user.email);
+          setHasPassword(data.hasPassword);
         }
       })
       .catch(() => setError("エラーが発生しました"))
@@ -44,23 +47,30 @@ export default function SetupPasswordPage() {
     e.preventDefault();
     setError("");
 
-    if (password !== confirmPassword) {
-      setError("パスワードが一致しません");
-      return;
-    }
+    const isChangingPassword = !hasPassword || wantsChange;
 
-    if (password.length < 6) {
-      setError("パスワードは6文字以上で入力してください");
-      return;
+    if (isChangingPassword) {
+      if (password !== confirmPassword) {
+        setError("パスワードが一致しません");
+        return;
+      }
+      if (password.length < 6) {
+        setError("パスワードは6文字以上で入力してください");
+        return;
+      }
     }
 
     setSubmitting(true);
 
     try {
+      const body = isChangingPassword
+        ? { token, password }
+        : { token, verifyOnly: true };
+
       const res = await fetch("/api/auth/setup-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -72,18 +82,26 @@ export default function SetupPasswordPage() {
 
       setDone(true);
 
-      // 自動ログイン
-      setTimeout(async () => {
-        const result = await signIn("credentials", {
-          email: userEmail,
-          password,
-          redirect: false,
-        });
-        if (!result?.error) {
-          router.push("/");
-          router.refresh();
-        }
-      }, 1500);
+      // パスワードが確定している場合は自動ログイン
+      const loginPassword = isChangingPassword ? password : null;
+      if (loginPassword) {
+        setTimeout(async () => {
+          const result = await signIn("credentials", {
+            email: userEmail,
+            password: loginPassword,
+            redirect: false,
+          });
+          if (!result?.error) {
+            router.push("/");
+            router.refresh();
+          }
+        }, 1500);
+      } else {
+        // パスワード変更なしの場合はログインページへ
+        setTimeout(() => {
+          router.push("/login");
+        }, 2000);
+      }
     } catch {
       setError("設定に失敗しました");
     } finally {
@@ -99,20 +117,22 @@ export default function SetupPasswordPage() {
     );
   }
 
-  // 完了画面
   if (done) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="w-full max-w-md text-center">
           <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">登録完了</h1>
-          <p className="text-sm text-gray-500">自動的にログインしています...</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">認証完了</h1>
+          <p className="text-sm text-gray-500">
+            {(!hasPassword || wantsChange)
+              ? "自動的にログインしています..."
+              : "ログインページに移動します..."}
+          </p>
         </div>
       </div>
     );
   }
 
-  // エラー画面（トークン無効・期限切れ）
   if (error && !userName) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -134,14 +154,16 @@ export default function SetupPasswordPage() {
         <div className="text-center mb-8">
           <FileText className="h-12 w-12 text-blue-600 mx-auto mb-3" />
           <h1 className="text-2xl font-bold text-gray-900">記帳代行ツール</h1>
-          <p className="text-sm text-gray-500 mt-1">パスワード設定</p>
+          <p className="text-sm text-gray-500 mt-1">メールアドレス認証</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white border rounded-xl p-6 space-y-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-sm text-blue-800">
               <span className="font-medium">{userName}</span> 様、ようこそ。<br />
-              パスワードを設定してアカウント登録を完了してください。
+              {hasPassword
+                ? "メールアドレスの認証を完了してください。"
+                : "パスワードを設定してアカウント登録を完了してください。"}
             </p>
           </div>
 
@@ -152,50 +174,87 @@ export default function SetupPasswordPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              メールアドレス
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">メールアドレス</label>
             <p className="px-3 py-2 bg-gray-50 border rounded-lg text-sm text-gray-600">{userEmail}</p>
           </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              パスワード
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="6文字以上"
-            />
-          </div>
+          {/* パスワード設定済み：変更しない場合は認証のみ */}
+          {hasPassword && !wantsChange && (
+            <div className="space-y-3">
+              <div className="bg-gray-50 border rounded-lg p-3">
+                <p className="text-sm text-gray-600">パスワードは管理者により設定済みです。</p>
+              </div>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                認証を完了する
+              </button>
+              <button
+                type="button"
+                onClick={() => setWantsChange(true)}
+                className="w-full py-2 text-blue-600 hover:bg-blue-50 rounded-lg text-sm transition-colors"
+              >
+                パスワードを変更したい場合はこちら
+              </button>
+            </div>
+          )}
 
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-              パスワード（確認）
-            </label>
-            <input
-              id="confirmPassword"
-              type="password"
-              required
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="もう一度入力"
-            />
-          </div>
+          {/* パスワード未設定 or 変更希望 */}
+          {(!hasPassword || wantsChange) && (
+            <>
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  {wantsChange ? "新しいパスワード" : "パスワード"}
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="6文字以上"
+                />
+              </div>
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-            登録完了
-          </button>
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  パスワード（確認）
+                </label>
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="もう一度入力"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {wantsChange ? "パスワード変更して認証完了" : "登録完了"}
+              </button>
+
+              {wantsChange && (
+                <button
+                  type="button"
+                  onClick={() => { setWantsChange(false); setPassword(""); setConfirmPassword(""); }}
+                  className="w-full py-2 text-gray-500 hover:bg-gray-50 rounded-lg text-sm transition-colors"
+                >
+                  戻る
+                </button>
+              )}
+            </>
+          )}
         </form>
       </div>
     </div>
