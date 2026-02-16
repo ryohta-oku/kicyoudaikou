@@ -14,6 +14,8 @@ export default function SetupPasswordPage() {
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [hasPassword, setHasPassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -37,6 +39,7 @@ export default function SetupPasswordPage() {
           setUserName(data.user.name);
           setUserEmail(data.user.email);
           setHasPassword(data.hasPassword);
+          if (data.plainPassword) setCurrentPassword(data.plainPassword);
         }
       })
       .catch(() => setError("エラーが発生しました"))
@@ -181,8 +184,19 @@ export default function SetupPasswordPage() {
           {/* パスワード設定済み：変更しない場合は認証のみ */}
           {hasPassword && !wantsChange && (
             <div className="space-y-3">
-              <div className="bg-gray-50 border rounded-lg p-3">
-                <p className="text-sm text-gray-600">パスワードは管理者により設定済みです。</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">パスワード（設定済み）</label>
+                <div
+                  onClick={() => {
+                    navigator.clipboard.writeText(currentPassword);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="px-3 py-2 bg-gray-50 border rounded-lg text-sm font-mono cursor-pointer hover:bg-gray-100 transition-colors flex items-center justify-between"
+                >
+                  <span>{currentPassword}</span>
+                  <span className="text-xs text-gray-400">{copied ? "コピーしました" : "クリックでコピー"}</span>
+                </div>
               </div>
               <button
                 type="submit"
