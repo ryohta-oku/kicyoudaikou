@@ -93,6 +93,8 @@ interface Folder {
   name: string;
   creator: string;
   createdAt: string;
+  clientId: string | null;
+  client: { id: string; name: string } | null;
   documents: Document[];
 }
 
@@ -483,6 +485,110 @@ export default function FolderDetailPage({
           {folder.documents.length} ファイル
         </span>
       </div>
+
+      {/* フォルダ詳細情報カード */}
+      {(() => {
+        // 仕訳データの集計
+        const allJournalEntries = folder.documents.flatMap((d) => d.journalEntries || []);
+        const totalAmount = allJournalEntries.reduce((sum, e) => sum + (e.debitAmount || 0), 0);
+        const totalTax = Math.floor(totalAmount - totalAmount / 1.1); // 概算消費税
+        const confirmedEntryCount = allJournalEntries.filter((e) => e.isConfirmed).length;
+
+        // ステータス判定
+        const statuses = folder.documents.map((d) => d.status);
+        const overallStatus = statuses.every((s) => s === "exported")
+          ? "エクスポート済"
+          : statuses.every((s) => s === "reviewed" || s === "exported")
+            ? "確認済"
+            : statuses.some((s) => s === "classified" || s === "reviewed" || s === "exported")
+              ? "仕訳済"
+              : statuses.some((s) => s === "ocr_confirmed")
+                ? "OCR確認完了"
+                : statuses.some((s) => s === "ocr_complete")
+                  ? "OCR完了"
+                  : "処理中";
+
+        return (
+          <div className="bg-white rounded-xl border overflow-hidden">
+            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
+              {/* 左列 */}
+              <div className="divide-y divide-gray-100">
+                <div className="flex px-5 py-3">
+                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">フォルダ名</dt>
+                  <dd className="text-sm text-gray-900">{folder.name}</dd>
+                </div>
+                <div className="flex px-5 py-3">
+                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">作成日時</dt>
+                  <dd className="text-sm text-gray-900">
+                    {new Date(folder.createdAt).toLocaleString("ja-JP")}
+                  </dd>
+                </div>
+                <div className="flex px-5 py-3">
+                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">得意先</dt>
+                  <dd className="text-sm text-gray-900">{folder.client?.name || "-"}</dd>
+                </div>
+                <div className="flex px-5 py-3">
+                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">ステータス</dt>
+                  <dd className="text-sm">
+                    <span className={cn(
+                      "inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium",
+                      overallStatus === "エクスポート済" ? "bg-emerald-100 text-emerald-800" :
+                      overallStatus === "確認済" ? "bg-green-100 text-green-800" :
+                      overallStatus === "仕訳済" ? "bg-purple-100 text-purple-800" :
+                      "bg-blue-100 text-blue-800"
+                    )}>
+                      {overallStatus}
+                    </span>
+                  </dd>
+                </div>
+              </div>
+              {/* 右列 */}
+              <div className="divide-y divide-gray-100">
+                <div className="flex px-5 py-3">
+                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">ファイル数</dt>
+                  <dd className="text-sm text-gray-900">{folder.documents.length} 件</dd>
+                </div>
+                <div className="flex px-5 py-3">
+                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">明細数</dt>
+                  <dd className="text-sm text-gray-900">{allJournalEntries.length} 件</dd>
+                </div>
+                <div className="flex px-5 py-3">
+                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">合計金額</dt>
+                  <dd className="text-sm">
+                    {allJournalEntries.length > 0 ? (
+                      <>
+                        <span className="font-medium text-blue-700 text-base">
+                          {formatCurrency(totalAmount)}
+                        </span>
+                        <span className="text-gray-500 text-xs ml-1">
+                          (内消費税: {formatCurrency(totalTax)})
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="flex px-5 py-3">
+                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">確認状況</dt>
+                  <dd className="text-sm text-gray-900">
+                    {allJournalEntries.length > 0 ? (
+                      <span>
+                        {confirmedEntryCount}/{allJournalEntries.length} 件確認済
+                        {confirmedEntryCount === allJournalEntries.length && allJournalEntries.length > 0 && (
+                          <Check className="inline w-4 h-4 text-green-600 ml-1" />
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </dd>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* OCR処理中バナー */}
       {isAnyProcessing && (

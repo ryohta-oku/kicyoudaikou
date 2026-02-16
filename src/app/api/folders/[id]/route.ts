@@ -10,6 +10,7 @@ export async function GET(
     const folder = await prisma.folder.findUnique({
       where: { id },
       include: {
+        client: { select: { id: true, name: true } },
         documents: {
           include: {
             pages: { select: { id: true, imagePath: true, pageNumber: true }, orderBy: { pageNumber: "asc" } },
