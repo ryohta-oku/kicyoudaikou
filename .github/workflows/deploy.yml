@@ -91,7 +91,7 @@ jobs:
 
             # 初期管理者ユーザーを作成（ユーザーが0人の場合のみ）
             echo ">>> 管理者ユーザーチェック..."
-            node prisma/seed-admin.mjs
+            npx tsx prisma/seed-admin.ts
 
             # PM2 でアプリを再起動
             echo ">>> PM2 restart..."
