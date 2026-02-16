@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, Pencil, Trash2, Plus, Loader2 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
+import SubAccountCombobox from "./SubAccountCombobox";
 
 interface JournalEntry {
   id: string;
@@ -20,28 +21,36 @@ interface JournalEntry {
 }
 
 interface Account {
+  id: string;
   code: string;
   name: string;
   category: string;
+  subAccounts: { id: string; code: string; name: string }[];
 }
+
+const CATEGORY_ORDER = ["費用", "資産", "負債", "収益", "純資産"];
 
 interface JournalEntryTableProps {
   entries: JournalEntry[];
   accounts?: Account[];
+  clientId?: string | null;
   editable?: boolean;
   onUpdate?: (id: string, data: Partial<JournalEntry>) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   onAdd?: (data: Partial<JournalEntry>) => Promise<void>;
+  onAccountsRefresh?: () => void;
   documentId?: string;
 }
 
 export default function JournalEntryTable({
   entries,
   accounts = [],
+  clientId,
   editable = false,
   onUpdate,
   onDelete,
   onAdd,
+  onAccountsRefresh,
   documentId,
 }: JournalEntryTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -146,6 +155,8 @@ export default function JournalEntryTable({
       ...currentData,
       accountCode: code,
       accountName: account?.name || "",
+      subAccountCode: "",
+      subAccountName: "",
     });
   };
 
@@ -214,11 +225,26 @@ export default function JournalEntryTable({
                         className="w-full px-2 py-1 border rounded text-sm"
                       >
                         <option value="">選択...</option>
-                        {accounts.map((acc) => (
-                          <option key={acc.code} value={acc.code}>
-                            {acc.code} {acc.name}
-                          </option>
-                        ))}
+                        {CATEGORY_ORDER.map((category) => {
+                          const categoryAccounts = accounts.filter((a) => a.category === category);
+                          if (categoryAccounts.length === 0) return null;
+                          return (
+                            <optgroup key={category} label={category}>
+                              {categoryAccounts.map((acc) => (
+                                <option key={acc.code} value={acc.code}>
+                                  {acc.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                          );
+                        })}
+                        {accounts
+                          .filter((a) => !CATEGORY_ORDER.includes(a.category))
+                          .map((acc) => (
+                            <option key={acc.code} value={acc.code}>
+                              {acc.name}
+                            </option>
+                          ))}
                       </select>
                     ) : (
                       <span>
@@ -233,14 +259,22 @@ export default function JournalEntryTable({
                   </td>
                   <td className="px-4 py-3">
                     {isEditing ? (
-                      <input
-                        type="text"
-                        value={editData.subAccountName || ""}
-                        onChange={(e) =>
-                          setEditData({ ...editData, subAccountName: e.target.value })
-                        }
-                        className="w-full px-2 py-1 border rounded text-sm"
-                      />
+                      (() => {
+                        const editAccount = accounts.find((a) => a.code === editData.accountCode);
+                        return (
+                          <SubAccountCombobox
+                            subAccounts={editAccount?.subAccounts || []}
+                            value={editData.subAccountCode || ""}
+                            valueName={editData.subAccountName || ""}
+                            onChange={(code, name) =>
+                              setEditData({ ...editData, subAccountCode: code, subAccountName: name })
+                            }
+                            accountId={editAccount?.id || ""}
+                            clientId={clientId}
+                            onSubAccountAdded={onAccountsRefresh}
+                          />
+                        );
+                      })()
                     ) : (
                       entry.subAccountName
                     )}
@@ -385,20 +419,45 @@ export default function JournalEntryTable({
                     className="w-full px-2 py-1 border rounded text-sm"
                   >
                     <option value="">選択...</option>
-                    {accounts.map((acc) => (
-                      <option key={acc.code} value={acc.code}>
-                        {acc.code} {acc.name}
-                      </option>
-                    ))}
+                    {CATEGORY_ORDER.map((category) => {
+                      const categoryAccounts = accounts.filter((a) => a.category === category);
+                      if (categoryAccounts.length === 0) return null;
+                      return (
+                        <optgroup key={category} label={category}>
+                          {categoryAccounts.map((acc) => (
+                            <option key={acc.code} value={acc.code}>
+                              {acc.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                    {accounts
+                      .filter((a) => !CATEGORY_ORDER.includes(a.category))
+                      .map((acc) => (
+                        <option key={acc.code} value={acc.code}>
+                          {acc.name}
+                        </option>
+                      ))}
                   </select>
                 </td>
                 <td className="px-4 py-3">
-                  <input
-                    type="text"
-                    value={newEntry.subAccountName || ""}
-                    onChange={(e) => setNewEntry({ ...newEntry, subAccountName: e.target.value })}
-                    className="w-full px-2 py-1 border rounded text-sm"
-                  />
+                  {(() => {
+                    const newAccount = accounts.find((a) => a.code === newEntry.accountCode);
+                    return (
+                      <SubAccountCombobox
+                        subAccounts={newAccount?.subAccounts || []}
+                        value={newEntry.subAccountCode || ""}
+                        valueName={newEntry.subAccountName || ""}
+                        onChange={(code, name) =>
+                          setNewEntry({ ...newEntry, subAccountCode: code, subAccountName: name })
+                        }
+                        accountId={newAccount?.id || ""}
+                        clientId={clientId}
+                        onSubAccountAdded={onAccountsRefresh}
+                      />
+                    );
+                  })()}
                 </td>
                 <td className="px-4 py-3">
                   <input

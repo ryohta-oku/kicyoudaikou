@@ -395,6 +395,7 @@ export default function ClassifyPage({
                   documentFilepath={doc.filepath}
                   entries={doc.journalEntries}
                   accounts={accounts}
+                  clientId={getSelectedClientId()}
                   onEntryUpdate={(entryId, data) =>
                     handleEntryUpdate(doc.id, entryId, data)
                   }
@@ -402,6 +403,10 @@ export default function ClassifyPage({
                   onAllEntriesConfirmed={() =>
                     handleAllEntriesConfirmed(doc.id)
                   }
+                  onAccountsRefresh={async () => {
+                    const refreshed = await fetchAccounts();
+                    setAccounts(refreshed);
+                  }}
                 />
               ) : (
                 <div className="text-center py-8 text-gray-500 text-sm">

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, RotateCcw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
+import SubAccountCombobox from "./SubAccountCombobox";
 
 interface Page {
   id: string;
@@ -42,12 +43,16 @@ interface ClassifyEditorProps {
   documentFilepath: string;
   entries: ClassifyEntry[];
   accounts: Account[];
+  clientId?: string | null;
   onEntryUpdate: (entryId: string, data: Partial<ClassifyEntry>) => Promise<void>;
   onEntryConfirm: (entryId: string) => Promise<void>;
   onAllEntriesConfirmed?: () => void;
+  onAccountsRefresh?: () => void;
 }
 
 const TAX_RATE_OPTIONS = ["課税10%", "課税8%", "非課税", "不課税", "免税"];
+
+const CATEGORY_ORDER = ["費用", "資産", "負債", "収益", "純資産"];
 
 export default function ClassifyEditor({
   pages,
@@ -55,9 +60,11 @@ export default function ClassifyEditor({
   documentFilepath,
   entries,
   accounts,
+  clientId,
   onEntryUpdate,
   onEntryConfirm,
   onAllEntriesConfirmed,
+  onAccountsRefresh,
 }: ClassifyEditorProps) {
   const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
   const [editedEntries, setEditedEntries] = useState<Record<string, Partial<ClassifyEntry>>>({});
@@ -277,44 +284,45 @@ export default function ClassifyEditor({
                       {currentEntry.accountName || currentEntry.accountCode}
                     </option>
                   )}
-                  {accounts.map((a) => (
-                    <option key={a.code} value={a.code}>
-                      {a.name}
-                    </option>
-                  ))}
+                  {CATEGORY_ORDER.map((category) => {
+                    const categoryAccounts = accounts.filter((a) => a.category === category);
+                    if (categoryAccounts.length === 0) return null;
+                    return (
+                      <optgroup key={category} label={category}>
+                        {categoryAccounts.map((a) => (
+                          <option key={a.code} value={a.code}>
+                            {a.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
+                  {/* カテゴリ未分類の勘定科目 */}
+                  {accounts
+                    .filter((a) => !CATEGORY_ORDER.includes(a.category))
+                    .map((a) => (
+                      <option key={a.code} value={a.code}>
+                        {a.name}
+                      </option>
+                    ))}
                 </select>
               </div>
               {/* 補助科目 */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">補助科目</label>
-                {subAccounts.length > 0 ? (
-                  <select
-                    value={String(getFieldValue("subAccountCode"))}
-                    onChange={(e) => {
-                      const sub = subAccounts.find((s) => s.code === e.target.value);
-                      handleFieldChange("subAccountCode", e.target.value);
-                      handleFieldChange("subAccountName", sub?.name || "");
-                    }}
-                    disabled={isDisabled}
-                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                  >
-                    <option value="">-- なし --</option>
-                    {subAccounts.map((s) => (
-                      <option key={s.code} value={s.code}>
-                        {s.code}: {s.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={String(getFieldValue("subAccountName"))}
-                    onChange={(e) => handleFieldChange("subAccountName", e.target.value)}
-                    disabled={isDisabled}
-                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                    placeholder="補助科目名"
-                  />
-                )}
+                <SubAccountCombobox
+                  subAccounts={subAccounts}
+                  value={String(getFieldValue("subAccountCode"))}
+                  valueName={String(getFieldValue("subAccountName"))}
+                  onChange={(code, name) => {
+                    handleFieldChange("subAccountCode", code);
+                    handleFieldChange("subAccountName", name);
+                  }}
+                  accountId={selectedAccount?.id || ""}
+                  clientId={clientId}
+                  disabled={isDisabled}
+                  onSubAccountAdded={onAccountsRefresh}
+                />
               </div>
               {/* 税率区分 */}
               <div>

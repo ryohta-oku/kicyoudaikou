@@ -24,9 +24,11 @@ interface JournalEntry {
 }
 
 interface Account {
+  id: string;
   code: string;
   name: string;
   category: string;
+  subAccounts: { id: string; code: string; name: string }[];
 }
 
 interface Document {
@@ -222,10 +224,12 @@ export default function ClassifyPage({ params }: { params: Promise<{ id: string 
           <JournalEntryTable
             entries={document.journalEntries}
             accounts={accounts}
+            clientId={getSelectedClientId()}
             editable={true}
             onUpdate={handleEntryUpdate}
             onDelete={handleEntryDelete}
             onAdd={handleEntryAdd}
+            onAccountsRefresh={fetchAccounts}
             documentId={id}
           />
         </>
