@@ -31,6 +31,19 @@ jobs:
               echo ">>> NEXTAUTH_SECRET を追加しました"
             fi
 
+            # AUTH_SECRET（NextAuth v5 用） - NEXTAUTH_SECRET と同じ値を使用
+            if ! grep -q "^AUTH_SECRET" /var/www/kicyoudaikou/.env; then
+              AUTH_VAL=$(grep "^NEXTAUTH_SECRET" /var/www/kicyoudaikou/.env | cut -d'=' -f2-)
+              echo "AUTH_SECRET=$AUTH_VAL" >> /var/www/kicyoudaikou/.env
+              echo ">>> AUTH_SECRET を追加しました"
+            fi
+
+            # AUTH_URL（NextAuth v5 用）
+            if ! grep -q "^AUTH_URL" /var/www/kicyoudaikou/.env; then
+              echo 'AUTH_URL="http://162.43.7.199"' >> /var/www/kicyoudaikou/.env
+              echo ">>> AUTH_URL を追加しました"
+            fi
+
             if ! grep -q "^APP_URL" /var/www/kicyoudaikou/.env; then
               echo 'APP_URL="http://162.43.7.199"' >> /var/www/kicyoudaikou/.env
               echo ">>> APP_URL を追加しました"
