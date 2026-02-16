@@ -54,33 +54,19 @@ export async function POST(request: NextRequest) {
     }
 
     const userRole = ["admin", "instructor", "user"].includes(role) ? role : "user";
-
-    if (password) {
-      // パスワード指定あり：即ログイン可能な状態で作成
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const user = await prisma.user.create({
-        data: {
-          email,
-          password: hashedPassword,
-          plainPassword: password,
-          name,
-          role: userRole,
-        },
-        select: { id: true, email: true, name: true, role: true, plainPassword: true, createdAt: true },
-      });
-
-      return NextResponse.json({ user, mode: "password" });
-    }
-
-    // パスワード未指定：招待メールフロー
     const inviteToken = randomUUID();
     const inviteTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24時間後
-    const placeholderPassword = await bcrypt.hash(randomUUID(), 10);
+
+    // パスワード指定あり→そのまま設定、なし→ランダムプレースホルダー
+    const hashedPassword = password
+      ? await bcrypt.hash(password, 10)
+      : await bcrypt.hash(randomUUID(), 10);
 
     const user = await prisma.user.create({
       data: {
         email,
-        password: placeholderPassword,
+        password: hashedPassword,
+        plainPassword: password || "",
         name,
         role: userRole,
         inviteToken,
@@ -89,15 +75,21 @@ export async function POST(request: NextRequest) {
       select: { id: true, email: true, name: true, role: true, plainPassword: true, createdAt: true },
     });
 
-    // 招待メール送信
-    const emailResult = await sendInviteEmail(email, name, inviteToken);
+    // 招待メール送信（失敗してもユーザー作成は成功とする）
+    let emailSent = false;
+    let setupUrl: string | undefined;
+    try {
+      const emailResult = await sendInviteEmail(email, name, inviteToken);
+      emailSent = !emailResult.consoleOnly;
+      setupUrl = emailResult.consoleOnly ? emailResult.setupUrl : undefined;
+    } catch (emailErr) {
+      console.error("Email send failed:", emailErr);
+      // メール失敗時はsetupUrlを手動で生成
+      const appUrl = process.env.APP_URL || "http://localhost:3000";
+      setupUrl = `${appUrl}/setup-password?token=${inviteToken}`;
+    }
 
-    return NextResponse.json({
-      user,
-      mode: "invite",
-      emailSent: !emailResult.consoleOnly,
-      setupUrl: emailResult.consoleOnly ? emailResult.setupUrl : undefined,
-    });
+    return NextResponse.json({ user, emailSent, setupUrl });
   } catch (err) {
     console.error("Admin user create error:", err);
     return NextResponse.json({ error: "作成に失敗しました" }, { status: 500 });

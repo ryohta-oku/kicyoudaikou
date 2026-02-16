@@ -207,13 +207,13 @@ export default function AdminPage() {
       setAddPassword("");
       setAddRole("user");
 
-      if (data.mode === "password") {
-        setMessage({ type: "success", text: `「${data.user.name}」を追加しました（パスワード設定済み）。` });
-      } else if (data.emailSent) {
+      if (data.emailSent) {
         setMessage({ type: "success", text: `「${data.user.name}」を追加しました。招待メールを送信しました。` });
       } else if (data.setupUrl) {
         setSetupUrl(data.setupUrl);
-        setMessage({ type: "success", text: `「${data.user.name}」を追加しました。RESEND_API_KEY未設定のため、以下のURLをご本人にお伝えください。` });
+        setMessage({ type: "success", text: `「${data.user.name}」を追加しました。以下のURLをご本人にお伝えください。` });
+      } else {
+        setMessage({ type: "success", text: `「${data.user.name}」を追加しました。` });
       }
     } catch {
       setMessage({ type: "error", text: "追加に失敗しました" });
