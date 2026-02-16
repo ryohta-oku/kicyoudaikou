@@ -23,6 +23,7 @@ interface OCREditorProps {
   pages: Page[];
   documentFileType: string;
   documentFilepath: string;
+  readOnly?: boolean;
   onPageUpdate: (pageId: string, data: PageUpdateData) => Promise<void>;
   onPageConfirm: (pageId: string) => Promise<void>;
   onAllPagesConfirmed?: () => void;
@@ -41,6 +42,7 @@ export default function OCREditor({
   pages,
   documentFileType,
   documentFilepath,
+  readOnly = false,
   onPageUpdate,
   onPageConfirm,
   onAllPagesConfirmed,
@@ -148,7 +150,7 @@ export default function OCREditor({
 
   const isPdf = documentFileType === "pdf";
   const fields = editedFields[currentPage.id] || { date: "", registrationNumber: "", amount: "", tax: "", memo: "" };
-  const isDisabled = confirmedPages[currentPage.id];
+  const isDisabled = readOnly || confirmedPages[currentPage.id];
 
   return (
     <div className="space-y-4">
@@ -287,6 +289,7 @@ export default function OCREditor({
           </div>
 
           {/* アクションボタン */}
+          {!readOnly && (
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleReset(currentPage.id)}
@@ -319,6 +322,7 @@ export default function OCREditor({
               確認完了
             </button>
           </div>
+          )}
         </div>
       </div>
     </div>

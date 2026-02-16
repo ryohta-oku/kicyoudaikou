@@ -192,13 +192,14 @@ export default function FolderDetailPage({
     fetchFolder().then(async (folderData) => {
       if (!folderData) return;
 
-      // OCR未確認のドキュメントのみ詳細を取得（確認済み以降は不要）
-      const ocrNeedsReviewDocs = folderData.documents.filter(
-        (d: Document) => d.status === "ocr_complete"
+      // OCR完了済み（未確認 + 確認済み）のドキュメント詳細を取得
+      // 確認済みは読み取り専用で表示、仕訳済み以降は不要
+      const ocrDocs = folderData.documents.filter(
+        (d: Document) => d.status === "ocr_complete" || d.status === "ocr_confirmed"
       );
-      if (ocrNeedsReviewDocs.length > 0) {
+      if (ocrDocs.length > 0) {
         setLoadingOcrDocs(true);
-        await Promise.all(ocrNeedsReviewDocs.map((d: Document) => fetchDocFullData(d.id)));
+        await Promise.all(ocrDocs.map((d: Document) => fetchDocFullData(d.id)));
         setLoadingOcrDocs(false);
       }
 
@@ -324,9 +325,9 @@ export default function FolderDetailPage({
       case "ocr_processing":
         return { href: null, label: "処理中..." };
       case "ocr_complete":
-        return { href: null, label: "OCR確認（下部）" };
+        return { href: null, label: "" };
       case "ocr_confirmed":
-        return { href: `/folders/${id}/classify`, label: "仕訳分類へ" };
+        return { href: null, label: "" };
       case "classified":
         return { href: `/folders/${id}/classify`, label: "仕訳確認" };
       case "reviewed":
@@ -334,7 +335,7 @@ export default function FolderDetailPage({
       case "exported":
         return { href: `/documents/${docId}/export`, label: "再エクスポート" };
       default:
-        return { href: `/documents/${docId}/ocr-review`, label: "確認" };
+        return { href: null, label: "" };
     }
   };
 
@@ -559,32 +560,63 @@ export default function FolderDetailPage({
         </div>
       )}
 
-      {/* OCR内容確認セクション（ocr_complete のドキュメントのみ表示） */}
+      {/* OCR内容確認セクション */}
       {(() => {
-        const ocrNeedsReviewDocs = folder.documents.filter(
-          (d) => ocrDocsData[d.id] && !fullyConfirmedDocIds.has(d.id)
+        // OCRデータがあるドキュメント（ocr_complete + ocr_confirmed）
+        const ocrVisibleDocs = folder.documents.filter((d) => ocrDocsData[d.id]);
+        if (ocrVisibleDocs.length === 0) return null;
+
+        const unconfirmedCount = ocrVisibleDocs.filter((d) => !fullyConfirmedDocIds.has(d.id)).length;
+        const allOcrConfirmed = unconfirmedCount === 0;
+        // 仕訳分類対象 = ocr_confirmed のドキュメント（classified以降は除外）
+        const hasClassifyTarget = folder.documents.some(
+          (d) => d.status === "ocr_confirmed"
         );
-        if (ocrNeedsReviewDocs.length === 0) return null;
 
         return (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900">
                 OCR内容確認
-                <span className="ml-2 text-sm font-normal text-gray-500">
-                  ({ocrNeedsReviewDocs.length} 件未確認)
-                </span>
+                {unconfirmedCount > 0 && (
+                  <span className="ml-2 text-sm font-normal text-gray-500">
+                    ({unconfirmedCount} 件未確認)
+                  </span>
+                )}
               </h2>
+              {allOcrConfirmed && hasClassifyTarget && (
+                <button
+                  onClick={() => router.push(`/folders/${id}/classify`)}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  一括仕訳分類
+                </button>
+              )}
             </div>
 
-            {ocrNeedsReviewDocs.map((doc) => {
+            {!allOcrConfirmed && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <p className="text-sm text-yellow-800">
+                  すべてのドキュメントのOCR確認が完了すると「一括仕訳分類」ボタンが表示されます。
+                </p>
+              </div>
+            )}
+
+            {ocrVisibleDocs.map((doc) => {
               const fullDoc = ocrDocsData[doc.id];
               if (!fullDoc) return null;
+              const isConfirmed = fullyConfirmedDocIds.has(doc.id);
               return (
                 <div key={doc.id} className="bg-white rounded-xl border overflow-hidden">
                   <div className="bg-gray-50 px-4 py-3 border-b flex items-center gap-2">
                     <FileText className="w-4 h-4 text-red-500" />
                     <h3 className="text-sm font-medium text-gray-700">{doc.filename}</h3>
+                    {isConfirmed && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+                        確認完了
+                      </span>
+                    )}
                   </div>
                   <div className="p-4">
                     {fullDoc.pages.length > 0 ? (
@@ -592,6 +624,7 @@ export default function FolderDetailPage({
                         pages={fullDoc.pages}
                         documentFileType={fullDoc.fileType}
                         documentFilepath={fullDoc.filepath}
+                        readOnly={isConfirmed}
                         onPageUpdate={handlePageUpdate}
                         onPageConfirm={async (pageId) => {
                           await handlePageConfirm(pageId);
