@@ -23,7 +23,7 @@ export async function sendInviteEmail(to: string, name: string, token: string) {
     return { success: true, consoleOnly: true, setupUrl };
   }
 
-  await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from,
     to,
     subject: "【記帳代行ツール】パスワードを設定してください",
@@ -44,5 +44,11 @@ export async function sendInviteEmail(to: string, name: string, token: string) {
     `,
   });
 
+  if (error) {
+    console.error("Resend email error:", error);
+    throw new Error(`メール送信に失敗しました: ${error.message}`);
+  }
+
+  console.log("Resend email sent:", data);
   return { success: true, consoleOnly: false };
 }
