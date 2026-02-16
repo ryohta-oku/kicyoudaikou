@@ -14,6 +14,9 @@ export async function GET(
           include: {
             pages: { select: { id: true } },
             _count: { select: { journalEntries: true } },
+            journalEntries: {
+              orderBy: { date: "asc" },
+            },
           },
           orderBy: { createdAt: "desc" },
         },

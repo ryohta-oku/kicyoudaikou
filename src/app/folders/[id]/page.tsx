@@ -13,9 +13,26 @@ import {
   FolderOpen,
   PlayCircle,
   Sparkles,
+  Check,
+  Pencil,
 } from "lucide-react";
-import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
+import { cn, STATUS_LABELS, STATUS_COLORS, formatCurrency } from "@/lib/utils";
 import OCREditor, { type PageUpdateData } from "@/components/OCREditor";
+
+interface JournalEntryData {
+  id: string;
+  date: string;
+  description: string;
+  accountCode: string;
+  accountName: string;
+  subAccountCode: string;
+  subAccountName: string;
+  debitAmount: number;
+  creditAmount: number;
+  taxRate: string;
+  aiSuggested: boolean;
+  isConfirmed: boolean;
+}
 
 interface Document {
   id: string;
@@ -27,6 +44,7 @@ interface Document {
   createdAt: string;
   pages: { id: string }[];
   _count: { journalEntries: number };
+  journalEntries: JournalEntryData[];
 }
 
 interface Page {
@@ -559,6 +577,151 @@ export default function FolderDetailPage({
 
         </div>
       )}
+
+      {/* 仕訳明細セクション (Money Forward風) */}
+      {(() => {
+        const classifiedDocs = folder.documents.filter(
+          (d) =>
+            (d.status === "classified" || d.status === "reviewed" || d.status === "exported") &&
+            d.journalEntries &&
+            d.journalEntries.length > 0
+        );
+        if (classifiedDocs.length === 0) return null;
+
+        // 全ドキュメントの仕訳エントリをフラットにまとめる
+        const allEntries = classifiedDocs.flatMap((doc) =>
+          doc.journalEntries.map((entry) => ({
+            ...entry,
+            documentId: doc.id,
+            filename: doc.filename,
+          }))
+        );
+
+        // 日付順でソート
+        allEntries.sort((a, b) => a.date.localeCompare(b.date));
+
+        const confirmedCount = allEntries.filter((e) => e.isConfirmed).length;
+
+        return (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900">
+                仕訳明細
+                <span className="ml-2 text-sm font-normal text-gray-500">
+                  {allEntries.length} 件
+                  {confirmedCount > 0 && (
+                    <span className="text-green-600 ml-1">
+                      ({confirmedCount} 件確認済)
+                    </span>
+                  )}
+                </span>
+              </h2>
+              <Link
+                href={`/folders/${id}/classify`}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              >
+                <Pencil className="w-4 h-4" />
+                仕訳確認・編集
+              </Link>
+            </div>
+
+            <div className="bg-white rounded-xl border overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b">
+                      <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">日付</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">支払先・内容</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">金額（税込）</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">勘定科目</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">税区分</th>
+                      <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">確認</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">ファイル</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allEntries.map((entry) => (
+                      <tr
+                        key={entry.id}
+                        className={cn(
+                          "border-b hover:bg-gray-50 transition-colors",
+                          entry.isConfirmed ? "bg-green-50/30" : "",
+                          entry.aiSuggested && !entry.isConfirmed ? "bg-yellow-50/30" : ""
+                        )}
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-700">
+                          {entry.date}
+                        </td>
+                        <td className="px-4 py-3 max-w-[280px]">
+                          <div className="truncate text-gray-900">
+                            {entry.description}
+                          </div>
+                          {entry.subAccountName && (
+                            <div className="text-xs text-gray-500 truncate">
+                              {entry.subAccountName}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono whitespace-nowrap text-gray-900">
+                          {entry.debitAmount > 0
+                            ? formatCurrency(entry.debitAmount)
+                            : entry.creditAmount > 0
+                              ? formatCurrency(entry.creditAmount)
+                              : "-"}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-700">
+                          {entry.accountName}
+                          {entry.aiSuggested && !entry.isConfirmed && (
+                            <span className="ml-1 text-xs text-yellow-600 bg-yellow-100 px-1 rounded">
+                              AI
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-600 text-xs">
+                          {entry.taxRate || "-"}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {entry.isConfirmed ? (
+                            <span className="inline-flex items-center justify-center w-6 h-6 bg-green-100 text-green-600 rounded-full">
+                              <Check className="w-3.5 h-3.5" />
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center justify-center w-6 h-6 bg-gray-100 text-gray-400 rounded-full">
+                              <span className="w-2 h-2 bg-gray-300 rounded-full" />
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className="text-xs text-gray-500 truncate max-w-[120px] block">
+                            {entry.filename}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* フッター */}
+              <div className="px-4 py-3 bg-gray-50 border-t flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  合計金額:{" "}
+                  <span className="font-medium text-gray-900">
+                    {formatCurrency(
+                      allEntries.reduce((sum, e) => sum + (e.debitAmount || e.creditAmount || 0), 0)
+                    )}
+                  </span>
+                </div>
+                <Link
+                  href={`/folders/${id}/classify`}
+                  className="text-sm text-blue-600 hover:underline"
+                >
+                  仕訳確認ページへ →
+                </Link>
+              </div>
+            </div>
+          </section>
+        );
+      })()}
 
       {/* OCR内容確認セクション */}
       {(() => {
