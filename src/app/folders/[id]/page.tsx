@@ -77,7 +77,6 @@ export default function FolderDetailPage({
   const [loadingOcrDocs, setLoadingOcrDocs] = useState(false);
   const [fullyConfirmedDocIds, setFullyConfirmedDocIds] = useState<Set<string>>(new Set());
   const confirmedProcessedRef = useRef<Set<string>>(new Set());
-  const [ocrTab, setOcrTab] = useState<"all" | "confirmed" | "unconfirmed">("all");
 
   const fetchFolder = useCallback(async () => {
     try {
@@ -193,22 +192,22 @@ export default function FolderDetailPage({
     fetchFolder().then(async (folderData) => {
       if (!folderData) return;
 
-      // OCR完了済みドキュメントの詳細を並列取得
-      const ocrCompleteDocs = folderData.documents.filter(
-        (d: Document) => d.status === "ocr_complete" || d.status === "ocr_confirmed" || d.status === "classified" || d.status === "reviewed" || d.status === "exported"
+      // OCR未確認のドキュメントのみ詳細を取得（確認済み以降は不要）
+      const ocrNeedsReviewDocs = folderData.documents.filter(
+        (d: Document) => d.status === "ocr_complete"
       );
-      if (ocrCompleteDocs.length > 0) {
+      if (ocrNeedsReviewDocs.length > 0) {
         setLoadingOcrDocs(true);
-        await Promise.all(ocrCompleteDocs.map((d: Document) => fetchDocFullData(d.id)));
+        await Promise.all(ocrNeedsReviewDocs.map((d: Document) => fetchDocFullData(d.id)));
         setLoadingOcrDocs(false);
+      }
 
-        // ocr_confirmed 以降のドキュメントを fullyConfirmedDocIds に初期登録
-        const confirmedIds = folderData.documents
-          .filter((d: Document) => d.status !== "uploaded" && d.status !== "ocr_processing" && d.status !== "ocr_complete")
-          .map((d: Document) => d.id);
-        if (confirmedIds.length > 0) {
-          setFullyConfirmedDocIds(new Set(confirmedIds));
-        }
+      // ocr_confirmed 以降のドキュメントを fullyConfirmedDocIds に初期登録
+      const confirmedIds = folderData.documents
+        .filter((d: Document) => d.status !== "uploaded" && d.status !== "ocr_processing" && d.status !== "ocr_complete")
+        .map((d: Document) => d.id);
+      if (confirmedIds.length > 0) {
+        setFullyConfirmedDocIds(new Set(confirmedIds));
       }
 
       // uploaded状態のドキュメントの自動OCR
@@ -325,9 +324,9 @@ export default function FolderDetailPage({
       case "ocr_processing":
         return { href: null, label: "処理中..." };
       case "ocr_complete":
-        return { href: null, label: "" };
+        return { href: null, label: "OCR確認（下部）" };
       case "ocr_confirmed":
-        return { href: null, label: "" };
+        return { href: `/folders/${id}/classify`, label: "仕訳分類へ" };
       case "classified":
         return { href: `/folders/${id}/classify`, label: "仕訳確認" };
       case "reviewed":
@@ -560,125 +559,67 @@ export default function FolderDetailPage({
         </div>
       )}
 
-      {/* OCR内容確認セクション */}
-      {folder.documents.some((d) => ocrDocsData[d.id]) && (() => {
-        const ocrDocs = folder.documents.filter((d) => ocrDocsData[d.id]);
-
-        // ocrDocsData のページ状態から直接確認状態を判定（より信頼性が高い）
-        const isDocFullyConfirmed = (docId: string) => {
-          const docData = ocrDocsData[docId];
-          if (!docData || docData.pages.length === 0) return false;
-          return docData.pages.every((p) => p.isConfirmed) || fullyConfirmedDocIds.has(docId);
-        };
-
-        const confirmedCount = ocrDocs.filter((d) => isDocFullyConfirmed(d.id)).length;
-        const unconfirmedCount = ocrDocs.length - confirmedCount;
-        const filteredDocs = ocrDocs.filter((d) => {
-          if (ocrTab === "confirmed") return isDocFullyConfirmed(d.id);
-          if (ocrTab === "unconfirmed") return !isDocFullyConfirmed(d.id);
-          return true;
-        });
-
-        const allOcrConfirmed = ocrDocs.length > 0 && unconfirmedCount === 0;
+      {/* OCR内容確認セクション（ocr_complete のドキュメントのみ表示） */}
+      {(() => {
+        const ocrNeedsReviewDocs = folder.documents.filter(
+          (d) => ocrDocsData[d.id] && !fullyConfirmedDocIds.has(d.id)
+        );
+        if (ocrNeedsReviewDocs.length === 0) return null;
 
         return (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">OCR内容確認</h2>
-              <button
-                onClick={() => router.push(`/folders/${id}/classify`)}
-                disabled={!allOcrConfirmed}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                <Sparkles className="w-4 h-4" />
-                一括仕訳分類
-              </button>
+              <h2 className="text-lg font-bold text-gray-900">
+                OCR内容確認
+                <span className="ml-2 text-sm font-normal text-gray-500">
+                  ({ocrNeedsReviewDocs.length} 件未確認)
+                </span>
+              </h2>
             </div>
 
-            {/* タブ */}
-            <div className="flex gap-1 border-b">
-              {([
-                { key: "all", label: "すべて", count: ocrDocs.length },
-                { key: "confirmed", label: "OCR確認完了", count: confirmedCount },
-                { key: "unconfirmed", label: "未完了", count: unconfirmedCount },
-              ] as const).map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setOcrTab(tab.key)}
-                  className={cn(
-                    "px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px",
-                    ocrTab === tab.key
-                      ? "border-blue-600 text-blue-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700"
-                  )}
-                >
-                  {tab.label}
-                  <span className={cn(
-                    "ml-1.5 px-1.5 py-0.5 text-xs rounded-full",
-                    ocrTab === tab.key
-                      ? "bg-blue-100 text-blue-700"
-                      : "bg-gray-100 text-gray-600"
-                  )}>
-                    {tab.count}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            {filteredDocs.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 text-sm">
-                該当するドキュメントはありません
-              </div>
-            ) : (
-              filteredDocs.map((doc) => {
-                const fullDoc = ocrDocsData[doc.id];
-                return (
-                  <div key={doc.id} className="bg-white rounded-xl border overflow-hidden">
-                    <div className="bg-gray-50 px-4 py-3 border-b flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-red-500" />
-                      <h3 className="text-sm font-medium text-gray-700">{doc.filename}</h3>
-                      {isDocFullyConfirmed(doc.id) && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
-                          確認完了
-                        </span>
-                      )}
-                    </div>
-                    <div className="p-4">
-                      {fullDoc.pages.length > 0 ? (
-                        <OCREditor
-                          pages={fullDoc.pages}
-                          documentFileType={fullDoc.fileType}
-                          documentFilepath={fullDoc.filepath}
-                          onPageUpdate={handlePageUpdate}
-                          onPageConfirm={async (pageId) => {
-                            await handlePageConfirm(pageId);
-                            // 親の ocrDocsData を更新して確認状態を反映
-                            setOcrDocsData((prev) => {
-                              const docData = prev[doc.id];
-                              if (!docData) return prev;
-                              return {
-                                ...prev,
-                                [doc.id]: {
-                                  ...docData,
-                                  pages: docData.pages.map((p) =>
-                                    p.id === pageId ? { ...p, isConfirmed: true } : p
-                                  ),
-                                },
-                              };
-                            });
-                          }}
-                          onAllPagesConfirmed={() => handleAllPagesConfirmed(doc.id)}
-                        />
-                      ) : (
-                        <div className="text-center py-8 text-gray-500">
-                          ページデータがありません
-                        </div>
-                      )}
-                    </div>
+            {ocrNeedsReviewDocs.map((doc) => {
+              const fullDoc = ocrDocsData[doc.id];
+              if (!fullDoc) return null;
+              return (
+                <div key={doc.id} className="bg-white rounded-xl border overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-3 border-b flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-red-500" />
+                    <h3 className="text-sm font-medium text-gray-700">{doc.filename}</h3>
                   </div>
-                );
-              })
-            )}
+                  <div className="p-4">
+                    {fullDoc.pages.length > 0 ? (
+                      <OCREditor
+                        pages={fullDoc.pages}
+                        documentFileType={fullDoc.fileType}
+                        documentFilepath={fullDoc.filepath}
+                        onPageUpdate={handlePageUpdate}
+                        onPageConfirm={async (pageId) => {
+                          await handlePageConfirm(pageId);
+                          setOcrDocsData((prev) => {
+                            const docData = prev[doc.id];
+                            if (!docData) return prev;
+                            return {
+                              ...prev,
+                              [doc.id]: {
+                                ...docData,
+                                pages: docData.pages.map((p) =>
+                                  p.id === pageId ? { ...p, isConfirmed: true } : p
+                                ),
+                              },
+                            };
+                          });
+                        }}
+                        onAllPagesConfirmed={() => handleAllPagesConfirmed(doc.id)}
+                      />
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        ページデータがありません
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </section>
         );
       })()}
