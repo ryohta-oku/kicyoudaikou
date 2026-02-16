@@ -70,4 +70,13 @@ jobs:
             echo ">>> PM2 restart..."
             pm2 startOrRestart ecosystem.config.cjs --env production
 
+            # 起動確認（少し待ってからステータスとログを表示）
+            sleep 5
+            echo ">>> PM2 status:"
+            pm2 status
+            echo ">>> PM2 logs (最新20行):"
+            pm2 logs --nostream --lines 20
+            echo ">>> .env の内容（値はマスク）:"
+            grep -E "^[A-Z_]+=" /var/www/kicyoudaikou/.env | sed 's/=.*/=***/'
+
             echo "=== デプロイ完了 ==="
