@@ -47,3 +47,13 @@ jobs:
             pm2 startOrRestart ecosystem.config.cjs --env production
 
             echo "=== デプロイ完了 ==="
+
+            # アプリの状態確認
+            echo "=== PM2 ステータス ==="
+            pm2 status
+            echo "=== PM2 ログ（最新50行） ==="
+            pm2 logs --nostream --lines 50
+            echo "=== .env の項目確認（値は非表示） ==="
+            grep -oP '^[A-Z_]+' /var/www/kicyoudaikou/.env
+            echo "=== APP_URL の値 ==="
+            grep "^APP_URL" /var/www/kicyoudaikou/.env
