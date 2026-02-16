@@ -109,11 +109,15 @@ export default function SubAccountCombobox({
         type="text"
         value={inputText}
         onChange={(e) => {
-          setInputText(e.target.value);
+          const newText = e.target.value;
+          setInputText(newText);
           setIsOpen(true);
-          // 入力が空になったらクリア
-          if (e.target.value === "") {
+          if (newText === "") {
             handleClear();
+          } else {
+            // 入力テキストをそのまま親に反映（マスター一致ならコードも設定）
+            const matched = subAccounts.find((s) => s.name === newText.trim());
+            onChange(matched?.code || "", newText);
           }
         }}
         onFocus={() => setIsOpen(true)}
