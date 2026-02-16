@@ -1,5 +1,4 @@
 import { Resend } from "resend";
-import { writeFileSync } from "fs";
 
 function getResend() {
   const apiKey = process.env.RESEND_API_KEY;
@@ -12,8 +11,6 @@ export async function sendInviteEmail(to: string, name: string, token: string) {
   const setupUrl = `${appUrl}/setup-password?token=${token}`;
   const from = process.env.RESEND_FROM || "記帳代行ツール <onboarding@resend.dev>";
 
-  const debugLog = `[${new Date().toISOString()}] to=${to}, RESEND_API_KEY=${process.env.RESEND_API_KEY ? "SET(" + process.env.RESEND_API_KEY.substring(0, 8) + "...)" : "NOT SET"}\n`;
-  writeFileSync("/tmp/email-debug.log", debugLog, { flag: "a" });
   const resend = getResend();
 
   if (!resend) {
