@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     if (fileType === "heic") {
       try {
         const jpegData = await convert({
-          buffer: new Uint8Array(buffer),
+          buffer: new Uint8Array(buffer) as unknown as ArrayBuffer,
           format: "JPEG",
           quality: 0.95,
         });

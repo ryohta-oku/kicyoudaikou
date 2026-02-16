@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
       if (document.fileType === "heic" || document.fileType === "heif") {
         const convert = (await import("heic-convert")).default;
         const heicBuffer = await readFile(filePath);
-        const jpegData = await convert({ buffer: new Uint8Array(heicBuffer), format: "JPEG", quality: 0.95 });
+        const jpegData = await convert({ buffer: new Uint8Array(heicBuffer) as unknown as ArrayBuffer, format: "JPEG", quality: 0.95 });
         const destPath = path.join(imagesDir, "page_1.jpg");
         await writeFile(destPath, Buffer.from(jpegData as ArrayBuffer));
         fullImagePath = destPath;
