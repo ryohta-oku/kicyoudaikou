@@ -164,9 +164,14 @@ export default function SubAccountCombobox({
               「{inputText.trim()}」を追加する
             </button>
           )}
+          {inputText.trim() && !exactMatch && !accountId && (
+            <div className="px-3 py-2 text-sm text-gray-400 border-t">
+              勘定科目を先に選択してください
+            </div>
+          )}
           {filtered.length === 0 && !inputText.trim() && subAccounts.length === 0 && (
             <div className="px-3 py-2 text-sm text-gray-400">
-              補助科目はありません
+              補助科目を入力して追加できます
             </div>
           )}
         </div>

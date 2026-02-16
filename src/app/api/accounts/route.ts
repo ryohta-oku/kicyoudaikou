@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { ensureAccountsSeeded } from "@/lib/accountSeed";
 
 export async function GET(request: NextRequest) {
   try {
     const clientId = request.nextUrl.searchParams.get("clientId");
+
+    // 勘定科目が0件の場合は自動シード
+    await ensureAccountsSeeded();
 
     const accounts = await prisma.account.findMany({
       include: {
