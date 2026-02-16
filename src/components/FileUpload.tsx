@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import {
   Upload,
   File,
@@ -61,6 +62,7 @@ export default function FileUpload({
   onBulkUploadComplete,
   onUploadComplete,
 }: FileUploadProps) {
+  const { data: session } = useSession();
   const [isDragOver, setIsDragOver] = useState(false);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -124,10 +126,11 @@ export default function FileUpload({
   /** フォルダを作成 */
   const createFolder = async (name: string): Promise<string> => {
     const clientId = getSelectedClientId();
+    const creator = session?.user?.name || "";
     const res = await fetch("/api/folders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, clientId }),
+      body: JSON.stringify({ name, creator, clientId }),
     });
     const data = await res.json();
     if (!res.ok) {
