@@ -17,6 +17,7 @@ import {
   Pencil,
   X,
   AlertTriangle,
+  CircleAlert,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS, formatCurrency } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
@@ -868,22 +869,25 @@ export default function FolderDetailPage({
                         <td className="px-4 py-3 whitespace-nowrap text-gray-700">{entry.date || <span className="text-red-400">-</span>}</td>
                         <td className="px-4 py-3 text-center">
                           {alerts.length > 0 ? (
-                            <div className="relative group cursor-default">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-medium">
-                                <AlertTriangle className="w-3 h-3" />アラート
-                              </span>
-                              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-50">
-                                <div className="bg-gray-800 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-lg">
-                                  <p className="font-medium mb-1">未入力の項目:</p>
+                            <div className="relative group">
+                              <button type="button" className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-[11px] font-medium transition-colors cursor-pointer">
+                                <CircleAlert className="w-4 h-4 animate-alert-bounce text-amber-600" />
+                                <span>要確認</span>
+                              </button>
+                              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-50 pointer-events-none">
+                                <div className="bg-gray-800 text-white text-xs rounded-lg px-3 py-2.5 whitespace-nowrap shadow-lg">
+                                  <p className="font-medium mb-1.5 text-amber-300 flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3" />未入力の項目
+                                  </p>
                                   {alerts.map((a) => (
-                                    <p key={a} className="text-amber-300">・{a}</p>
+                                    <p key={a} className="text-gray-200 leading-5">・{a}</p>
                                   ))}
                                 </div>
                                 <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-800" />
                               </div>
                             </div>
                           ) : (
-                            <span className="text-xs text-gray-400">該当なし</span>
+                            <span className="text-xs text-gray-400">-</span>
                           )}
                         </td>
                         <td className="px-4 py-3 max-w-[280px]">
@@ -942,9 +946,9 @@ export default function FolderDetailPage({
                   )}
                 >
                   {alerts.length > 0 && (
-                    <div className="flex items-center gap-1.5 text-amber-700 text-xs font-medium">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      未入力: {alerts.join("、")}
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-100 rounded-lg text-amber-700 text-xs font-medium">
+                      <CircleAlert className="w-4 h-4 animate-alert-bounce text-amber-600 flex-shrink-0" />
+                      <span>未入力: {alerts.join("、")}</span>
                     </div>
                   )}
                   <div className="flex items-start justify-between gap-2">
