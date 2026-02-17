@@ -133,8 +133,27 @@ export default function FolderDetailPage({
     try {
       const res = await fetch(`/api/folders/${id}`);
       const data = await res.json();
-      setFolder(data.folder || null);
-      return data.folder as Folder | null;
+      const folderData = data.folder as Folder | null;
+
+      // 仕訳済み以降で仕訳が0件のドキュメントを自動クリーンアップ
+      if (folderData) {
+        const orphanedDocs = folderData.documents.filter(
+          (d) =>
+            (d.status === "classified" || d.status === "reviewed" || d.status === "exported") &&
+            (!d.journalEntries || d.journalEntries.length === 0)
+        );
+        if (orphanedDocs.length > 0) {
+          await Promise.all(
+            orphanedDocs.map((d) => fetch(`/api/documents/${d.id}`, { method: "DELETE" }))
+          );
+          folderData.documents = folderData.documents.filter(
+            (d) => !orphanedDocs.some((o) => o.id === d.id)
+          );
+        }
+      }
+
+      setFolder(folderData);
+      return folderData;
     } catch (error) {
       console.error("Failed to fetch folder:", error);
       return null;
