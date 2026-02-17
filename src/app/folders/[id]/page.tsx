@@ -1298,7 +1298,7 @@ export default function FolderDetailPage({
                     {/* 削除ボタン */}
                     <button
                       onClick={async () => {
-                        if (!confirm(`「${item.description || "この仕訳"}」を削除してもよろしいですか？`)) return;
+                        if (!confirm(`「${item.description || "この仕訳"}」を削除してもよろしいですか？\n※ このファイルの仕訳が他になければファイルも削除されます`)) return;
                         setDeletingEntryId(item.id);
                         try {
                           const res = await fetch("/api/entries", {
@@ -1307,6 +1307,11 @@ export default function FolderDetailPage({
                             body: JSON.stringify({ id: item.id }),
                           });
                           if (!res.ok) throw new Error("削除に失敗しました");
+                          // このドキュメントの他の仕訳が無ければドキュメントも削除
+                          const doc = folder?.documents.find(d => d.id === item.documentId);
+                          if (doc && doc.journalEntries.filter(e => e.id !== item.id).length === 0) {
+                            await fetch(`/api/documents/${item.documentId}`, { method: "DELETE" });
+                          }
                           await fetchFolder();
                           setDuplicateCompare(null);
                         } catch (err) {
