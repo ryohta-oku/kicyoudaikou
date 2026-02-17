@@ -1015,6 +1015,10 @@ export default function FolderDetailPage({
                                 </div>
                               )}
                             </div>
+                          ) : !entry.isConfirmed ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg text-[11px] font-medium">
+                              未確認
+                            </span>
                           ) : (
                             <span className="text-xs text-gray-400">-</span>
                           )}
