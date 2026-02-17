@@ -168,6 +168,11 @@ export default function OCREditor({
 
   const currentPageChecks = checkedFields[currentPage.id] || {};
   const allFieldsChecked = CHECK_FIELDS.every((f) => currentPageChecks[f]);
+  // 次にチェックすべきフィールド（ステップガイド用）
+  const activeCheckField = confirmedPages[currentPage.id]
+    ? null
+    : CHECK_FIELDS.find((f) => !currentPageChecks[f]) ?? null;
+  const checkedCount = CHECK_FIELDS.filter((f) => currentPageChecks[f]).length;
 
   const isPdf = documentFileType === "pdf";
   const fields = editedFields[currentPage.id] || { date: "", registrationNumber: "", amount: "", tax: "", memo: "" };
@@ -258,6 +263,8 @@ export default function OCREditor({
                 checked={!!currentPageChecks.date}
                 onCheck={() => toggleFieldCheck(currentPage.id, "date")}
                 showCheck={!readOnly}
+                isGuideActive={activeCheckField === "date"}
+                guideStep={checkedCount + 1}
               />
               <FieldRow
                 label="登録番号"
@@ -268,6 +275,8 @@ export default function OCREditor({
                 checked={!!currentPageChecks.registrationNumber}
                 onCheck={() => toggleFieldCheck(currentPage.id, "registrationNumber")}
                 showCheck={!readOnly}
+                isGuideActive={activeCheckField === "registrationNumber"}
+                guideStep={checkedCount + 1}
               />
               <FieldRow
                 label="金額（税込）"
@@ -278,6 +287,8 @@ export default function OCREditor({
                 checked={!!currentPageChecks.amount}
                 onCheck={() => toggleFieldCheck(currentPage.id, "amount")}
                 showCheck={!readOnly}
+                isGuideActive={activeCheckField === "amount"}
+                guideStep={checkedCount + 1}
               />
               <FieldRow
                 label="消費税"
@@ -288,6 +299,8 @@ export default function OCREditor({
                 checked={!!currentPageChecks.tax}
                 onCheck={() => toggleFieldCheck(currentPage.id, "tax")}
                 showCheck={!readOnly}
+                isGuideActive={activeCheckField === "tax"}
+                guideStep={checkedCount + 1}
               />
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">メモ</label>
@@ -342,23 +355,31 @@ export default function OCREditor({
               ) : null}
               保存
             </button>
-            <button
-              onClick={() => handleConfirm(currentPage.id)}
-              disabled={isDisabled || savingPages[currentPage.id] || !allFieldsChecked}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {savingPages[currentPage.id] ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Check className="w-4 h-4" />
+            <div className="relative">
+              <button
+                onClick={() => handleConfirm(currentPage.id)}
+                disabled={isDisabled || savingPages[currentPage.id] || !allFieldsChecked}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50",
+                  allFieldsChecked && !confirmedPages[currentPage.id]
+                    ? "bg-blue-600 hover:bg-blue-700 ring-2 ring-blue-300 ring-offset-1 animate-pulse"
+                    : "bg-blue-600 hover:bg-blue-700"
+                )}
+              >
+                {savingPages[currentPage.id] ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Check className="w-4 h-4" />
+                )}
+                確認完了
+              </button>
+              {allFieldsChecked && !confirmedPages[currentPage.id] && (
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 whitespace-nowrap bg-blue-700 text-white text-xs rounded-md px-3 py-1.5 shadow-lg z-10 animate-bounce">
+                  全項目チェック済み！確認完了を押してください
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-blue-700" />
+                </div>
               )}
-              確認完了
-            </button>
-            {!confirmedPages[currentPage.id] && !allFieldsChecked && (
-              <span className="text-xs text-amber-600">
-                各項目を確認してチェックしてください
-              </span>
-            )}
+            </div>
           </div>
           )}
         </div>
@@ -371,10 +392,14 @@ function CheckButton({
   checked,
   confirmed,
   onClick,
+  isGuideActive = false,
+  guideStep,
 }: {
   checked: boolean;
   confirmed: boolean;
   onClick: () => void;
+  isGuideActive?: boolean;
+  guideStep?: number;
 }) {
   if (confirmed) {
     return (
@@ -384,7 +409,7 @@ function CheckButton({
     );
   }
   return (
-    <div className="relative group mt-0.5 shrink-0">
+    <div className="relative mt-0.5 shrink-0">
       <button
         type="button"
         onClick={onClick}
@@ -392,15 +417,17 @@ function CheckButton({
           "flex items-center justify-center w-8 h-8 rounded-full border-2 transition-colors",
           checked
             ? "bg-green-100 border-green-500 text-green-600 hover:bg-green-200"
-            : "border-gray-300 text-gray-300 hover:border-gray-400 hover:text-gray-400"
+            : isGuideActive
+              ? "border-blue-400 text-blue-400 ring-2 ring-blue-200 ring-offset-1 animate-pulse hover:border-blue-500"
+              : "border-gray-300 text-gray-300 hover:border-gray-400 hover:text-gray-400"
         )}
       >
         {checked && <Check className="w-4 h-4" />}
       </button>
-      {!checked && (
-        <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 hidden group-hover:block whitespace-nowrap bg-gray-800 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10">
-          内容を確認してチェック
-          <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-gray-800" />
+      {isGuideActive && !checked && (
+        <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-blue-600 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10">
+          <span className="font-bold">{guideStep}/{CHECK_FIELDS.length}</span>{" "}内容を確認してチェック →
+          <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-blue-600" />
         </div>
       )}
     </div>
@@ -416,6 +443,8 @@ function FieldRow({
   checked,
   onCheck,
   showCheck,
+  isGuideActive = false,
+  guideStep,
 }: {
   label: string;
   value: string;
@@ -425,6 +454,8 @@ function FieldRow({
   checked: boolean;
   onCheck: () => void;
   showCheck: boolean;
+  isGuideActive?: boolean;
+  guideStep?: number;
 }) {
   return (
     <div>
@@ -439,7 +470,13 @@ function FieldRow({
           placeholder={placeholder}
         />
         {showCheck && (
-          <CheckButton checked={checked} confirmed={disabled && checked} onClick={onCheck} />
+          <CheckButton
+            checked={checked}
+            confirmed={disabled && checked}
+            onClick={onCheck}
+            isGuideActive={isGuideActive}
+            guideStep={guideStep}
+          />
         )}
       </div>
     </div>
