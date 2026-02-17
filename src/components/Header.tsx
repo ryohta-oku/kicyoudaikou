@@ -24,6 +24,7 @@ export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const mobileDropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -41,7 +42,10 @@ export default function Header() {
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inDesktop = dropdownRef.current?.contains(target);
+      const inMobile = mobileDropdownRef.current?.contains(target);
+      if (!inDesktop && !inMobile) {
         setIsOpen(false);
         setSearchQuery("");
       }
@@ -162,7 +166,7 @@ export default function Header() {
 
   // 得意先ドロップダウン（デスクトップ・モバイル共通）
   const ClientSelector = ({ mobile }: { mobile?: boolean }) => (
-    <div className={cn("relative", mobile && "w-full")} ref={mobile ? undefined : dropdownRef}>
+    <div className={cn("relative", mobile && "w-full")} ref={mobile ? mobileDropdownRef : dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
