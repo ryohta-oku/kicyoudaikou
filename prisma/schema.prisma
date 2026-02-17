@@ -108,6 +108,7 @@ model JournalEntry {
   aiSuggested     Boolean  @default(false) // AI推測かどうか
   aiReasoning     String   @default("") // AIによる勘定科目選定理由
   isConfirmed     Boolean  @default(false) // 確認済みかどうか
+  duplicateDismissed Boolean @default(false) // 重複検知を却下済みかどうか
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

@@ -51,6 +51,7 @@ interface JournalEntryData {
   aiSuggested: boolean;
   aiReasoning: string;
   isConfirmed: boolean;
+  duplicateDismissed: boolean;
 }
 
 interface Document {
@@ -121,6 +122,12 @@ export default function FolderDetailPage({
   const [loadingOcrDocs, setLoadingOcrDocs] = useState(false);
   const [fullyConfirmedDocIds, setFullyConfirmedDocIds] = useState<Set<string>>(new Set());
   const confirmedProcessedRef = useRef<Set<string>>(new Set());
+  const [duplicateCompare, setDuplicateCompare] = useState<{
+    entry: JournalEntryData & { documentId: string; filename: string; filepath: string; fileType: string; pages: { id: string; imagePath: string; pageNumber: number }[] };
+    paired: JournalEntryData & { documentId: string; filename: string; filepath: string; fileType: string; pages: { id: string; imagePath: string; pageNumber: number }[] };
+  } | null>(null);
+  const [dismissingDuplicate, setDismissingDuplicate] = useState(false);
+  const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
 
   const fetchFolder = useCallback(async () => {
     try {
@@ -793,11 +800,14 @@ export default function FolderDetailPage({
 
         // 重複検知: 金額 + 勘定科目が一致 & 別ファイル由来
         // 日付は両方存在して異なる場合のみ除外（片方が空なら重複の可能性あり）
+        // duplicateDismissed のエントリは重複検知から除外
         const duplicateIds = new Set<string>();
+        const duplicatePairs = new Map<string, string[]>();
         for (let i = 0; i < allEntries.length; i++) {
           for (let j = i + 1; j < allEntries.length; j++) {
             const a = allEntries[i];
             const b = allEntries[j];
+            if (a.duplicateDismissed || b.duplicateDismissed) continue;
             const datesContradict = a.date && b.date && a.date !== b.date;
             if (
               a.documentId !== b.documentId &&
@@ -809,6 +819,8 @@ export default function FolderDetailPage({
             ) {
               duplicateIds.add(a.id);
               duplicateIds.add(b.id);
+              duplicatePairs.set(a.id, [...(duplicatePairs.get(a.id) || []), b.id]);
+              duplicatePairs.set(b.id, [...(duplicatePairs.get(b.id) || []), a.id]);
             }
           }
         }
@@ -934,7 +946,15 @@ export default function FolderDetailPage({
                               )}
                               {isDuplicate && (
                                 <div className="relative group">
-                                  <button type="button" className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg text-[11px] font-medium transition-colors cursor-pointer">
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
+                                    onClick={() => {
+                                      const pairedIds = duplicatePairs.get(entry.id) || [];
+                                      const paired = allEntries.find(e => pairedIds.includes(e.id));
+                                      if (paired) setDuplicateCompare({ entry, paired });
+                                    }}
+                                  >
                                     <CircleAlert className="w-4 h-4 animate-alert-bounce text-orange-600" />
                                     <span>重複？</span>
                                   </button>
@@ -943,8 +963,7 @@ export default function FolderDetailPage({
                                       <p className="font-medium mb-1 text-orange-300 flex items-center gap-1">
                                         <CircleAlert className="w-3 h-3" />重複の可能性
                                       </p>
-                                      <p className="text-gray-300 leading-5 text-[11px]">同じ金額・勘定科目の仕訳が</p>
-                                      <p className="text-gray-300 leading-5 text-[11px]">別ファイルにあります</p>
+                                      <p className="text-gray-300 leading-5 text-[11px]">クリックして比較</p>
                                     </div>
                                     <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-800" />
                                   </div>
@@ -1014,10 +1033,18 @@ export default function FolderDetailPage({
                   )}
                 >
                   {isDuplicate && (
-                    <div className="flex items-center gap-1.5 px-2 py-1 bg-orange-100 rounded-lg text-orange-700 text-xs font-medium">
+                    <button
+                      type="button"
+                      className="flex items-center gap-1.5 px-2 py-1 bg-orange-100 hover:bg-orange-200 rounded-lg text-orange-700 text-xs font-medium w-full transition-colors"
+                      onClick={() => {
+                        const pairedIds = duplicatePairs.get(entry.id) || [];
+                        const paired = allEntries.find(e => pairedIds.includes(e.id));
+                        if (paired) setDuplicateCompare({ entry, paired });
+                      }}
+                    >
                       <CircleAlert className="w-4 h-4 animate-alert-bounce text-orange-600 flex-shrink-0" />
-                      <span>重複の可能性（別ファイルに同じ仕訳あり）</span>
-                    </div>
+                      <span>重複の可能性（タップして比較）</span>
+                    </button>
                   )}
                   {missingAlerts.length > 0 && (
                     <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-100 rounded-lg text-amber-700 text-xs font-medium">
@@ -1178,6 +1205,147 @@ export default function FolderDetailPage({
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
           <span className="ml-2 text-sm text-gray-500">OCRデータを読み込み中...</span>
+        </div>
+      )}
+
+      {/* 重複比較モーダル */}
+      {duplicateCompare && (
+        <div
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50"
+          onClick={() => !dismissingDuplicate && !deletingEntryId && setDuplicateCompare(null)}
+        >
+          <div
+            className="bg-white md:rounded-xl shadow-2xl w-full md:max-w-4xl h-full md:h-auto md:max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* モーダルヘッダー */}
+            <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b bg-gray-50 flex-shrink-0">
+              <h3 className="text-base md:text-lg font-bold text-gray-900 flex items-center gap-2">
+                <CircleAlert className="w-5 h-5 text-orange-500" />
+                重複の確認
+              </h3>
+              <button
+                onClick={() => setDuplicateCompare(null)}
+                disabled={dismissingDuplicate || !!deletingEntryId}
+                className="p-1.5 text-gray-500 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 比較コンテンツ */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-200">
+                {[duplicateCompare.entry, duplicateCompare.paired].map((item, idx) => (
+                  <div key={item.id} className="p-4 md:p-6 space-y-3">
+                    <h4 className="text-sm font-bold text-gray-700">仕訳 {idx === 0 ? "A" : "B"}</h4>
+                    <dl className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">日付</dt>
+                        <dd className="text-gray-900 font-medium">{item.date || <span className="text-red-400">-</span>}</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">摘要</dt>
+                        <dd className="text-gray-900 font-medium text-right max-w-[200px] truncate">{item.description || "-"}</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">金額</dt>
+                        <dd className="text-gray-900 font-medium font-mono">
+                          {item.debitAmount > 0 ? formatCurrency(item.debitAmount) : item.creditAmount > 0 ? formatCurrency(item.creditAmount) : "-"}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">勘定科目</dt>
+                        <dd className="text-gray-900 font-medium">{item.accountName || "-"}</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">税区分</dt>
+                        <dd className="text-gray-900">{item.taxRate || "-"}</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">ファイル</dt>
+                        <dd className="text-gray-900 text-xs truncate max-w-[180px]">{item.filename}</dd>
+                      </div>
+                    </dl>
+                    {/* 削除ボタン */}
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`「${item.description || "この仕訳"}」を削除してもよろしいですか？`)) return;
+                        setDeletingEntryId(item.id);
+                        try {
+                          const res = await fetch("/api/entries", {
+                            method: "DELETE",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ id: item.id }),
+                          });
+                          if (!res.ok) throw new Error("削除に失敗しました");
+                          await fetchFolder();
+                          setDuplicateCompare(null);
+                        } catch (err) {
+                          alert(err instanceof Error ? err.message : "削除に失敗しました");
+                        } finally {
+                          setDeletingEntryId(null);
+                        }
+                      }}
+                      disabled={dismissingDuplicate || !!deletingEntryId}
+                      className="w-full mt-2 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {deletingEntryId === item.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                      こちらを削除
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* フッターアクション */}
+            <div className="border-t bg-gray-50 px-4 md:px-6 py-3 md:py-4 flex-shrink-0">
+              <p className="text-sm text-gray-600 mb-3">この2件は重複ですか？</p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  onClick={async () => {
+                    setDismissingDuplicate(true);
+                    try {
+                      await Promise.all([
+                        fetch("/api/entries", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id: duplicateCompare.entry.id, duplicateDismissed: true }),
+                        }),
+                        fetch("/api/entries", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id: duplicateCompare.paired.id, duplicateDismissed: true }),
+                        }),
+                      ]);
+                      await fetchFolder();
+                      setDuplicateCompare(null);
+                    } catch (err) {
+                      alert(err instanceof Error ? err.message : "更新に失敗しました");
+                    } finally {
+                      setDismissingDuplicate(false);
+                    }
+                  }}
+                  disabled={dismissingDuplicate || !!deletingEntryId}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  {dismissingDuplicate ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  重複ではない
+                </button>
+                <p className="hidden sm:flex items-center text-xs text-gray-400 px-2">
+                  または上の「こちらを削除」で1件削除
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
