@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { getSelectedClientId } from "@/lib/client";
 import {
   FileText,
@@ -47,6 +49,8 @@ export default function ClassifyPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
+  const { data: session, status: sessionStatus } = useSession();
   const [folder, setFolder] = useState<FolderInfo | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -55,6 +59,13 @@ export default function ClassifyPage({
   const [classifyError, setClassifyError] = useState<string | null>(null);
   const [allDone, setAllDone] = useState(false);
   const classifyStartedRef = useRef(false);
+
+  // B型利用者はアクセス不可 → フォルダ詳細にリダイレクト
+  useEffect(() => {
+    if (sessionStatus === "authenticated" && session?.user?.role === "user_b") {
+      router.replace(`/folders/${id}`);
+    }
+  }, [sessionStatus, session, router, id]);
 
   /** フォルダ情報を取得 */
   const fetchFolder = useCallback(async () => {

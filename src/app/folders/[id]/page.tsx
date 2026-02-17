@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   FileText,
   ArrowLeft,
@@ -108,6 +109,10 @@ export default function FolderDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const { data: session } = useSession();
+  const userRole = session?.user?.role || "";
+  // B型利用者は仕訳関連セクションを非表示
+  const canViewJournal = userRole !== "user_b";
   const [folder, setFolder] = useState<Folder | null>(null);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -457,11 +462,11 @@ export default function FolderDetailPage({
       case "ocr_confirmed":
         return { href: null, label: "" };
       case "classified":
-        return { href: `/folders/${id}/classify`, label: "仕訳確認" };
+        return canViewJournal ? { href: `/folders/${id}/classify`, label: "仕訳確認" } : { href: null, label: "" };
       case "reviewed":
-        return { href: `/documents/${docId}/export`, label: "エクスポート" };
+        return canViewJournal ? { href: `/documents/${docId}/export`, label: "エクスポート" } : { href: null, label: "" };
       case "exported":
-        return { href: `/documents/${docId}/export`, label: "再エクスポート" };
+        return canViewJournal ? { href: `/documents/${docId}/export`, label: "再エクスポート" } : { href: null, label: "" };
       default:
         return { href: null, label: "" };
     }
@@ -680,7 +685,7 @@ export default function FolderDetailPage({
                 <tbody>
                   {folder.documents.map((doc) => {
                     const nextAction = getNextAction(doc.status, doc.id);
-                    const canExport = doc.status === "reviewed" || doc.status === "exported";
+                    const canExport = canViewJournal && (doc.status === "reviewed" || doc.status === "exported");
                     const isProcessing = ocrProcessingIds.has(doc.id);
                     return (
                       <tr key={doc.id} className="border-b hover:bg-gray-50">
@@ -741,7 +746,7 @@ export default function FolderDetailPage({
           <div className="md:hidden space-y-3">
             {folder.documents.map((doc) => {
               const nextAction = getNextAction(doc.status, doc.id);
-              const canExport = doc.status === "reviewed" || doc.status === "exported";
+              const canExport = canViewJournal && (doc.status === "reviewed" || doc.status === "exported");
               const isProcessing = ocrProcessingIds.has(doc.id);
               return (
                 <div key={doc.id} className="bg-white rounded-xl border p-4 space-y-3">
@@ -790,8 +795,8 @@ export default function FolderDetailPage({
         </>
       )}
 
-      {/* 仕訳明細セクション (Money Forward風) */}
-      {(() => {
+      {/* 仕訳明細セクション (Money Forward風) - B型は非表示 */}
+      {canViewJournal && (() => {
         const classifiedDocs = folder.documents.filter(
           (d) =>
             (d.status === "classified" || d.status === "reviewed" || d.status === "exported") &&
@@ -1146,7 +1151,7 @@ export default function FolderDetailPage({
                   </span>
                 )}
               </h2>
-              {allOcrConfirmed && hasClassifyTarget && (
+              {canViewJournal && allOcrConfirmed && hasClassifyTarget && (
                 <button
                   onClick={() => router.push(`/folders/${id}/classify`)}
                   className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
@@ -1157,7 +1162,7 @@ export default function FolderDetailPage({
               )}
             </div>
 
-            {!allOcrConfirmed && (
+            {canViewJournal && !allOcrConfirmed && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                 <p className="text-sm text-yellow-800">
                   すべてのドキュメントのOCR確認が完了すると「一括仕訳分類」ボタンが表示されます。
