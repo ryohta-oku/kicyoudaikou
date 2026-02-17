@@ -6,8 +6,36 @@ on:
       - main
 
 jobs:
+  # ステップ1: GitHub Actions上でビルドテスト（VPSに触らずに検証）
+  build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --production=false
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: Build Next.js
+        run: npm run build
+        env:
+          DATABASE_URL: "file:./dev.db"
+
+  # ステップ2: ビルドテスト成功後にVPSへデプロイ
   deploy:
     runs-on: ubuntu-latest
+    needs: build-check
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
@@ -16,13 +44,14 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
+          command_timeout: 10m
           script: |
             set -e
             cd /var/www/kicyoudaikou
 
             echo "=== デプロイ開始 ==="
 
-            # .env に必要な環境変数を追加（ビルド前に実行）
+            # --- .env チェック ---
             echo ">>> .env チェック..."
 
             if ! grep -q "^NEXTAUTH_SECRET" /var/www/kicyoudaikou/.env; then
@@ -31,14 +60,12 @@ jobs:
               echo ">>> NEXTAUTH_SECRET を追加しました"
             fi
 
-            # AUTH_SECRET（NextAuth v5 用） - NEXTAUTH_SECRET と同じ値を使用
             if ! grep -q "^AUTH_SECRET" /var/www/kicyoudaikou/.env; then
               AUTH_VAL=$(grep "^NEXTAUTH_SECRET" /var/www/kicyoudaikou/.env | cut -d'=' -f2-)
               echo "AUTH_SECRET=$AUTH_VAL" >> /var/www/kicyoudaikou/.env
               echo ">>> AUTH_SECRET を追加しました"
             fi
 
-            # AUTH_URL（NextAuth v5 用）
             if ! grep -q "^AUTH_URL" /var/www/kicyoudaikou/.env; then
               echo 'AUTH_URL="http://162.43.7.199"' >> /var/www/kicyoudaikou/.env
               echo ">>> AUTH_URL を追加しました"
@@ -62,46 +89,109 @@ jobs:
             echo ">>> .env キー一覧:"
             grep -E "^[A-Z_]+=" /var/www/kicyoudaikou/.env | sed 's/=.*/=***/'
 
-            # 最新コードを取得
-            echo ">>> git pull..."
-            git pull origin main
+            # --- バックアップ作成 ---
+            echo ">>> 旧ビルドをバックアップ中..."
+            BACKUP_DIR="/var/www/kicyoudaikou-backup"
+            rm -rf "$BACKUP_DIR"
+            mkdir -p "$BACKUP_DIR"
 
-            # 依存パッケージをインストール
-            echo ">>> npm ci..."
-            npm ci --production=false
-
-            # Prisma クライアント生成
-            echo ">>> Prisma generate..."
-            npx prisma generate
-
-            # Next.js ビルド
-            echo ">>> npm run build..."
-            npm run build
-
-            # ビルド確認
-            if [ ! -d ".next" ]; then
-              echo "エラー: .next ディレクトリが見つかりません。ビルドが失敗しています。"
-              exit 1
+            # 現在のビルド成果物とnode_modulesをバックアップ
+            if [ -d ".next" ]; then
+              cp -a .next "$BACKUP_DIR/.next"
             fi
-            echo ">>> ビルド成功（.next ディレクトリ確認OK）"
+            # 現在のgit HEADを記録（ロールバック用）
+            git rev-parse HEAD > "$BACKUP_DIR/git-head.txt"
+            echo ">>> バックアップ完了: $(cat $BACKUP_DIR/git-head.txt)"
 
-            # DB マイグレーション
+            # --- ロールバック関数 ---
+            rollback() {
+              echo "!!! デプロイ失敗 - ロールバック開始 !!!"
+
+              # gitを元のコミットに戻す
+              if [ -f "$BACKUP_DIR/git-head.txt" ]; then
+                PREV_HEAD=$(cat "$BACKUP_DIR/git-head.txt")
+                echo ">>> git checkout $PREV_HEAD..."
+                git checkout "$PREV_HEAD" -- . 2>/dev/null || true
+              fi
+
+              # .nextを復元
+              if [ -d "$BACKUP_DIR/.next" ]; then
+                echo ">>> .next を復元中..."
+                rm -rf .next
+                cp -a "$BACKUP_DIR/.next" .next
+              fi
+
+              # PM2を再起動（旧バージョンで）
+              echo ">>> PM2 を旧バージョンで再起動..."
+              pm2 startOrRestart ecosystem.config.cjs --env production 2>/dev/null || true
+              sleep 5
+              echo ">>> ロールバック完了"
+              pm2 status
+              exit 1
+            }
+
+            # --- コード取得 ---
+            echo ">>> git pull..."
+            git pull origin main || rollback
+
+            # --- 依存パッケージ ---
+            echo ">>> npm ci..."
+            npm ci --production=false || rollback
+
+            # --- Prisma ---
+            echo ">>> Prisma generate..."
+            npx prisma generate || rollback
+
+            # --- ビルド ---
+            echo ">>> npm run build..."
+            npm run build || rollback
+
+            # ビルド成果物の確認
+            if [ ! -d ".next" ]; then
+              echo "エラー: .next ディレクトリが見つかりません"
+              rollback
+            fi
+            echo ">>> ビルド成功"
+
+            # --- DBマイグレーション ---
             echo ">>> Prisma migrate..."
-            npx prisma migrate deploy
+            npx prisma migrate deploy || rollback
 
-            # 初期管理者ユーザーの確認（ユーザーが0人なら初期セットアップ画面で登録可能）
+            # --- シード ---
             echo ">>> ユーザーチェック..."
-            npx tsx prisma/seed-admin.ts || echo ">>> シードスクリプトスキップ（初期セットアップ画面で登録可能）"
+            npx tsx prisma/seed-admin.ts 2>/dev/null || echo ">>> シードスクリプトスキップ"
 
-            # PM2 でアプリを再起動
+            # --- PM2再起動 ---
             echo ">>> PM2 restart..."
-            pm2 startOrRestart ecosystem.config.cjs --env production
+            pm2 startOrRestart ecosystem.config.cjs --env production || rollback
 
-            # 起動確認
-            sleep 5
+            # --- ヘルスチェック ---
+            echo ">>> ヘルスチェック中（最大30秒）..."
+            HEALTH_OK=false
+            for i in $(seq 1 6); do
+              sleep 5
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/login 2>/dev/null || echo "000")
+              echo ">>> 試行 $i/6: HTTP $HTTP_CODE"
+              if [ "$HTTP_CODE" = "200" ]; then
+                HEALTH_OK=true
+                break
+              fi
+            done
+
+            if [ "$HEALTH_OK" = false ]; then
+              echo "!!! ヘルスチェック失敗（HTTP応答なし）"
+              echo ">>> PM2 ログ:"
+              pm2 logs --nostream --lines 30
+              rollback
+            fi
+
+            echo ">>> ヘルスチェック成功"
+
+            # --- 完了 ---
             echo ">>> PM2 status:"
             pm2 status
-            echo ">>> PM2 logs (最新20行):"
-            pm2 logs --nostream --lines 20
+            echo ">>> PM2 logs (最新10行):"
+            pm2 logs --nostream --lines 10
 
-            echo "=== デプロイ完了 ==="
+            # バックアップを保持（次回デプロイまで残す）
+            echo "=== デプロイ完了（正常） ==="
