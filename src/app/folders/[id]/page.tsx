@@ -951,10 +951,35 @@ export default function FolderDetailPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {allEntries.map((entry) => {
+                    {(() => {
+                      // ステップガイド: 最初の要対応エントリを特定
+                      const firstActionEntryId = allEntries.find((e) => {
+                        const a = getAlerts(e);
+                        return a.length > 0 || !e.isConfirmed;
+                      })?.id ?? null;
+                      let actionIndex = 0;
+                      const totalActions = allEntries.filter((e) => {
+                        const a = getAlerts(e);
+                        return a.length > 0 || !e.isConfirmed;
+                      }).length;
+
+                      return allEntries.map((entry) => {
                       const alerts = getAlerts(entry);
                       const isDuplicate = duplicateIds.has(entry.id);
                       const missingAlerts = alerts.filter((a) => a !== "重複の可能性");
+                      const hasIssue = alerts.length > 0 || !entry.isConfirmed;
+                      const isFirstAction = entry.id === firstActionEntryId;
+                      if (hasIssue) actionIndex++;
+
+                      // アラート種別の判定（1つのバッジにまとめる）
+                      const alertDetails: { label: string; color: string }[] = [];
+                      if (isDuplicate) alertDetails.push({ label: "重複の可能性があります", color: "orange" });
+                      if (missingAlerts.length > 0) alertDetails.push(...missingAlerts.map((a) => ({ label: `${a}が未入力`, color: "amber" })));
+                      if (!entry.isConfirmed && alerts.length === 0) alertDetails.push({ label: "仕訳が未確認です", color: "blue" });
+
+                      // バッジの色（最も重要なアラートの色）
+                      const badgeColor = isDuplicate ? "orange" : missingAlerts.length > 0 ? "amber" : !entry.isConfirmed ? "blue" : "";
+
                       return (
                       <tr
                         key={entry.id}
@@ -968,59 +993,63 @@ export default function FolderDetailPage({
                       >
                         <td className="px-4 py-3 whitespace-nowrap text-gray-700">{entry.date || <span className="text-red-400">-</span>}</td>
                         <td className="px-4 py-3 text-center">
-                          {alerts.length > 0 ? (
-                            <div className="flex flex-col items-center gap-1">
-                              {missingAlerts.length > 0 && (
-                                <div className="relative group">
-                                  <button type="button" className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-[11px] font-medium transition-colors cursor-pointer">
-                                    <CircleAlert className="w-4 h-4 animate-alert-bounce text-amber-600" />
-                                    <span>要確認</span>
-                                  </button>
-                                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-50 pointer-events-none">
-                                    <div className="bg-gray-800 text-white text-xs rounded-lg px-3 py-2.5 whitespace-nowrap shadow-lg">
-                                      <p className="font-medium mb-1 text-amber-300 flex items-center gap-1">
-                                        <AlertTriangle className="w-3 h-3" />未入力の項目
-                                      </p>
-                                      {missingAlerts.map((a) => (
-                                        <p key={a} className="text-gray-200 leading-5">・{a}</p>
-                                      ))}
-                                    </div>
-                                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-800" />
-                                  </div>
+                          {hasIssue ? (
+                            <div className="relative group">
+                              <button
+                                type="button"
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer",
+                                  badgeColor === "orange" ? "bg-orange-100 hover:bg-orange-200 text-orange-700" :
+                                  badgeColor === "amber" ? "bg-amber-100 hover:bg-amber-200 text-amber-700" :
+                                  "bg-blue-50 hover:bg-blue-100 text-blue-600"
+                                )}
+                                onClick={() => {
+                                  if (isDuplicate) {
+                                    const pairedIds = duplicatePairs.get(entry.id) || [];
+                                    const paired = allEntries.find(e => pairedIds.includes(e.id));
+                                    if (paired) setDuplicateCompare({ entry, paired });
+                                  } else {
+                                    openDetail(entry);
+                                  }
+                                }}
+                              >
+                                <CircleAlert className={cn(
+                                  "w-4 h-4",
+                                  badgeColor === "orange" ? "text-orange-600" :
+                                  badgeColor === "amber" ? "text-amber-600 animate-alert-bounce" :
+                                  "text-blue-500"
+                                )} />
+                                <span>{isDuplicate ? "重複？" : missingAlerts.length > 0 ? "要確認" : "未確認"}</span>
+                              </button>
+                              {/* ホバー詳細 */}
+                              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-50 pointer-events-none">
+                                <div className="bg-gray-800 text-white text-xs rounded-lg px-3 py-2.5 whitespace-nowrap shadow-lg">
+                                  {alertDetails.map((d, i) => (
+                                    <p key={i} className="text-gray-200 leading-5 flex items-center gap-1">
+                                      <span className={cn(
+                                        "w-1.5 h-1.5 rounded-full shrink-0",
+                                        d.color === "orange" ? "bg-orange-400" :
+                                        d.color === "amber" ? "bg-amber-400" : "bg-blue-400"
+                                      )} />
+                                      {d.label}
+                                    </p>
+                                  ))}
+                                  <p className="text-gray-400 text-[10px] mt-1 border-t border-gray-700 pt-1">クリックして確認</p>
                                 </div>
-                              )}
-                              {isDuplicate && (
-                                <div className="relative group">
-                                  <button
-                                    type="button"
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
-                                    onClick={() => {
-                                      const pairedIds = duplicatePairs.get(entry.id) || [];
-                                      const paired = allEntries.find(e => pairedIds.includes(e.id));
-                                      if (paired) setDuplicateCompare({ entry, paired });
-                                    }}
-                                  >
-                                    <CircleAlert className="w-4 h-4 animate-alert-bounce text-orange-600" />
-                                    <span>重複？</span>
-                                  </button>
-                                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-50 pointer-events-none">
-                                    <div className="bg-gray-800 text-white text-xs rounded-lg px-3 py-2.5 whitespace-nowrap shadow-lg">
-                                      <p className="font-medium mb-1 text-orange-300 flex items-center gap-1">
-                                        <CircleAlert className="w-3 h-3" />重複の可能性
-                                      </p>
-                                      <p className="text-gray-300 leading-5 text-[11px]">クリックして比較</p>
-                                    </div>
-                                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-800" />
-                                  </div>
+                                <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-800" />
+                              </div>
+                              {/* ステップガイド吹き出し */}
+                              {isFirstAction && (
+                                <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-blue-600 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10 animate-bounce">
+                                  アラートを確認してください（残り{totalActions}件）
+                                  <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-blue-600" />
                                 </div>
                               )}
                             </div>
-                          ) : !entry.isConfirmed ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg text-[11px] font-medium">
-                              未確認
-                            </span>
                           ) : (
-                            <span className="text-xs text-gray-400">-</span>
+                            <span className="inline-flex items-center justify-center w-6 h-6 text-green-500">
+                              <Check className="w-4 h-4" />
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-3 max-w-[280px]">
@@ -1052,7 +1081,8 @@ export default function FolderDetailPage({
                         </td>
                       </tr>
                     );
-                    })}
+                    });
+                    })()}
                   </tbody>
                 </table>
               </div>
