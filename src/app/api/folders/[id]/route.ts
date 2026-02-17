@@ -42,6 +42,36 @@ export async function GET(
   }
 }
 
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    const { handoffStatus, handoffBy } = body;
+
+    const data: Record<string, unknown> = {};
+    if (handoffStatus !== undefined) data.handoffStatus = handoffStatus;
+    if (handoffBy !== undefined) data.handoffBy = handoffBy;
+    if (handoffStatus === "handed_off") data.handoffAt = new Date();
+
+    const folder = await prisma.folder.update({
+      where: { id },
+      data,
+    });
+
+    return NextResponse.json({ folder });
+  } catch (error) {
+    console.error("Error updating folder:", error);
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(
+      { error: "フォルダの更新に失敗しました", code: "FOLDER_UPDATE_FAILED", detail },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

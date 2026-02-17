@@ -24,6 +24,7 @@ export const STATUS_LABELS: Record<string, string> = {
   classified: "仕訳済",
   reviewed: "確認済",
   exported: "エクスポート済",
+  handed_off: "引き継ぎ済",
 };
 
 export const STATUS_COLORS: Record<string, string> = {
@@ -34,4 +35,5 @@ export const STATUS_COLORS: Record<string, string> = {
   classified: "bg-purple-100 text-purple-800",
   reviewed: "bg-green-100 text-green-800",
   exported: "bg-emerald-100 text-emerald-800",
+  handed_off: "bg-cyan-100 text-cyan-800",
 };

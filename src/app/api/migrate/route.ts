@@ -31,6 +31,29 @@ export async function GET() {
       `);
       results.push("✓ Folder テーブルを作成しました");
     } else {
+      // Folder テーブルに引き継ぎ関連カラムを追加
+      const folderInfo = await prisma.$queryRawUnsafe<{ name: string }[]>(
+        "PRAGMA table_info(Folder)"
+      );
+      const folderColumns = folderInfo.map((r) => r.name);
+      if (!folderColumns.includes("handoffStatus")) {
+        await prisma.$executeRawUnsafe(
+          `ALTER TABLE "Folder" ADD COLUMN "handoffStatus" TEXT`
+        );
+        results.push("✓ Folder.handoffStatus カラムを追加しました");
+      }
+      if (!folderColumns.includes("handoffBy")) {
+        await prisma.$executeRawUnsafe(
+          `ALTER TABLE "Folder" ADD COLUMN "handoffBy" TEXT NOT NULL DEFAULT ''`
+        );
+        results.push("✓ Folder.handoffBy カラムを追加しました");
+      }
+      if (!folderColumns.includes("handoffAt")) {
+        await prisma.$executeRawUnsafe(
+          `ALTER TABLE "Folder" ADD COLUMN "handoffAt" DATETIME`
+        );
+        results.push("✓ Folder.handoffAt カラムを追加しました");
+      }
       results.push("Folder テーブルは既に存在します");
     }
 

@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
+import { getEffectiveRole } from "@/lib/roleSimulation";
 import {
   FolderOpen,
   Upload,
@@ -16,6 +18,8 @@ import {
   FileStack,
   Play,
   MonitorSmartphone,
+  Send,
+  ArrowRight,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
@@ -32,10 +36,15 @@ interface Folder {
   name: string;
   creator: string;
   createdAt: string;
+  handoffStatus: string | null;
+  handoffBy: string;
+  handoffAt: string | null;
   documents: FolderDocument[];
 }
 
-function getFolderStatus(documents: FolderDocument[]): string {
+function getFolderStatus(folder: Folder): string {
+  if (folder.handoffStatus === "handed_off") return "handed_off";
+  const documents = folder.documents;
   if (documents.length === 0) return "uploaded";
   const statuses = documents.map((d) => d.status);
   // 優先度順: 処理中 > アップロード済 > OCR完了 > OCR確認完了 > 仕訳済 > 確認済 > エクスポート済
@@ -50,6 +59,8 @@ function getFolderStatus(documents: FolderDocument[]): string {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const userRole = getEffectiveRole(session?.user?.role || "");
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
@@ -247,6 +258,86 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* B型: OCR未完了フォルダ警告バナー */}
+      {userRole === "user_b" && (() => {
+        const incompleteFolders = folders.filter((f) => {
+          if (f.documents.length === 0) return false;
+          if (f.handoffStatus === "handed_off") return false;
+          return f.documents.some(
+            (d) =>
+              d.status === "uploaded" ||
+              d.status === "ocr_processing" ||
+              d.status === "ocr_complete"
+          );
+        });
+        if (incompleteFolders.length === 0) return null;
+        return (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 md:p-4 space-y-2">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+              <span className="text-xs md:text-sm font-medium text-amber-800">
+                OCR確認が完了していないフォルダが {incompleteFolders.length} 件あります
+              </span>
+            </div>
+            <div className="space-y-1 ml-8">
+              {incompleteFolders.map((f) => (
+                <Link
+                  key={f.id}
+                  href={`/folders/${f.id}`}
+                  className="flex items-center gap-2 text-xs text-amber-700 hover:text-amber-900 hover:underline"
+                >
+                  <ArrowRight className="w-3 h-3" />
+                  {f.name}
+                </Link>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* A型: 引き継ぎフォルダセクション */}
+      {userRole === "user_a" && (() => {
+        const handoffFolders = folders.filter((f) => f.handoffStatus === "handed_off");
+        if (handoffFolders.length === 0) return null;
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base md:text-lg font-bold text-gray-900">引き継ぎフォルダ</h2>
+              <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold text-white bg-cyan-500 rounded-full">
+                {handoffFolders.length}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {handoffFolders.map((f) => (
+                <Link
+                  key={f.id}
+                  href={`/folders/${f.id}`}
+                  className="flex items-center justify-between gap-3 bg-cyan-50 border border-cyan-200 rounded-xl p-3 md:p-4 hover:bg-cyan-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Send className="w-5 h-5 text-cyan-600 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{f.name}</p>
+                      <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                        <span>引継元: {f.handoffBy || "-"}</span>
+                        {f.handoffAt && (
+                          <span>{new Date(f.handoffAt).toLocaleString("ja-JP")}</span>
+                        )}
+                        <span className="inline-flex items-center gap-1">
+                          <FileText className="w-3 h-3" />
+                          {f.documents.length}件
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                </Link>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* フォルダ一覧 */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -287,7 +378,7 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {folders.map((folder) => {
-                    const folderStatus = getFolderStatus(folder.documents);
+                    const folderStatus = getFolderStatus(folder);
                     return (
                       <tr key={folder.id} className="border-b hover:bg-gray-50">
                         <td className="px-4 py-4 text-gray-600 whitespace-nowrap">
@@ -345,7 +436,7 @@ export default function DashboardPage() {
           {/* モバイル: カード表示 */}
           <div className="md:hidden space-y-3">
             {folders.map((folder) => {
-              const folderStatus = getFolderStatus(folder.documents);
+              const folderStatus = getFolderStatus(folder);
               return (
                 <div key={folder.id} className="bg-white rounded-xl border overflow-hidden">
                   <Link href={`/folders/${folder.id}`} className="block p-4 active:bg-gray-50">

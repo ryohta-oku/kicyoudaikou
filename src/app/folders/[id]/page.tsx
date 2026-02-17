@@ -20,6 +20,7 @@ import {
   X,
   AlertTriangle,
   CircleAlert,
+  Send,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS, formatCurrency } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
@@ -100,6 +101,9 @@ interface Folder {
   createdAt: string;
   clientId: string | null;
   client: { id: string; name: string } | null;
+  handoffStatus: string | null;
+  handoffBy: string;
+  handoffAt: string | null;
   documents: Document[];
 }
 
@@ -135,6 +139,7 @@ export default function FolderDetailPage({
   } | null>(null);
   const [dismissingDuplicate, setDismissingDuplicate] = useState(false);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
+  const [handingOff, setHandingOff] = useState(false);
 
   const fetchFolder = useCallback(async () => {
     try {
@@ -539,6 +544,72 @@ export default function FolderDetailPage({
           </span>
         </div>
       </div>
+
+      {/* B型: 引き継ぎ済バッジ or 引き継ぎボタン */}
+      {userRole === "user_b" && folder.handoffStatus === "handed_off" && (
+        <div className="flex items-center gap-3 bg-cyan-50 border border-cyan-200 rounded-lg px-4 py-3">
+          <Send className="h-5 w-5 text-cyan-600 flex-shrink-0" />
+          <span className="text-sm text-cyan-800">
+            このフォルダはA型利用者に引き継ぎ済みです
+            {folder.handoffAt && (
+              <span className="text-xs text-cyan-600 ml-2">
+                ({new Date(folder.handoffAt).toLocaleString("ja-JP")})
+              </span>
+            )}
+          </span>
+        </div>
+      )}
+      {userRole === "user_b" &&
+        !folder.handoffStatus &&
+        folder.documents.length > 0 &&
+        folder.documents.every(
+          (d) =>
+            d.status === "ocr_confirmed" ||
+            d.status === "classified" ||
+            d.status === "reviewed" ||
+            d.status === "exported"
+        ) && (
+          <div className="flex items-center justify-between gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Send className="h-5 w-5 text-green-600 flex-shrink-0" />
+              <span className="text-sm text-green-800">
+                全ドキュメントのOCR確認が完了しました。A型利用者に引き継ぎできます。
+              </span>
+            </div>
+            <button
+              onClick={async () => {
+                if (!confirm("このフォルダをA型利用者に引き継ぎますか？")) return;
+                setHandingOff(true);
+                try {
+                  const userName = session?.user?.name || session?.user?.email || "";
+                  const res = await fetch(`/api/folders/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      handoffStatus: "handed_off",
+                      handoffBy: userName,
+                    }),
+                  });
+                  if (!res.ok) throw new Error("引き継ぎに失敗しました");
+                  await fetchFolder();
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : "引き継ぎに失敗しました");
+                } finally {
+                  setHandingOff(false);
+                }
+              }}
+              disabled={handingOff}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
+            >
+              {handingOff ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+              引き継ぎ完了
+            </button>
+          </div>
+        )}
 
       {/* フォルダ詳細情報カード */}
       {(() => {

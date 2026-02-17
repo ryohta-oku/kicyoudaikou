@@ -40,9 +40,12 @@ model Folder {
   id        String   @id @default(uuid())
   name      String
   creator   String   @default("")
-  clientId  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  clientId       String?
+  handoffStatus  String?            // null=未引継, "handed_off"=引継済
+  handoffBy      String   @default("") // 引き継いだB型ユーザー名
+  handoffAt      DateTime?          // 引き継ぎ日時
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   client    Company?   @relation(fields: [clientId], references: [id])
   documents Document[]
