@@ -1239,6 +1239,38 @@ export default function FolderDetailPage({
                 {[duplicateCompare.entry, duplicateCompare.paired].map((item, idx) => (
                   <div key={item.id} className="p-4 md:p-6 space-y-3">
                     <h4 className="text-sm font-bold text-gray-700">仕訳 {idx === 0 ? "A" : "B"}</h4>
+                    {/* 元ファイル画像プレビュー */}
+                    <div className="border rounded-lg overflow-hidden bg-gray-50">
+                      <div className="px-3 py-1.5 bg-gray-100 border-b">
+                        <p className="text-[11px] text-gray-500 truncate">{item.filename}</p>
+                      </div>
+                      {item.fileType === "pdf" ? (
+                        <iframe
+                          src={`/api/files?path=${encodeURIComponent(item.filepath)}`}
+                          className="w-full border-0"
+                          style={{ height: "200px" }}
+                          title={`PDF - ${item.filename}`}
+                        />
+                      ) : (() => {
+                        const matchedPage = item.pageId
+                          ? item.pages.find((p) => p.id === item.pageId)
+                          : item.pages[0];
+                        return matchedPage ? (
+                          <div className="overflow-auto max-h-[200px]">
+                            <Image
+                              src={`/api/files?path=${encodeURIComponent(matchedPage.imagePath)}`}
+                              alt={`${item.filename}`}
+                              width={400}
+                              height={300}
+                              className="w-full h-auto"
+                              unoptimized
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-center py-6 text-gray-400 text-xs">画像なし</div>
+                        );
+                      })()}
+                    </div>
                     <dl className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <dt className="text-gray-500">日付</dt>
@@ -1261,10 +1293,6 @@ export default function FolderDetailPage({
                       <div className="flex justify-between">
                         <dt className="text-gray-500">税区分</dt>
                         <dd className="text-gray-900">{item.taxRate || "-"}</dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-gray-500">ファイル</dt>
-                        <dd className="text-gray-900 text-xs truncate max-w-[180px]">{item.filename}</dd>
                       </div>
                     </dl>
                     {/* 削除ボタン */}
