@@ -38,7 +38,7 @@ export interface PageUpdateData {
   memo: string;
 }
 
-const CHECK_FIELDS = ["date", "registrationNumber", "amount", "tax", "memo"] as const;
+const CHECK_FIELDS = ["date", "registrationNumber", "amount", "tax"] as const;
 
 export default function OCREditor({
   pages,
@@ -291,23 +291,14 @@ export default function OCREditor({
               />
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">メモ</label>
-                <div className="flex items-start gap-2">
-                  <textarea
-                    value={fields.memo}
-                    onChange={(e) => handleFieldChange(currentPage.id, "memo", e.target.value)}
-                    disabled={isDisabled}
-                    rows={2}
-                    className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500 resize-none"
-                    placeholder="取引先名・品目など"
-                  />
-                  {!readOnly && (
-                    <CheckButton
-                      checked={!!currentPageChecks.memo}
-                      confirmed={!!confirmedPages[currentPage.id]}
-                      onClick={() => toggleFieldCheck(currentPage.id, "memo")}
-                    />
-                  )}
-                </div>
+                <textarea
+                  value={fields.memo}
+                  onChange={(e) => handleFieldChange(currentPage.id, "memo", e.target.value)}
+                  disabled={isDisabled}
+                  rows={2}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500 resize-none"
+                  placeholder="取引先名・品目など"
+                />
               </div>
             </div>
           </div>
@@ -365,7 +356,7 @@ export default function OCREditor({
             </button>
             {!confirmedPages[currentPage.id] && !allFieldsChecked && (
               <span className="text-xs text-amber-600">
-                全項目を確認してください
+                各項目を確認してチェックしてください
               </span>
             )}
           </div>
@@ -393,18 +384,26 @@ function CheckButton({
     );
   }
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center justify-center w-8 h-8 rounded-full border-2 transition-colors mt-0.5 shrink-0",
-        checked
-          ? "bg-green-100 border-green-500 text-green-600 hover:bg-green-200"
-          : "border-gray-300 text-gray-300 hover:border-gray-400 hover:text-gray-400"
+    <div className="relative group mt-0.5 shrink-0">
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "flex items-center justify-center w-8 h-8 rounded-full border-2 transition-colors",
+          checked
+            ? "bg-green-100 border-green-500 text-green-600 hover:bg-green-200"
+            : "border-gray-300 text-gray-300 hover:border-gray-400 hover:text-gray-400"
+        )}
+      >
+        {checked && <Check className="w-4 h-4" />}
+      </button>
+      {!checked && (
+        <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 hidden group-hover:block whitespace-nowrap bg-gray-800 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10">
+          内容を確認してチェック
+          <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-gray-800" />
+        </div>
       )}
-    >
-      {checked && <Check className="w-4 h-4" />}
-    </button>
+    </div>
   );
 }
 
