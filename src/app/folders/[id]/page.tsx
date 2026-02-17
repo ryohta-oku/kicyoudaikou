@@ -791,15 +791,17 @@ export default function FolderDetailPage({
 
         const confirmedCount = allEntries.filter((e) => e.isConfirmed).length;
 
-        // 重複検知: 日付 + 金額 + 勘定科目が一致 & 別ファイル由来
+        // 重複検知: 金額 + 勘定科目が一致 & 別ファイル由来
+        // 日付は両方存在して異なる場合のみ除外（片方が空なら重複の可能性あり）
         const duplicateIds = new Set<string>();
         for (let i = 0; i < allEntries.length; i++) {
           for (let j = i + 1; j < allEntries.length; j++) {
             const a = allEntries[i];
             const b = allEntries[j];
+            const datesContradict = a.date && b.date && a.date !== b.date;
             if (
               a.documentId !== b.documentId &&
-              a.date && b.date && a.date === b.date &&
+              !datesContradict &&
               a.accountCode && b.accountCode && a.accountCode === b.accountCode &&
               (a.debitAmount > 0 || a.creditAmount > 0) &&
               a.debitAmount === b.debitAmount &&
