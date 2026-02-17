@@ -91,7 +91,7 @@ jobs:
 
             # --- バックアップ作成 ---
             echo ">>> 旧ビルドをバックアップ中..."
-            BACKUP_DIR="/var/www/kicyoudaikou-backup"
+            BACKUP_DIR="/var/www/kicyoudaikou/.deploy-backup"
             rm -rf "$BACKUP_DIR"
             mkdir -p "$BACKUP_DIR"
 
