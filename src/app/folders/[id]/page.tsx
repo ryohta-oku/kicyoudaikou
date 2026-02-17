@@ -791,6 +791,26 @@ export default function FolderDetailPage({
 
         const confirmedCount = allEntries.filter((e) => e.isConfirmed).length;
 
+        // 重複検知: 日付 + 金額 + 勘定科目が一致 & 別ファイル由来
+        const duplicateIds = new Set<string>();
+        for (let i = 0; i < allEntries.length; i++) {
+          for (let j = i + 1; j < allEntries.length; j++) {
+            const a = allEntries[i];
+            const b = allEntries[j];
+            if (
+              a.documentId !== b.documentId &&
+              a.date && b.date && a.date === b.date &&
+              a.accountCode && b.accountCode && a.accountCode === b.accountCode &&
+              (a.debitAmount > 0 || a.creditAmount > 0) &&
+              a.debitAmount === b.debitAmount &&
+              a.creditAmount === b.creditAmount
+            ) {
+              duplicateIds.add(a.id);
+              duplicateIds.add(b.id);
+            }
+          }
+        }
+
         // アラート判定
         const getAlerts = (entry: typeof allEntries[0]): string[] => {
           const alerts: string[] = [];
@@ -799,9 +819,15 @@ export default function FolderDetailPage({
           if (entry.debitAmount <= 0 && entry.creditAmount <= 0) alerts.push("金額");
           if (!entry.accountCode && !entry.accountName) alerts.push("勘定科目");
           if (!entry.taxRate) alerts.push("税区分");
+          if (duplicateIds.has(entry.id)) alerts.push("重複の可能性");
           return alerts;
         };
         const alertCount = allEntries.filter((e) => getAlerts(e).length > 0).length;
+        const missingFieldCount = allEntries.filter((e) => {
+          const a = getAlerts(e);
+          return a.some((msg) => msg !== "重複の可能性");
+        }).length;
+        const duplicateCount = duplicateIds.size;
 
         return (
           <section className="space-y-3">
@@ -827,12 +853,24 @@ export default function FolderDetailPage({
             </div>
 
             {/* アラートバナー */}
-            {alertCount > 0 && (
-              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
-                <span className="text-sm text-amber-800">
-                  <strong>{alertCount} 件</strong>の仕訳に入力不足があります。詳細ボタンから修正してください。
-                </span>
+            {(missingFieldCount > 0 || duplicateCount > 0) && (
+              <div className="space-y-2">
+                {missingFieldCount > 0 && (
+                  <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                    <span className="text-sm text-amber-800">
+                      <strong>{missingFieldCount} 件</strong>の仕訳に入力不足があります。詳細ボタンから修正してください。
+                    </span>
+                  </div>
+                )}
+                {duplicateCount > 0 && (
+                  <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-lg px-4 py-3">
+                    <CircleAlert className="h-5 w-5 text-orange-600 flex-shrink-0 animate-alert-bounce" />
+                    <span className="text-sm text-orange-800">
+                      <strong>{duplicateCount} 件</strong>の仕訳に重複の可能性があります（日付・金額・勘定科目が一致、別ファイル由来）。不要な場合は詳細から削除してください。
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -856,32 +894,54 @@ export default function FolderDetailPage({
                   <tbody>
                     {allEntries.map((entry) => {
                       const alerts = getAlerts(entry);
+                      const isDuplicate = duplicateIds.has(entry.id);
+                      const missingAlerts = alerts.filter((a) => a !== "重複の可能性");
                       return (
                       <tr
                         key={entry.id}
                         className={cn(
                           "border-b hover:bg-gray-50 transition-colors",
-                          alerts.length > 0 ? "bg-amber-50/40" : "",
-                          entry.isConfirmed && alerts.length === 0 ? "bg-green-50/30" : "",
-                          entry.aiSuggested && !entry.isConfirmed && alerts.length === 0 ? "bg-yellow-50/30" : ""
+                          isDuplicate ? "bg-orange-50/40" : "",
+                          !isDuplicate && missingAlerts.length > 0 ? "bg-amber-50/40" : "",
+                          !isDuplicate && alerts.length === 0 && entry.isConfirmed ? "bg-green-50/30" : "",
+                          !isDuplicate && alerts.length === 0 && entry.aiSuggested && !entry.isConfirmed ? "bg-yellow-50/30" : ""
                         )}
                       >
                         <td className="px-4 py-3 whitespace-nowrap text-gray-700">{entry.date || <span className="text-red-400">-</span>}</td>
                         <td className="px-4 py-3 text-center">
                           {alerts.length > 0 ? (
                             <div className="relative group">
-                              <button type="button" className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-[11px] font-medium transition-colors cursor-pointer">
-                                <CircleAlert className="w-4 h-4 animate-alert-bounce text-amber-600" />
-                                <span>要確認</span>
+                              <button type="button" className={cn(
+                                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer",
+                                isDuplicate
+                                  ? "bg-orange-100 hover:bg-orange-200 text-orange-700"
+                                  : "bg-amber-100 hover:bg-amber-200 text-amber-700"
+                              )}>
+                                <CircleAlert className={cn("w-4 h-4 animate-alert-bounce", isDuplicate ? "text-orange-600" : "text-amber-600")} />
+                                <span>{isDuplicate ? "重複？" : "要確認"}</span>
                               </button>
                               <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-50 pointer-events-none">
                                 <div className="bg-gray-800 text-white text-xs rounded-lg px-3 py-2.5 whitespace-nowrap shadow-lg">
-                                  <p className="font-medium mb-1.5 text-amber-300 flex items-center gap-1">
-                                    <AlertTriangle className="w-3 h-3" />未入力の項目
-                                  </p>
-                                  {alerts.map((a) => (
-                                    <p key={a} className="text-gray-200 leading-5">・{a}</p>
-                                  ))}
+                                  {missingAlerts.length > 0 && (
+                                    <>
+                                      <p className="font-medium mb-1 text-amber-300 flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3" />未入力の項目
+                                      </p>
+                                      {missingAlerts.map((a) => (
+                                        <p key={a} className="text-gray-200 leading-5">・{a}</p>
+                                      ))}
+                                    </>
+                                  )}
+                                  {isDuplicate && (
+                                    <>
+                                      {missingAlerts.length > 0 && <div className="border-t border-gray-600 my-1.5" />}
+                                      <p className="font-medium mb-1 text-orange-300 flex items-center gap-1">
+                                        <CircleAlert className="w-3 h-3" />重複の可能性
+                                      </p>
+                                      <p className="text-gray-300 leading-5 text-[11px]">同じ日付・金額・勘定科目の</p>
+                                      <p className="text-gray-300 leading-5 text-[11px]">仕訳が別ファイルにあります</p>
+                                    </>
+                                  )}
                                 </div>
                                 <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-800" />
                               </div>
@@ -935,20 +995,29 @@ export default function FolderDetailPage({
             <div className="md:hidden space-y-3">
               {allEntries.map((entry) => {
                 const alerts = getAlerts(entry);
+                const isDuplicate = duplicateIds.has(entry.id);
+                const missingAlerts = alerts.filter((a) => a !== "重複の可能性");
                 return (
                 <div
                   key={entry.id}
                   className={cn(
                     "bg-white rounded-xl border p-4 space-y-2",
-                    alerts.length > 0 ? "border-amber-300 bg-amber-50/40" : "",
-                    entry.isConfirmed && alerts.length === 0 ? "border-green-200 bg-green-50/30" : "",
-                    entry.aiSuggested && !entry.isConfirmed && alerts.length === 0 ? "border-yellow-200 bg-yellow-50/30" : ""
+                    isDuplicate ? "border-orange-300 bg-orange-50/40" : "",
+                    !isDuplicate && missingAlerts.length > 0 ? "border-amber-300 bg-amber-50/40" : "",
+                    alerts.length === 0 && entry.isConfirmed ? "border-green-200 bg-green-50/30" : "",
+                    alerts.length === 0 && entry.aiSuggested && !entry.isConfirmed ? "border-yellow-200 bg-yellow-50/30" : ""
                   )}
                 >
-                  {alerts.length > 0 && (
+                  {isDuplicate && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-orange-100 rounded-lg text-orange-700 text-xs font-medium">
+                      <CircleAlert className="w-4 h-4 animate-alert-bounce text-orange-600 flex-shrink-0" />
+                      <span>重複の可能性（別ファイルに同じ仕訳あり）</span>
+                    </div>
+                  )}
+                  {missingAlerts.length > 0 && (
                     <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-100 rounded-lg text-amber-700 text-xs font-medium">
                       <CircleAlert className="w-4 h-4 animate-alert-bounce text-amber-600 flex-shrink-0" />
-                      <span>未入力: {alerts.join("、")}</span>
+                      <span>未入力: {missingAlerts.join("、")}</span>
                     </div>
                   )}
                   <div className="flex items-start justify-between gap-2">
