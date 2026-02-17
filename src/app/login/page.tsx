@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { FileText, Loader2, Shield } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { status } = useSession();
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
 
   // ログインフォーム
@@ -20,6 +21,13 @@ export default function LoginPage() {
   const [setupEmail, setSetupEmail] = useState("");
   const [setupPassword, setSetupPassword] = useState("");
   const [setupConfirm, setSetupConfirm] = useState("");
+
+  // ログイン済みならダッシュボードにリダイレクト
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace("/");
+    }
+  }, [status, router]);
 
   useEffect(() => {
     fetch("/api/auth/register")
@@ -107,7 +115,7 @@ export default function LoginPage() {
     }
   };
 
-  if (needsSetup === null) {
+  if (needsSetup === null || status === "loading" || status === "authenticated") {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
