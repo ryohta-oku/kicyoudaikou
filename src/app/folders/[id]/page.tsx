@@ -116,6 +116,7 @@ export default function FolderDetailPage({
   const canViewJournal = userRole !== "user_b";
   const [folder, setFolder] = useState<Folder | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [ocrProcessingIds, setOcrProcessingIds] = useState<Set<string>>(new Set());
   const [ocrErrors, setOcrErrors] = useState<Record<string, string>>({});
@@ -137,30 +138,44 @@ export default function FolderDetailPage({
 
   const fetchFolder = useCallback(async () => {
     try {
+      setFetchError(null);
       const res = await fetch(`/api/folders/${id}`);
       const data = await res.json();
+
+      if (!res.ok) {
+        setFetchError(`API Error ${res.status}: ${data.error || ""} ${data.detail || ""}`);
+        setFolder(null);
+        return null;
+      }
+
       const folderData = data.folder as Folder | null;
 
       // 仕訳済み以降で仕訳が0件のドキュメントを自動クリーンアップ
       if (folderData) {
-        const orphanedDocs = folderData.documents.filter(
-          (d) =>
-            (d.status === "classified" || d.status === "reviewed" || d.status === "exported") &&
-            (!d.journalEntries || d.journalEntries.length === 0)
-        );
-        if (orphanedDocs.length > 0) {
-          await Promise.all(
-            orphanedDocs.map((d) => fetch(`/api/documents/${d.id}`, { method: "DELETE" }))
+        try {
+          const orphanedDocs = folderData.documents.filter(
+            (d) =>
+              (d.status === "classified" || d.status === "reviewed" || d.status === "exported") &&
+              (!d.journalEntries || d.journalEntries.length === 0)
           );
-          folderData.documents = folderData.documents.filter(
-            (d) => !orphanedDocs.some((o) => o.id === d.id)
-          );
+          if (orphanedDocs.length > 0) {
+            await Promise.all(
+              orphanedDocs.map((d) => fetch(`/api/documents/${d.id}`, { method: "DELETE" }))
+            );
+            folderData.documents = folderData.documents.filter(
+              (d) => !orphanedDocs.some((o) => o.id === d.id)
+            );
+          }
+        } catch (cleanupErr) {
+          console.error("Cleanup failed (non-fatal):", cleanupErr);
         }
       }
 
       setFolder(folderData);
       return folderData;
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      setFetchError(`Fetch failed: ${msg}`);
       console.error("Failed to fetch folder:", error);
       return null;
     } finally {
@@ -493,6 +508,11 @@ export default function FolderDetailPage({
     return (
       <div className="text-center py-16">
         <p className="text-gray-500">フォルダが見つかりません</p>
+        {fetchError && (
+          <p className="text-red-500 text-xs mt-2 max-w-lg mx-auto break-all bg-red-50 p-3 rounded-lg">
+            {fetchError}
+          </p>
+        )}
         <Link href="/" className="text-blue-600 hover:underline mt-4 inline-block">
           ダッシュボードに戻る
         </Link>
