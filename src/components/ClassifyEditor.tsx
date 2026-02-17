@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Check, RotateCcw, Loader2 } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Check, RotateCcw, Loader2, CircleCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import SubAccountCombobox from "./SubAccountCombobox";
@@ -52,6 +52,8 @@ interface ClassifyEditorProps {
 
 const TAX_RATE_OPTIONS = ["課税10%", "課税8%", "非課税", "不課税", "免税"];
 
+const CLASSIFY_CHECK_FIELDS = ["accountCode", "subAccountCode", "taxRate"] as const;
+
 const CATEGORY_ORDER = ["費用", "資産", "負債", "収益", "純資産"];
 
 export default function ClassifyEditor({
@@ -72,6 +74,14 @@ export default function ClassifyEditor({
     const initial: Record<string, boolean> = {};
     entries.forEach((e) => {
       initial[e.id] = e.isConfirmed;
+    });
+    return initial;
+  });
+  const [checkedFields, setCheckedFields] = useState<Record<string, Record<string, boolean>>>(() => {
+    const initial: Record<string, Record<string, boolean>> = {};
+    entries.forEach((e) => {
+      const allChecked = e.isConfirmed;
+      initial[e.id] = Object.fromEntries(CLASSIFY_CHECK_FIELDS.map((f) => [f, allChecked]));
     });
     return initial;
   });
@@ -160,6 +170,20 @@ export default function ClassifyEditor({
       return next;
     });
   };
+
+  const toggleFieldCheck = useCallback((entryId: string, field: string) => {
+    setCheckedFields((prev) => ({
+      ...prev,
+      [entryId]: { ...prev[entryId], [field]: !prev[entryId]?.[field] },
+    }));
+  }, []);
+
+  const currentChecks = checkedFields[currentEntry.id] || {};
+  const allFieldsChecked = CLASSIFY_CHECK_FIELDS.every((f) => currentChecks[f]);
+  const activeCheckField = confirmedEntries[currentEntry.id]
+    ? null
+    : CLASSIFY_CHECK_FIELDS.find((f) => !currentChecks[f]) ?? null;
+  const checkedCount = CLASSIFY_CHECK_FIELDS.filter((f) => currentChecks[f]).length;
 
   // 対応するページを取得（エントリのpageIdに対応）
   const matchedPage = currentEntry.pageId
@@ -264,82 +288,111 @@ export default function ClassifyEditor({
               {/* 勘定科目 */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">勘定科目</label>
-                <select
-                  value={String(getFieldValue("accountCode"))}
-                  onChange={(e) => {
-                    const account = accounts.find((a) => a.code === e.target.value);
-                    handleFieldChange("accountCode", e.target.value);
-                    handleFieldChange("accountName", account?.name || "");
-                    // 勘定科目変更時に補助科目をリセット
-                    handleFieldChange("subAccountCode", "");
-                    handleFieldChange("subAccountName", "");
-                  }}
-                  disabled={isDisabled}
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                >
-                  <option value="">-- 選択してください --</option>
-                  {/* AIが選んだコードがマスターにない場合も選択肢に表示 */}
-                  {currentEntry.accountCode && !accounts.find((a) => a.code === currentEntry.accountCode) && (
-                    <option value={currentEntry.accountCode}>
-                      {currentEntry.accountName || currentEntry.accountCode}
-                    </option>
-                  )}
-                  {CATEGORY_ORDER.map((category) => {
-                    const categoryAccounts = accounts.filter((a) => a.category === category);
-                    if (categoryAccounts.length === 0) return null;
-                    return (
-                      <optgroup key={category} label={category}>
-                        {categoryAccounts.map((a) => (
-                          <option key={a.code} value={a.code}>
-                            {a.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    );
-                  })}
-                  {/* カテゴリ未分類の勘定科目 */}
-                  {accounts
-                    .filter((a) => !CATEGORY_ORDER.includes(a.category))
-                    .map((a) => (
-                      <option key={a.code} value={a.code}>
-                        {a.name}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={String(getFieldValue("accountCode"))}
+                    onChange={(e) => {
+                      const account = accounts.find((a) => a.code === e.target.value);
+                      handleFieldChange("accountCode", e.target.value);
+                      handleFieldChange("accountName", account?.name || "");
+                      // 勘定科目変更時に補助科目をリセット
+                      handleFieldChange("subAccountCode", "");
+                      handleFieldChange("subAccountName", "");
+                    }}
+                    disabled={isDisabled}
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                  >
+                    <option value="">-- 選択してください --</option>
+                    {/* AIが選んだコードがマスターにない場合も選択肢に表示 */}
+                    {currentEntry.accountCode && !accounts.find((a) => a.code === currentEntry.accountCode) && (
+                      <option value={currentEntry.accountCode}>
+                        {currentEntry.accountName || currentEntry.accountCode}
                       </option>
-                    ))}
-                </select>
+                    )}
+                    {CATEGORY_ORDER.map((category) => {
+                      const categoryAccounts = accounts.filter((a) => a.category === category);
+                      if (categoryAccounts.length === 0) return null;
+                      return (
+                        <optgroup key={category} label={category}>
+                          {categoryAccounts.map((a) => (
+                            <option key={a.code} value={a.code}>
+                              {a.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                    {/* カテゴリ未分類の勘定科目 */}
+                    {accounts
+                      .filter((a) => !CATEGORY_ORDER.includes(a.category))
+                      .map((a) => (
+                        <option key={a.code} value={a.code}>
+                          {a.name}
+                        </option>
+                      ))}
+                  </select>
+                  <ClassifyCheckButton
+                    checked={!!currentChecks.accountCode}
+                    confirmed={isDisabled}
+                    onClick={() => toggleFieldCheck(currentEntry.id, "accountCode")}
+                    isGuideActive={activeCheckField === "accountCode"}
+                    guideStep={checkedCount + 1}
+                  />
+                </div>
               </div>
               {/* 補助科目 */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">補助科目</label>
-                <SubAccountCombobox
-                  subAccounts={subAccounts}
-                  value={String(getFieldValue("subAccountCode"))}
-                  valueName={String(getFieldValue("subAccountName"))}
-                  onChange={(code, name) => {
-                    handleFieldChange("subAccountCode", code);
-                    handleFieldChange("subAccountName", name);
-                  }}
-                  accountId={selectedAccount?.id || ""}
-                  clientId={clientId}
-                  disabled={isDisabled}
-                  onSubAccountAdded={onAccountsRefresh}
-                />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <SubAccountCombobox
+                      subAccounts={subAccounts}
+                      value={String(getFieldValue("subAccountCode"))}
+                      valueName={String(getFieldValue("subAccountName"))}
+                      onChange={(code, name) => {
+                        handleFieldChange("subAccountCode", code);
+                        handleFieldChange("subAccountName", name);
+                      }}
+                      accountId={selectedAccount?.id || ""}
+                      clientId={clientId}
+                      disabled={isDisabled}
+                      onSubAccountAdded={onAccountsRefresh}
+                    />
+                  </div>
+                  <ClassifyCheckButton
+                    checked={!!currentChecks.subAccountCode}
+                    confirmed={isDisabled}
+                    onClick={() => toggleFieldCheck(currentEntry.id, "subAccountCode")}
+                    isGuideActive={activeCheckField === "subAccountCode"}
+                    guideStep={checkedCount + 1}
+                  />
+                </div>
               </div>
               {/* 税率区分 */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">税率区分</label>
-                <select
-                  value={String(getFieldValue("taxRate"))}
-                  onChange={(e) => handleFieldChange("taxRate", e.target.value)}
-                  disabled={isDisabled}
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                >
-                  <option value="">-- 選択してください --</option>
-                  {TAX_RATE_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={String(getFieldValue("taxRate"))}
+                    onChange={(e) => handleFieldChange("taxRate", e.target.value)}
+                    disabled={isDisabled}
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                  >
+                    <option value="">-- 選択してください --</option>
+                    {TAX_RATE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                  <ClassifyCheckButton
+                    checked={!!currentChecks.taxRate}
+                    confirmed={isDisabled}
+                    onClick={() => toggleFieldCheck(currentEntry.id, "taxRate")}
+                    isGuideActive={activeCheckField === "taxRate"}
+                    guideStep={checkedCount + 1}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -381,18 +434,36 @@ export default function ClassifyEditor({
               ) : null}
               保存
             </button>
-            <button
-              onClick={() => handleConfirm(currentEntry.id)}
-              disabled={isDisabled || savingEntries[currentEntry.id]}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {savingEntries[currentEntry.id] ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Check className="w-4 h-4" />
+            <div className="relative">
+              <button
+                onClick={() => handleConfirm(currentEntry.id)}
+                disabled={isDisabled || savingEntries[currentEntry.id] || !allFieldsChecked}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50",
+                  allFieldsChecked && !confirmedEntries[currentEntry.id]
+                    ? "bg-blue-600 hover:bg-blue-700 ring-2 ring-blue-300 ring-offset-1 animate-pulse"
+                    : "bg-blue-600 hover:bg-blue-700"
+                )}
+              >
+                {savingEntries[currentEntry.id] ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Check className="w-4 h-4" />
+                )}
+                確認完了
+              </button>
+              {allFieldsChecked && !confirmedEntries[currentEntry.id] && (
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 whitespace-nowrap bg-blue-700 text-white text-xs rounded-md px-3 py-1.5 shadow-lg z-10 animate-bounce">
+                  全項目チェック済み！確認完了を押してください
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-blue-700" />
+                </div>
               )}
-              確認完了
-            </button>
+            </div>
+            {!confirmedEntries[currentEntry.id] && !allFieldsChecked && (
+              <span className="text-xs text-amber-600">
+                各項目を確認してチェックしてください
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -400,3 +471,48 @@ export default function ClassifyEditor({
   );
 }
 
+function ClassifyCheckButton({
+  checked,
+  confirmed,
+  onClick,
+  isGuideActive = false,
+  guideStep,
+}: {
+  checked: boolean;
+  confirmed: boolean;
+  onClick: () => void;
+  isGuideActive?: boolean;
+  guideStep?: number;
+}) {
+  if (confirmed) {
+    return (
+      <div className="flex items-center justify-center w-8 h-8 mt-0.5">
+        <CircleCheck className="w-5 h-5 text-green-500" />
+      </div>
+    );
+  }
+  return (
+    <div className="relative mt-0.5 shrink-0">
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "flex items-center justify-center w-8 h-8 rounded-full border-2 transition-colors",
+          checked
+            ? "bg-green-100 border-green-500 text-green-600 hover:bg-green-200"
+            : isGuideActive
+              ? "border-blue-400 text-blue-400 ring-2 ring-blue-200 ring-offset-1 animate-pulse hover:border-blue-500"
+              : "border-gray-300 text-gray-300 hover:border-gray-400 hover:text-gray-400"
+        )}
+      >
+        {checked && <Check className="w-4 h-4" />}
+      </button>
+      {isGuideActive && !checked && (
+        <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-blue-600 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10">
+          <span className="font-bold">{guideStep}/{CLASSIFY_CHECK_FIELDS.length}</span>{" "}内容を確認してチェック →
+          <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-blue-600" />
+        </div>
+      )}
+    </div>
+  );
+}
