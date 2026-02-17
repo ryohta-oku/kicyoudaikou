@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Check, RotateCcw, Loader2 } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Check, RotateCcw, Loader2, CircleCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 
@@ -38,6 +38,8 @@ export interface PageUpdateData {
   memo: string;
 }
 
+const CHECK_FIELDS = ["date", "registrationNumber", "amount", "tax", "memo"] as const;
+
 export default function OCREditor({
   pages,
   documentFileType,
@@ -68,6 +70,15 @@ export default function OCREditor({
     });
     return initial;
   });
+  const [checkedFields, setCheckedFields] = useState<Record<string, Record<string, boolean>>>(() => {
+    const initial: Record<string, Record<string, boolean>> = {};
+    pages.forEach((p) => {
+      const allChecked = p.isConfirmed;
+      initial[p.id] = Object.fromEntries(CHECK_FIELDS.map((f) => [f, allChecked]));
+    });
+    return initial;
+  });
+
   const [savingPages, setSavingPages] = useState<Record<string, boolean>>({});
   const [confirmedPages, setConfirmedPages] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
@@ -147,6 +158,16 @@ export default function OCREditor({
       }));
     }
   };
+
+  const toggleFieldCheck = useCallback((pageId: string, field: string) => {
+    setCheckedFields((prev) => ({
+      ...prev,
+      [pageId]: { ...prev[pageId], [field]: !prev[pageId]?.[field] },
+    }));
+  }, []);
+
+  const currentPageChecks = checkedFields[currentPage.id] || {};
+  const allFieldsChecked = CHECK_FIELDS.every((f) => currentPageChecks[f]);
 
   const isPdf = documentFileType === "pdf";
   const fields = editedFields[currentPage.id] || { date: "", registrationNumber: "", amount: "", tax: "", memo: "" };
@@ -234,6 +255,9 @@ export default function OCREditor({
                 placeholder="YYYY-MM-DD"
                 disabled={isDisabled}
                 onChange={(v) => handleFieldChange(currentPage.id, "date", v)}
+                checked={!!currentPageChecks.date}
+                onCheck={() => toggleFieldCheck(currentPage.id, "date")}
+                showCheck={!readOnly}
               />
               <FieldRow
                 label="登録番号"
@@ -241,6 +265,9 @@ export default function OCREditor({
                 placeholder="T0000000000000"
                 disabled={isDisabled}
                 onChange={(v) => handleFieldChange(currentPage.id, "registrationNumber", v)}
+                checked={!!currentPageChecks.registrationNumber}
+                onCheck={() => toggleFieldCheck(currentPage.id, "registrationNumber")}
+                showCheck={!readOnly}
               />
               <FieldRow
                 label="金額（税込）"
@@ -248,6 +275,9 @@ export default function OCREditor({
                 placeholder="0"
                 disabled={isDisabled}
                 onChange={(v) => handleFieldChange(currentPage.id, "amount", v)}
+                checked={!!currentPageChecks.amount}
+                onCheck={() => toggleFieldCheck(currentPage.id, "amount")}
+                showCheck={!readOnly}
               />
               <FieldRow
                 label="消費税"
@@ -255,17 +285,29 @@ export default function OCREditor({
                 placeholder="0"
                 disabled={isDisabled}
                 onChange={(v) => handleFieldChange(currentPage.id, "tax", v)}
+                checked={!!currentPageChecks.tax}
+                onCheck={() => toggleFieldCheck(currentPage.id, "tax")}
+                showCheck={!readOnly}
               />
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">メモ</label>
-                <textarea
-                  value={fields.memo}
-                  onChange={(e) => handleFieldChange(currentPage.id, "memo", e.target.value)}
-                  disabled={isDisabled}
-                  rows={2}
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500 resize-none"
-                  placeholder="取引先名・品目など"
-                />
+                <div className="flex items-start gap-2">
+                  <textarea
+                    value={fields.memo}
+                    onChange={(e) => handleFieldChange(currentPage.id, "memo", e.target.value)}
+                    disabled={isDisabled}
+                    rows={2}
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500 resize-none"
+                    placeholder="取引先名・品目など"
+                  />
+                  {!readOnly && (
+                    <CheckButton
+                      checked={!!currentPageChecks.memo}
+                      confirmed={!!confirmedPages[currentPage.id]}
+                      onClick={() => toggleFieldCheck(currentPage.id, "memo")}
+                    />
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -311,7 +353,7 @@ export default function OCREditor({
             </button>
             <button
               onClick={() => handleConfirm(currentPage.id)}
-              disabled={isDisabled || savingPages[currentPage.id]}
+              disabled={isDisabled || savingPages[currentPage.id] || !allFieldsChecked}
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
               {savingPages[currentPage.id] ? (
@@ -321,11 +363,48 @@ export default function OCREditor({
               )}
               確認完了
             </button>
+            {!confirmedPages[currentPage.id] && !allFieldsChecked && (
+              <span className="text-xs text-amber-600">
+                全項目を確認してください
+              </span>
+            )}
           </div>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+function CheckButton({
+  checked,
+  confirmed,
+  onClick,
+}: {
+  checked: boolean;
+  confirmed: boolean;
+  onClick: () => void;
+}) {
+  if (confirmed) {
+    return (
+      <div className="flex items-center justify-center w-8 h-8 mt-0.5">
+        <CircleCheck className="w-5 h-5 text-green-500" />
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center justify-center w-8 h-8 rounded-full border-2 transition-colors mt-0.5 shrink-0",
+        checked
+          ? "bg-green-100 border-green-500 text-green-600 hover:bg-green-200"
+          : "border-gray-300 text-gray-300 hover:border-gray-400 hover:text-gray-400"
+      )}
+    >
+      {checked && <Check className="w-4 h-4" />}
+    </button>
   );
 }
 
@@ -335,24 +414,35 @@ function FieldRow({
   placeholder,
   disabled,
   onChange,
+  checked,
+  onCheck,
+  showCheck,
 }: {
   label: string;
   value: string;
   placeholder: string;
   disabled: boolean;
   onChange: (value: string) => void;
+  checked: boolean;
+  onCheck: () => void;
+  showCheck: boolean;
 }) {
   return (
     <div>
       <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-        placeholder={placeholder}
-      />
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+          placeholder={placeholder}
+        />
+        {showCheck && (
+          <CheckButton checked={checked} confirmed={disabled && checked} onClick={onCheck} />
+        )}
+      </div>
     </div>
   );
 }
