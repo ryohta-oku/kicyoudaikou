@@ -6,6 +6,8 @@ import { auth } from "@/lib/auth";
 const ROLE_LABELS: Record<string, string> = {
   admin: "管理者",
   instructor: "指導者",
+  user_a: "利用者（A型）",
+  user_b: "利用者（B型）",
   user: "利用者",
 };
 

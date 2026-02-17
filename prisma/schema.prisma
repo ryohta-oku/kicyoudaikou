@@ -14,7 +14,7 @@ model User {
   password          String
   plainPassword     String    @default("")
   name              String
-  role              String    @default("user") // "admin", "instructor", or "user"
+  role              String    @default("user_b") // "admin", "instructor", "user_a", or "user_b"
   inviteToken       String?   @unique
   inviteTokenExpiry DateTime?
   createdAt         DateTime  @default(now())

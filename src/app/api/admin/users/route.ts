@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "このメールアドレスは既に登録されています" }, { status: 409 });
     }
 
-    const userRole = ["admin", "instructor", "user"].includes(role) ? role : "user";
+    const userRole = ["admin", "instructor", "user_a", "user_b"].includes(role) ? role : "user_b";
     const inviteToken = randomUUID();
     const inviteTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24時間後
 
@@ -128,7 +128,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "権限変更は管理者のみ可能です" }, { status: 403 });
     }
 
-    if (!["admin", "instructor", "user"].includes(role)) {
+    if (!["admin", "instructor", "user_a", "user_b"].includes(role)) {
       return NextResponse.json({ error: "無効な権限です" }, { status: 400 });
     }
 

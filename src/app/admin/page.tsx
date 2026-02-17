@@ -18,18 +18,23 @@ interface UserInfo {
 const ROLE_OPTIONS = [
   { value: "admin", label: "管理者" },
   { value: "instructor", label: "指導者" },
-  { value: "user", label: "利用者" },
+  { value: "user_a", label: "利用者（A型）" },
+  { value: "user_b", label: "利用者（B型）" },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "管理者",
   instructor: "指導者",
-  user: "利用者",
+  user_a: "利用者（A型）",
+  user_b: "利用者（B型）",
+  user: "利用者", // 旧ロール互換
 };
 
 const ROLE_COLORS: Record<string, string> = {
   admin: "bg-amber-50 text-amber-700 border-amber-200",
   instructor: "bg-green-50 text-green-700 border-green-200",
+  user_a: "bg-blue-50 text-blue-700 border-blue-200",
+  user_b: "bg-purple-50 text-purple-700 border-purple-200",
   user: "bg-gray-50 text-gray-600 border-gray-200",
 };
 
@@ -56,7 +61,7 @@ export default function AdminPage() {
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
   const [addPassword, setAddPassword] = useState("");
-  const [addRole, setAddRole] = useState("user");
+  const [addRole, setAddRole] = useState("user_b");
   const [adding, setAdding] = useState(false);
   const [setupUrl, setSetupUrl] = useState<string | null>(null);
 
@@ -205,7 +210,7 @@ export default function AdminPage() {
       setAddName("");
       setAddEmail("");
       setAddPassword("");
-      setAddRole("user");
+      setAddRole("user_b");
 
       if (data.emailSent) {
         setMessage({ type: "success", text: `「${data.user.name}」を追加しました。招待メールを送信しました。` });
@@ -338,7 +343,7 @@ export default function AdminPage() {
               </button>
               <button
                 type="button"
-                onClick={() => { setShowAddForm(false); setAddName(""); setAddEmail(""); setAddPassword(""); setAddRole("user"); }}
+                onClick={() => { setShowAddForm(false); setAddName(""); setAddEmail(""); setAddPassword(""); setAddRole("user_b"); }}
                 className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
               >
                 キャンセル
