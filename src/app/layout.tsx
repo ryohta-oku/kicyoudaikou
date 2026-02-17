@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Header from "@/components/Header";
+import WorkflowProgressBar from "@/components/WorkflowProgressBar";
 import SessionProvider from "@/components/SessionProvider";
 import AuthGuard from "@/components/AuthGuard";
 
@@ -20,6 +21,7 @@ export default function RootLayout({
         <SessionProvider>
           <AuthGuard>
             <Header />
+            <WorkflowProgressBar />
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               {children}
             </main>
