@@ -55,12 +55,18 @@ export async function POST(request: NextRequest) {
 
     if (useAI && aiEntries.length > 0) {
       // AI分類の結果をDB保存
+      // ページのOCR日付をフォールバック用に収集
+      const pageDates = document.pages
+        .map((p) => p.date)
+        .filter((d) => d && d.trim() !== "");
+      const fallbackDate = pageDates[0] || new Date().toISOString().split("T")[0];
+
       for (const item of aiEntries) {
         const entry = await prisma.journalEntry.create({
           data: {
             documentId,
             pageId: document.pages[0]?.id || null,
-            date: item.date,
+            date: item.date || fallbackDate,
             description: item.description,
             accountCode: item.accountCode,
             accountName: item.accountName,
