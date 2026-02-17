@@ -16,7 +16,6 @@ import {
   FileStack,
   Play,
   MonitorSmartphone,
-  X,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
@@ -59,11 +58,6 @@ export default function DashboardPage() {
   const [scanFiles, setScanFiles] = useState<{ name: string; size: number; modifiedAt: string }[]>([]);
   const [scanConfigured, setScanConfigured] = useState(false);
   const [scanImporting, setScanImporting] = useState(false);
-  const [scanGuideDismissed, setScanGuideDismissed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem("scanGuideDismissed") === "true";
-  });
-
   const checkScanFolder = useCallback(async () => {
     try {
       const res = await fetch("/api/scan");
@@ -223,70 +217,57 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* スキャンガイドカード */}
+      <div className="bg-white rounded-xl border p-4 md:p-5">
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">
+          スキャンの流れ
+        </h3>
+        <div className="grid grid-cols-4 gap-2 md:gap-4">
+          {[
+            { icon: Power, label: "電源を入れる", step: 1 },
+            { icon: FileStack, label: "書類をセット", step: 2 },
+            { icon: Play, label: "スキャン開始", step: 3 },
+            { icon: MonitorSmartphone, label: "自動で取込", step: 4 },
+          ].map(({ icon: Icon, label, step }) => (
+            <div
+              key={step}
+              className="flex flex-col items-center text-center gap-1.5 p-2 md:p-3 rounded-lg bg-gray-50"
+            >
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                <Icon className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-blue-600">
+                  Step {step}
+                </span>
+                <p className="text-[10px] md:text-xs text-gray-700 mt-0.5">{label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* フォルダ一覧 */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
         </div>
       ) : folders.length === 0 ? (
-        <div className="space-y-4">
-          {/* スキャンガイドカード */}
-          {!scanGuideDismissed && (
-            <div className="bg-white rounded-xl border p-4 md:p-6 relative">
-              <button
-                onClick={() => {
-                  setScanGuideDismissed(true);
-                  localStorage.setItem("scanGuideDismissed", "true");
-                }}
-                className="absolute top-3 right-3 p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-              <h3 className="text-sm md:text-base font-semibold text-gray-900 mb-4">
-                はじめてのスキャンガイド
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-                {[
-                  { icon: Power, label: "ScanSnapの電源を入れる", step: 1 },
-                  { icon: FileStack, label: "書類をセットする", step: 2 },
-                  { icon: Play, label: "スキャンボタンを押す", step: 3 },
-                  { icon: MonitorSmartphone, label: "自動で取り込まれます", step: 4 },
-                ].map(({ icon: Icon, label, step }) => (
-                  <div
-                    key={step}
-                    className="flex flex-col items-center text-center gap-2 p-3 rounded-lg bg-gray-50"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                      <Icon className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-blue-600">
-                        Step {step}
-                      </span>
-                      <p className="text-xs text-gray-700 mt-0.5">{label}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="text-center py-12 md:py-16 bg-white rounded-xl border">
-            <FolderOpen className="mx-auto h-12 w-12 md:h-16 md:w-16 text-gray-300 mb-4" />
-            <h3 className="text-base md:text-lg font-medium text-gray-700 mb-2">
-              フォルダがありません
-            </h3>
-            <p className="text-xs md:text-sm text-gray-500 mb-6 px-4">
-              PDF・画像ファイルをアップロードして記帳作業を始めましょう
-            </p>
-            <button
-              onClick={() => setShowUpload(true)}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-            >
-              <Upload className="w-4 h-4" />
-              アップロード
-            </button>
-          </div>
+        <div className="text-center py-12 md:py-16 bg-white rounded-xl border">
+          <FolderOpen className="mx-auto h-12 w-12 md:h-16 md:w-16 text-gray-300 mb-4" />
+          <h3 className="text-base md:text-lg font-medium text-gray-700 mb-2">
+            フォルダがありません
+          </h3>
+          <p className="text-xs md:text-sm text-gray-500 mb-6 px-4">
+            PDF・画像ファイルをアップロードして記帳作業を始めましょう
+          </p>
+          <button
+            onClick={() => setShowUpload(true)}
+            className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+          >
+            <Upload className="w-4 h-4" />
+            アップロード
+          </button>
         </div>
       ) : (
         <>
