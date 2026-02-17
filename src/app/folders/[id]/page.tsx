@@ -16,6 +16,7 @@ import {
   Check,
   Pencil,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS, formatCurrency } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
@@ -789,6 +790,18 @@ export default function FolderDetailPage({
 
         const confirmedCount = allEntries.filter((e) => e.isConfirmed).length;
 
+        // アラート判定
+        const getAlerts = (entry: typeof allEntries[0]): string[] => {
+          const alerts: string[] = [];
+          if (!entry.date) alerts.push("日付");
+          if (!entry.description) alerts.push("摘要");
+          if (entry.debitAmount <= 0 && entry.creditAmount <= 0) alerts.push("金額");
+          if (!entry.accountCode && !entry.accountName) alerts.push("勘定科目");
+          if (!entry.taxRate) alerts.push("税区分");
+          return alerts;
+        };
+        const alertCount = allEntries.filter((e) => getAlerts(e).length > 0).length;
+
         return (
           <section className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -812,6 +825,16 @@ export default function FolderDetailPage({
               </Link>
             </div>
 
+            {/* アラートバナー */}
+            {alertCount > 0 && (
+              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                <span className="text-sm text-amber-800">
+                  <strong>{alertCount} 件</strong>の仕訳に入力不足があります。詳細ボタンから修正してください。
+                </span>
+              </div>
+            )}
+
             {/* デスクトップ: テーブル表示 */}
             <div className="hidden md:block bg-white rounded-xl border overflow-hidden">
               <div className="overflow-x-auto">
@@ -819,6 +842,7 @@ export default function FolderDetailPage({
                   <thead>
                     <tr className="bg-gray-50 border-b">
                       <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">日付</th>
+                      <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">アラート</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">支払先・内容</th>
                       <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">金額（税込）</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">勘定科目</th>
@@ -829,16 +853,28 @@ export default function FolderDetailPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {allEntries.map((entry) => (
+                    {allEntries.map((entry) => {
+                      const alerts = getAlerts(entry);
+                      return (
                       <tr
                         key={entry.id}
                         className={cn(
                           "border-b hover:bg-gray-50 transition-colors",
-                          entry.isConfirmed ? "bg-green-50/30" : "",
-                          entry.aiSuggested && !entry.isConfirmed ? "bg-yellow-50/30" : ""
+                          alerts.length > 0 ? "bg-amber-50/40" : "",
+                          entry.isConfirmed && alerts.length === 0 ? "bg-green-50/30" : "",
+                          entry.aiSuggested && !entry.isConfirmed && alerts.length === 0 ? "bg-yellow-50/30" : ""
                         )}
                       >
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-700">{entry.date}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-700">{entry.date || <span className="text-red-400">-</span>}</td>
+                        <td className="px-4 py-3 text-center">
+                          {alerts.length > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-medium" title={`未入力: ${alerts.join("、")}`}>
+                              <AlertTriangle className="w-3 h-3" />アラート
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">該当なし</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 max-w-[280px]">
                           <div className="truncate text-gray-900">{entry.description}</div>
                           {entry.subAccountName && <div className="text-xs text-gray-500 truncate">{entry.subAccountName}</div>}
@@ -867,7 +903,8 @@ export default function FolderDetailPage({
                           </button>
                         </td>
                       </tr>
-                    ))}
+                    );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -881,18 +918,27 @@ export default function FolderDetailPage({
 
             {/* モバイル: カード表示 */}
             <div className="md:hidden space-y-3">
-              {allEntries.map((entry) => (
+              {allEntries.map((entry) => {
+                const alerts = getAlerts(entry);
+                return (
                 <div
                   key={entry.id}
                   className={cn(
                     "bg-white rounded-xl border p-4 space-y-2",
-                    entry.isConfirmed ? "border-green-200 bg-green-50/30" : "",
-                    entry.aiSuggested && !entry.isConfirmed ? "border-yellow-200 bg-yellow-50/30" : ""
+                    alerts.length > 0 ? "border-amber-300 bg-amber-50/40" : "",
+                    entry.isConfirmed && alerts.length === 0 ? "border-green-200 bg-green-50/30" : "",
+                    entry.aiSuggested && !entry.isConfirmed && alerts.length === 0 ? "border-yellow-200 bg-yellow-50/30" : ""
                   )}
                 >
+                  {alerts.length > 0 && (
+                    <div className="flex items-center gap-1.5 text-amber-700 text-xs font-medium">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      未入力: {alerts.join("、")}
+                    </div>
+                  )}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 truncate">{entry.description}</p>
+                      <p className="text-sm font-medium text-gray-900 truncate">{entry.description || <span className="text-red-400">（摘要なし）</span>}</p>
                       {entry.subAccountName && <p className="text-xs text-gray-500 truncate">{entry.subAccountName}</p>}
                     </div>
                     <div className="text-right flex-shrink-0">
@@ -928,7 +974,8 @@ export default function FolderDetailPage({
                     </button>
                   </div>
                 </div>
-              ))}
+              );
+              })}
               <div className="bg-white rounded-xl border px-4 py-3 flex items-center justify-between">
                 <div className="text-sm text-gray-600">
                   合計: <span className="font-medium text-gray-900">{formatCurrency(allEntries.reduce((sum, e) => sum + (e.debitAmount || e.creditAmount || 0), 0))}</span>
