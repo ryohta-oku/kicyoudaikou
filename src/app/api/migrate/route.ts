@@ -157,6 +157,20 @@ export async function GET() {
       `);
       results.push("✓ JournalEntry テーブルを作成しました");
     } else {
+      const jeInfo = await client.execute("PRAGMA table_info(JournalEntry)");
+      const jeColumns = jeInfo.rows.map((r: { name: string }) => r.name);
+      if (!jeColumns.includes("aiReasoning")) {
+        await client.execute(
+          `ALTER TABLE "JournalEntry" ADD COLUMN "aiReasoning" TEXT NOT NULL DEFAULT ''`
+        );
+        results.push("✓ JournalEntry.aiReasoning カラムを追加しました");
+      }
+      if (!jeColumns.includes("duplicateDismissed")) {
+        await client.execute(
+          `ALTER TABLE "JournalEntry" ADD COLUMN "duplicateDismissed" INTEGER NOT NULL DEFAULT 0`
+        );
+        results.push("✓ JournalEntry.duplicateDismissed カラムを追加しました");
+      }
       results.push("JournalEntry テーブルは既に存在します");
     }
 
