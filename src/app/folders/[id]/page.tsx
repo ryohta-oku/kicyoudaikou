@@ -469,7 +469,7 @@ export default function FolderDetailPage({
   return (
     <div className="space-y-6">
       {/* ヘッダー */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
         <Link
           href="/"
           className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
@@ -477,13 +477,13 @@ export default function FolderDetailPage({
           <ArrowLeft className="w-4 h-4" />
           ダッシュボード
         </Link>
-        <div className="flex items-center gap-2">
-          <FolderOpen className="w-5 h-5 text-yellow-500" />
-          <h1 className="text-xl font-bold text-gray-900">{folder.name}</h1>
+        <div className="flex items-center gap-2 min-w-0">
+          <FolderOpen className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+          <h1 className="text-lg md:text-xl font-bold text-gray-900 truncate">{folder.name}</h1>
+          <span className="text-xs md:text-sm text-gray-500 flex-shrink-0">
+            {folder.documents.length} ファイル
+          </span>
         </div>
-        <span className="text-sm text-gray-500">
-          {folder.documents.length} ファイル
-        </span>
       </div>
 
       {/* フォルダ詳細情報カード */}
@@ -635,133 +635,131 @@ export default function FolderDetailPage({
           </h3>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b">
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">
-                    作成日
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">
-                    ファイル名
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">
-                    ステータス
-                  </th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-600">
-                    エクスポート
-                  </th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-600">
-                    操作
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {folder.documents.map((doc) => {
-                  const nextAction = getNextAction(doc.status, doc.id);
-                  const canExport =
-                    doc.status === "reviewed" || doc.status === "exported";
-                  const isProcessing = ocrProcessingIds.has(doc.id);
-                  return (
-                    <tr key={doc.id} className="border-b hover:bg-gray-50">
-                      {/* 作成日 */}
-                      <td className="px-4 py-4 text-gray-600 whitespace-nowrap">
-                        {new Date(doc.createdAt).toLocaleDateString("ja-JP")}
-                      </td>
-                      {/* ファイル名 */}
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-red-500 flex-shrink-0" />
-                          <span className="text-gray-900 truncate max-w-[250px]">
-                            {doc.filename}
-                          </span>
-                        </div>
-                      </td>
-                      {/* ステータス */}
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          {isProcessing && (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-                          )}
-                          <span
-                            className={cn(
-                              "inline-flex px-2.5 py-1 rounded-full text-xs font-medium",
-                              STATUS_COLORS[doc.status] ||
-                                "bg-gray-100 text-gray-800"
-                            )}
-                          >
-                            {isProcessing
-                              ? "OCR処理中..."
-                              : STATUS_LABELS[doc.status] || doc.status}
-                          </span>
-                        </div>
-                      </td>
-                      {/* エクスポート */}
-                      <td className="px-4 py-4 text-center">
-                        {canExport ? (
-                          <Link
-                            href={`/documents/${doc.id}/export`}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            CSV出力
-                          </Link>
-                        ) : (
-                          <span className="text-xs text-gray-400">-</span>
-                        )}
-                      </td>
-                      {/* 操作 */}
-                      <td className="px-4 py-4">
-                        <div className="flex items-center justify-center gap-2">
-                          {nextAction.label === "" ? null : nextAction.href ? (
-                            <Link
-                              href={nextAction.href}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            >
-                              <ArrowRight className="w-4 h-4" />
-                              {nextAction.label}
-                            </Link>
-                          ) : nextAction.action ? (
-                            <button
-                              onClick={nextAction.action}
-                              disabled={isProcessing}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
-                            >
-                              {isProcessing ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <PlayCircle className="w-4 h-4" />
-                              )}
-                              {nextAction.label}
-                            </button>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-400">
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              {nextAction.label}
+        <>
+          {/* デスクトップ: テーブル表示 */}
+          <div className="hidden md:block bg-white rounded-xl border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b">
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">作成日</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">ファイル名</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">ステータス</th>
+                    <th className="px-4 py-3 text-center font-medium text-gray-600">エクスポート</th>
+                    <th className="px-4 py-3 text-center font-medium text-gray-600">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {folder.documents.map((doc) => {
+                    const nextAction = getNextAction(doc.status, doc.id);
+                    const canExport = doc.status === "reviewed" || doc.status === "exported";
+                    const isProcessing = ocrProcessingIds.has(doc.id);
+                    return (
+                      <tr key={doc.id} className="border-b hover:bg-gray-50">
+                        <td className="px-4 py-4 text-gray-600 whitespace-nowrap">
+                          {new Date(doc.createdAt).toLocaleDateString("ja-JP")}
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-red-500 flex-shrink-0" />
+                            <span className="text-gray-900 truncate max-w-[250px]">{doc.filename}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2">
+                            {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />}
+                            <span className={cn("inline-flex px-2.5 py-1 rounded-full text-xs font-medium", STATUS_COLORS[doc.status] || "bg-gray-100 text-gray-800")}>
+                              {isProcessing ? "OCR処理中..." : STATUS_LABELS[doc.status] || doc.status}
                             </span>
-                          )}
-                          <button
-                            onClick={() => handleDeleteDocument(doc.id)}
-                            disabled={deletingId === doc.id || isProcessing}
-                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                          >
-                            {deletingId === doc.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          {canExport ? (
+                            <Link href={`/documents/${doc.id}/export`} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">
+                              <Download className="w-3.5 h-3.5" />CSV出力
+                            </Link>
+                          ) : <span className="text-xs text-gray-400">-</span>}
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center justify-center gap-2">
+                            {nextAction.label === "" ? null : nextAction.href ? (
+                              <Link href={nextAction.href} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                                <ArrowRight className="w-4 h-4" />{nextAction.label}
+                              </Link>
+                            ) : nextAction.action ? (
+                              <button onClick={nextAction.action} disabled={isProcessing} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50">
+                                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
+                                {nextAction.label}
+                              </button>
                             ) : (
-                              <Trash2 className="w-4 h-4" />
+                              <span className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-400">
+                                <Loader2 className="w-4 h-4 animate-spin" />{nextAction.label}
+                              </span>
                             )}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                            <button onClick={() => handleDeleteDocument(doc.id)} disabled={deletingId === doc.id || isProcessing} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
+                              {deletingId === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-        </div>
+          {/* モバイル: カード表示 */}
+          <div className="md:hidden space-y-3">
+            {folder.documents.map((doc) => {
+              const nextAction = getNextAction(doc.status, doc.id);
+              const canExport = doc.status === "reviewed" || doc.status === "exported";
+              const isProcessing = ocrProcessingIds.has(doc.id);
+              return (
+                <div key={doc.id} className="bg-white rounded-xl border p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <FileText className="w-4 h-4 text-red-500 flex-shrink-0" />
+                        <span className="text-sm font-medium text-gray-900 truncate">{doc.filename}</span>
+                      </div>
+                      <p className="text-xs text-gray-500">{new Date(doc.createdAt).toLocaleDateString("ja-JP")}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />}
+                      <span className={cn("inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium", STATUS_COLORS[doc.status] || "bg-gray-100 text-gray-800")}>
+                        {isProcessing ? "OCR処理中..." : STATUS_LABELS[doc.status] || doc.status}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 border-t">
+                    {nextAction.label !== "" && (
+                      nextAction.href ? (
+                        <Link href={nextAction.href} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                          <ArrowRight className="w-3.5 h-3.5" />{nextAction.label}
+                        </Link>
+                      ) : nextAction.action ? (
+                        <button onClick={nextAction.action} disabled={isProcessing} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50">
+                          {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
+                          {nextAction.label}
+                        </button>
+                      ) : null
+                    )}
+                    {canExport && (
+                      <Link href={`/documents/${doc.id}/export`} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">
+                        <Download className="w-3.5 h-3.5" />CSV出力
+                      </Link>
+                    )}
+                    <button onClick={() => handleDeleteDocument(doc.id)} disabled={deletingId === doc.id || isProcessing} className="ml-auto inline-flex items-center gap-1 px-2 py-1.5 text-xs text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
+                      {deletingId === doc.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      削除
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* 仕訳明細セクション (Money Forward風) */}
@@ -793,8 +791,8 @@ export default function FolderDetailPage({
 
         return (
           <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h2 className="text-base md:text-lg font-bold text-gray-900">
                 仕訳明細
                 <span className="ml-2 text-sm font-normal text-gray-500">
                   {allEntries.length} 件
@@ -807,14 +805,15 @@ export default function FolderDetailPage({
               </h2>
               <Link
                 href={`/folders/${id}/classify`}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors self-start"
               >
                 <Pencil className="w-4 h-4" />
                 仕訳確認・編集
               </Link>
             </div>
 
-            <div className="bg-white rounded-xl border overflow-hidden">
+            {/* デスクトップ: テーブル表示 */}
+            <div className="hidden md:block bg-white rounded-xl border overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -839,58 +838,31 @@ export default function FolderDetailPage({
                           entry.aiSuggested && !entry.isConfirmed ? "bg-yellow-50/30" : ""
                         )}
                       >
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-700">
-                          {entry.date}
-                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-700">{entry.date}</td>
                         <td className="px-4 py-3 max-w-[280px]">
-                          <div className="truncate text-gray-900">
-                            {entry.description}
-                          </div>
-                          {entry.subAccountName && (
-                            <div className="text-xs text-gray-500 truncate">
-                              {entry.subAccountName}
-                            </div>
-                          )}
+                          <div className="truncate text-gray-900">{entry.description}</div>
+                          {entry.subAccountName && <div className="text-xs text-gray-500 truncate">{entry.subAccountName}</div>}
                         </td>
                         <td className="px-4 py-3 text-right font-mono whitespace-nowrap text-gray-900">
-                          {entry.debitAmount > 0
-                            ? formatCurrency(entry.debitAmount)
-                            : entry.creditAmount > 0
-                              ? formatCurrency(entry.creditAmount)
-                              : "-"}
+                          {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : "-"}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-gray-700">
                           {entry.accountName}
-                          {entry.aiSuggested && !entry.isConfirmed && (
-                            <span className="ml-1 text-xs text-yellow-600 bg-yellow-100 px-1 rounded">
-                              AI
-                            </span>
-                          )}
+                          {entry.aiSuggested && !entry.isConfirmed && <span className="ml-1 text-xs text-yellow-600 bg-yellow-100 px-1 rounded">AI</span>}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-600 text-xs">
-                          {entry.taxRate || "-"}
-                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-600 text-xs">{entry.taxRate || "-"}</td>
                         <td className="px-4 py-3 text-center">
                           {entry.isConfirmed ? (
-                            <span className="inline-flex items-center justify-center w-6 h-6 bg-green-100 text-green-600 rounded-full">
-                              <Check className="w-3.5 h-3.5" />
-                            </span>
+                            <span className="inline-flex items-center justify-center w-6 h-6 bg-green-100 text-green-600 rounded-full"><Check className="w-3.5 h-3.5" /></span>
                           ) : (
-                            <span className="inline-flex items-center justify-center w-6 h-6 bg-gray-100 text-gray-400 rounded-full">
-                              <span className="w-2 h-2 bg-gray-300 rounded-full" />
-                            </span>
+                            <span className="inline-flex items-center justify-center w-6 h-6 bg-gray-100 text-gray-400 rounded-full"><span className="w-2 h-2 bg-gray-300 rounded-full" /></span>
                           )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="text-xs text-gray-500 truncate max-w-[120px] block">
-                            {entry.filename}
-                          </span>
+                          <span className="text-xs text-gray-500 truncate max-w-[120px] block">{entry.filename}</span>
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => openDetail(entry)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200"
-                          >
+                          <button onClick={() => openDetail(entry)} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200">
                             詳細
                           </button>
                         </td>
@@ -899,22 +871,69 @@ export default function FolderDetailPage({
                   </tbody>
                 </table>
               </div>
-              {/* フッター */}
               <div className="px-4 py-3 bg-gray-50 border-t flex items-center justify-between">
                 <div className="text-sm text-gray-600">
-                  合計金額:{" "}
-                  <span className="font-medium text-gray-900">
-                    {formatCurrency(
-                      allEntries.reduce((sum, e) => sum + (e.debitAmount || e.creditAmount || 0), 0)
-                    )}
-                  </span>
+                  合計金額: <span className="font-medium text-gray-900">{formatCurrency(allEntries.reduce((sum, e) => sum + (e.debitAmount || e.creditAmount || 0), 0))}</span>
                 </div>
-                <Link
-                  href={`/folders/${id}/classify`}
-                  className="text-sm text-blue-600 hover:underline"
+                <Link href={`/folders/${id}/classify`} className="text-sm text-blue-600 hover:underline">仕訳確認ページへ →</Link>
+              </div>
+            </div>
+
+            {/* モバイル: カード表示 */}
+            <div className="md:hidden space-y-3">
+              {allEntries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className={cn(
+                    "bg-white rounded-xl border p-4 space-y-2",
+                    entry.isConfirmed ? "border-green-200 bg-green-50/30" : "",
+                    entry.aiSuggested && !entry.isConfirmed ? "border-yellow-200 bg-yellow-50/30" : ""
+                  )}
                 >
-                  仕訳確認ページへ →
-                </Link>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-900 truncate">{entry.description}</p>
+                      {entry.subAccountName && <p className="text-xs text-gray-500 truncate">{entry.subAccountName}</p>}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-mono font-medium text-gray-900">
+                        {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap text-xs text-gray-500">
+                    <span>{entry.date}</span>
+                    <span className="text-gray-300">|</span>
+                    <span>{entry.accountName}</span>
+                    {entry.aiSuggested && !entry.isConfirmed && <span className="text-yellow-600 bg-yellow-100 px-1 rounded">AI</span>}
+                    {entry.taxRate && (
+                      <>
+                        <span className="text-gray-300">|</span>
+                        <span>{entry.taxRate}</span>
+                      </>
+                    )}
+                    {entry.isConfirmed && (
+                      <span className="inline-flex items-center gap-0.5 text-green-600">
+                        <Check className="w-3 h-3" />確認済
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <span className="text-[10px] text-gray-400 truncate max-w-[150px]">{entry.filename}</span>
+                    <button
+                      onClick={() => openDetail(entry)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200"
+                    >
+                      詳細
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <div className="bg-white rounded-xl border px-4 py-3 flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  合計: <span className="font-medium text-gray-900">{formatCurrency(allEntries.reduce((sum, e) => sum + (e.debitAmount || e.creditAmount || 0), 0))}</span>
+                </div>
+                <Link href={`/folders/${id}/classify`} className="text-xs text-blue-600 hover:underline">仕訳確認 →</Link>
               </div>
             </div>
           </section>
@@ -1029,16 +1048,16 @@ export default function FolderDetailPage({
       {/* 仕訳詳細モーダル */}
       {detailEntry && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50"
           onClick={() => setDetailEntry(null)}
         >
           <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
+            className="bg-white md:rounded-xl shadow-2xl w-full md:max-w-4xl h-full md:h-auto md:max-h-[90vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* モーダルヘッダー */}
-            <div className="flex items-center justify-between px-6 py-4 border-b bg-gray-50">
-              <h3 className="text-lg font-bold text-gray-900">仕訳詳細</h3>
+            <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b bg-gray-50 flex-shrink-0">
+              <h3 className="text-base md:text-lg font-bold text-gray-900">仕訳詳細</h3>
               <button
                 onClick={() => setDetailEntry(null)}
                 className="p-1.5 text-gray-500 hover:bg-gray-200 rounded-lg transition-colors"
@@ -1050,19 +1069,19 @@ export default function FolderDetailPage({
             {/* モーダルコンテンツ */}
             <div className="flex-1 overflow-y-auto">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
-                {/* 左側: 元画像 */}
-                <div className="border-r">
+                {/* 左側: 元画像（モバイルでは折りたたみ） */}
+                <div className="lg:border-r">
                   <div className="bg-gray-50 px-4 py-2 border-b">
-                    <p className="text-xs font-medium text-gray-500">
+                    <p className="text-xs font-medium text-gray-500 truncate">
                       元ファイル: {detailEntry.filename}
                     </p>
                   </div>
-                  <div className="p-4">
+                  <div className="p-3 md:p-4">
                     {detailEntry.fileType === "pdf" ? (
                       <iframe
                         src={`/api/files?path=${encodeURIComponent(detailEntry.filepath)}`}
                         className="w-full border rounded"
-                        style={{ height: "500px" }}
+                        style={{ height: window.innerWidth < 768 ? "250px" : "500px" }}
                         title="PDF"
                       />
                     ) : (() => {
@@ -1070,7 +1089,7 @@ export default function FolderDetailPage({
                         ? detailEntry.pages.find((p) => p.id === detailEntry.pageId)
                         : detailEntry.pages[0];
                       return matchedPage ? (
-                        <div className="overflow-auto max-h-[500px]">
+                        <div className="overflow-auto max-h-[250px] md:max-h-[500px]">
                           <Image
                             src={`/api/files?path=${encodeURIComponent(matchedPage.imagePath)}`}
                             alt={`ページ ${matchedPage.pageNumber}`}
@@ -1081,7 +1100,7 @@ export default function FolderDetailPage({
                           />
                         </div>
                       ) : (
-                        <div className="text-center py-12 text-gray-400 text-sm">
+                        <div className="text-center py-8 md:py-12 text-gray-400 text-sm">
                           画像がありません
                         </div>
                       );
@@ -1090,7 +1109,7 @@ export default function FolderDetailPage({
                 </div>
 
                 {/* 右側: 仕訳編集フォーム */}
-                <div className="p-6 space-y-4 overflow-y-auto">
+                <div className="p-4 md:p-6 space-y-4 overflow-y-auto border-t lg:border-t-0">
                   {/* ステータス */}
                   <div className="flex items-center gap-2">
                     {detailEntry.isConfirmed ? (
