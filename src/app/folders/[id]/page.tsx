@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { getEffectiveRole } from "@/lib/roleSimulation";
 import {
   FileText,
   ArrowLeft,
@@ -110,7 +111,7 @@ export default function FolderDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const { data: session } = useSession();
-  const userRole = session?.user?.role || "";
+  const userRole = getEffectiveRole(session?.user?.role || "");
   // B型利用者は仕訳関連セクションを非表示
   const canViewJournal = userRole !== "user_b";
   const [folder, setFolder] = useState<Folder | null>(null);

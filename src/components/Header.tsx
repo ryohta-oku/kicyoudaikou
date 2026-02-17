@@ -5,8 +5,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { FileText, Home, Settings, Building2, Plus, ChevronDown, Search, Shield, LogOut, Menu, User, ShieldCheck, X } from "lucide-react";
+import { FileText, Home, Settings, Building2, Plus, ChevronDown, Search, Shield, LogOut, Menu, User, ShieldCheck, X, Eye } from "lucide-react";
 import { getSelectedClientId, setSelectedClientId } from "@/lib/client";
+import { getSimulatedRole, setSimulatedRole } from "@/lib/roleSimulation";
+
+const ROLE_VIEW_OPTIONS = [
+  { value: "", label: "管理者（自分）" },
+  { value: "instructor", label: "指導者として表示" },
+  { value: "user_a", label: "A型利用者として表示" },
+  { value: "user_b", label: "B型利用者として表示" },
+];
 
 interface Client {
   id: string;
@@ -23,6 +31,7 @@ export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [simulatedRole, setSimulatedRoleState] = useState<string>("");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const mobileDropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -37,8 +46,16 @@ export default function Header() {
   useEffect(() => {
     if (status === "authenticated") {
       fetchClients();
+      // ロールシミュレーション状態を復元
+      setSimulatedRoleState(getSimulatedRole() || "");
     }
   }, [status]);
+
+  const handleRoleSimulation = (role: string) => {
+    setSimulatedRole(role || null);
+    setSimulatedRoleState(role);
+    window.location.reload();
+  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -266,6 +283,27 @@ export default function Header() {
               {/* 得意先セレクタ */}
               {renderClientSelector()}
 
+              {/* ロール切替（管理者のみ） */}
+              {session.user.role === "admin" && (
+                <div className="flex items-center gap-1.5">
+                  <Eye className="h-3.5 w-3.5 text-gray-400" />
+                  <select
+                    value={simulatedRole}
+                    onChange={(e) => handleRoleSimulation(e.target.value)}
+                    className={cn(
+                      "text-xs font-medium px-2 py-1 rounded-lg border appearance-none cursor-pointer pr-6",
+                      simulatedRole
+                        ? "bg-violet-50 text-violet-700 border-violet-200"
+                        : "bg-gray-50 text-gray-500 border-gray-200"
+                    )}
+                  >
+                    {ROLE_VIEW_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <nav className="flex items-center gap-1">
                 {navItems.map((item) => {
                   const Icon = item.icon;
@@ -354,6 +392,22 @@ export default function Header() {
         </div>
       </header>
 
+      {/* ロールシミュレーション中バナー */}
+      {session.user.role === "admin" && simulatedRole && (
+        <div className="bg-violet-600 text-white text-center py-1.5 text-xs font-medium sticky top-14 md:top-16 z-40 flex items-center justify-center gap-2">
+          <Eye className="h-3.5 w-3.5" />
+          <span>
+            {ROLE_VIEW_OPTIONS.find((o) => o.value === simulatedRole)?.label || simulatedRole}
+          </span>
+          <button
+            onClick={() => handleRoleSimulation("")}
+            className="ml-2 px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded text-[11px] transition-colors"
+          >
+            解除
+          </button>
+        </div>
+      )}
+
       {/* モバイルメニュー（オーバーレイ） */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
@@ -410,6 +464,28 @@ export default function Header() {
                   <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">指導員</span>
                 )}
               </div>
+              {/* モバイル: ロール切替（管理者のみ） */}
+              {session.user.role === "admin" && (
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <p className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1">
+                    <Eye className="h-3 w-3" />表示切替
+                  </p>
+                  <select
+                    value={simulatedRole}
+                    onChange={(e) => handleRoleSimulation(e.target.value)}
+                    className={cn(
+                      "w-full text-sm px-3 py-2 rounded-lg border appearance-none cursor-pointer",
+                      simulatedRole
+                        ? "bg-violet-50 text-violet-700 border-violet-200"
+                        : "bg-gray-50 text-gray-600 border-gray-200"
+                    )}
+                  >
+                    {ROLE_VIEW_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <Link
                 href="/account"
                 className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"

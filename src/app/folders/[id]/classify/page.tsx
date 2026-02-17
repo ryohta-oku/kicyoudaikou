@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { getEffectiveRole } from "@/lib/roleSimulation";
 import { getSelectedClientId } from "@/lib/client";
 import {
   FileText,
@@ -60,12 +61,14 @@ export default function ClassifyPage({
   const [allDone, setAllDone] = useState(false);
   const classifyStartedRef = useRef(false);
 
+  const effectiveRole = getEffectiveRole(session?.user?.role || "");
+
   // B型利用者はアクセス不可 → フォルダ詳細にリダイレクト
   useEffect(() => {
-    if (sessionStatus === "authenticated" && session?.user?.role === "user_b") {
+    if (sessionStatus === "authenticated" && effectiveRole === "user_b") {
       router.replace(`/folders/${id}`);
     }
-  }, [sessionStatus, session, router, id]);
+  }, [sessionStatus, effectiveRole, router, id]);
 
   /** フォルダ情報を取得 */
   const fetchFolder = useCallback(async () => {
