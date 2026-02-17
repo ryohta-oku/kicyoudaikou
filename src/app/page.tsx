@@ -10,6 +10,7 @@ import {
   Loader2,
   FileText,
   AlertTriangle,
+  ScanLine,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
@@ -49,6 +50,43 @@ export default function DashboardPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [duplicateCount, setDuplicateCount] = useState(0);
+  const [scanFiles, setScanFiles] = useState<{ name: string; size: number; modifiedAt: string }[]>([]);
+  const [scanConfigured, setScanConfigured] = useState(false);
+  const [scanImporting, setScanImporting] = useState(false);
+
+  const checkScanFolder = useCallback(async () => {
+    try {
+      const res = await fetch("/api/scan");
+      const data = await res.json();
+      setScanConfigured(data.configured);
+      setScanFiles(data.files || []);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleScanImport = async () => {
+    setScanImporting(true);
+    try {
+      const clientId = getSelectedClientId();
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "取り込みに失敗しました");
+        return;
+      }
+      // 取り込み完了 → フォルダ詳細ページへ（OCR自動開始）
+      router.push(`/folders/${data.folder.id}`);
+    } catch {
+      alert("取り込みに失敗しました");
+    } finally {
+      setScanImporting(false);
+    }
+  };
 
   const fetchDuplicates = useCallback(async () => {
     try {
@@ -77,7 +115,12 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchFolders();
     fetchDuplicates();
-  }, [fetchFolders, fetchDuplicates]);
+    checkScanFolder();
+
+    // スキャンフォルダを5秒ごとにポーリング
+    const interval = setInterval(checkScanFolder, 5000);
+    return () => clearInterval(interval);
+  }, [fetchFolders, fetchDuplicates, checkScanFolder]);
 
   const handleBulkUploadComplete = (folderId: string) => {
     // アップロード完了後、フォルダ詳細ページへ遷移（OCRはそこで自動開始）
@@ -125,6 +168,39 @@ export default function DashboardPage() {
             重複の可能性がある得意先が <strong>{duplicateCount} グループ</strong>あります。得意先管理ページで確認・統合できます。
           </span>
         </Link>
+      )}
+
+      {/* スキャン取り込みバナー */}
+      {scanConfigured && scanFiles.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <ScanLine className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-blue-900">
+                  ScanSnapから {scanFiles.length} 件のファイルを検出しました
+                </p>
+                <p className="text-xs text-blue-700 mt-0.5">
+                  {scanFiles.map((f) => f.name).join(", ")}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleScanImport}
+              disabled={scanImporting}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50"
+            >
+              {scanImporting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <ScanLine className="w-4 h-4" />
+              )}
+              取り込み開始
+            </button>
+          </div>
+        </div>
       )}
 
       {/* アップロードエリア */}
