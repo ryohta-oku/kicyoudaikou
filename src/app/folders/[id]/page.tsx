@@ -912,41 +912,44 @@ export default function FolderDetailPage({
                         <td className="px-4 py-3 whitespace-nowrap text-gray-700">{entry.date || <span className="text-red-400">-</span>}</td>
                         <td className="px-4 py-3 text-center">
                           {alerts.length > 0 ? (
-                            <div className="relative group">
-                              <button type="button" className={cn(
-                                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer",
-                                isDuplicate
-                                  ? "bg-orange-100 hover:bg-orange-200 text-orange-700"
-                                  : "bg-amber-100 hover:bg-amber-200 text-amber-700"
-                              )}>
-                                <CircleAlert className={cn("w-4 h-4 animate-alert-bounce", isDuplicate ? "text-orange-600" : "text-amber-600")} />
-                                <span>{isDuplicate ? "重複？" : "要確認"}</span>
-                              </button>
-                              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-50 pointer-events-none">
-                                <div className="bg-gray-800 text-white text-xs rounded-lg px-3 py-2.5 whitespace-nowrap shadow-lg">
-                                  {missingAlerts.length > 0 && (
-                                    <>
+                            <div className="flex flex-col items-center gap-1">
+                              {missingAlerts.length > 0 && (
+                                <div className="relative group">
+                                  <button type="button" className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-[11px] font-medium transition-colors cursor-pointer">
+                                    <CircleAlert className="w-4 h-4 animate-alert-bounce text-amber-600" />
+                                    <span>要確認</span>
+                                  </button>
+                                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-50 pointer-events-none">
+                                    <div className="bg-gray-800 text-white text-xs rounded-lg px-3 py-2.5 whitespace-nowrap shadow-lg">
                                       <p className="font-medium mb-1 text-amber-300 flex items-center gap-1">
                                         <AlertTriangle className="w-3 h-3" />未入力の項目
                                       </p>
                                       {missingAlerts.map((a) => (
                                         <p key={a} className="text-gray-200 leading-5">・{a}</p>
                                       ))}
-                                    </>
-                                  )}
-                                  {isDuplicate && (
-                                    <>
-                                      {missingAlerts.length > 0 && <div className="border-t border-gray-600 my-1.5" />}
+                                    </div>
+                                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-800" />
+                                  </div>
+                                </div>
+                              )}
+                              {isDuplicate && (
+                                <div className="relative group">
+                                  <button type="button" className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg text-[11px] font-medium transition-colors cursor-pointer">
+                                    <CircleAlert className="w-4 h-4 animate-alert-bounce text-orange-600" />
+                                    <span>重複？</span>
+                                  </button>
+                                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-50 pointer-events-none">
+                                    <div className="bg-gray-800 text-white text-xs rounded-lg px-3 py-2.5 whitespace-nowrap shadow-lg">
                                       <p className="font-medium mb-1 text-orange-300 flex items-center gap-1">
                                         <CircleAlert className="w-3 h-3" />重複の可能性
                                       </p>
-                                      <p className="text-gray-300 leading-5 text-[11px]">同じ日付・金額・勘定科目の</p>
-                                      <p className="text-gray-300 leading-5 text-[11px]">仕訳が別ファイルにあります</p>
-                                    </>
-                                  )}
+                                      <p className="text-gray-300 leading-5 text-[11px]">同じ金額・勘定科目の仕訳が</p>
+                                      <p className="text-gray-300 leading-5 text-[11px]">別ファイルにあります</p>
+                                    </div>
+                                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-800" />
+                                  </div>
                                 </div>
-                                <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-800" />
-                              </div>
+                              )}
                             </div>
                           ) : (
                             <span className="text-xs text-gray-400">-</span>
