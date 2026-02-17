@@ -165,7 +165,7 @@ export default function Header() {
     : true;
 
   // 得意先ドロップダウン（デスクトップ・モバイル共通）
-  const ClientSelector = ({ mobile }: { mobile?: boolean }) => (
+  const renderClientSelector = (mobile?: boolean) => (
     <div className={cn("relative", mobile && "w-full")} ref={mobile ? mobileDropdownRef : dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -264,7 +264,7 @@ export default function Header() {
             {/* デスクトップ: 得意先セレクタ + ナビ + メニュー */}
             <div className="hidden md:flex items-center gap-4">
               {/* 得意先セレクタ */}
-              <ClientSelector />
+              {renderClientSelector()}
 
               <nav className="flex items-center gap-1">
                 {navItems.map((item) => {
@@ -367,7 +367,7 @@ export default function Header() {
             {/* 得意先セレクタ */}
             <div className="px-4 py-3 border-b border-gray-100">
               <p className="text-xs font-medium text-gray-500 mb-2">得意先</p>
-              <ClientSelector mobile />
+              {renderClientSelector(true)}
             </div>
 
             {/* ナビゲーション */}
