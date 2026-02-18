@@ -60,9 +60,9 @@ function computeCurrentStep(folder: FolderInfo, isTypeB: boolean): string {
     if (isTypeB) return "handoff";
     return "classify";
   }
-  if (statuses.some((s) => s === "classified")) return "review";
-  if (statuses.some((s) => s === "reviewed")) return "review";
-  if (statuses.every((s) => s === "exported")) return "done";
+  // 全ドキュメントが reviewed 以上なら完了
+  if (statuses.every((s) => s === "reviewed" || s === "exported")) return "done";
+  if (statuses.some((s) => s === "classified" || s === "reviewed")) return "review";
 
   // classified以降が混在
   return "classify";
