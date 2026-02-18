@@ -603,56 +603,44 @@ export default function DashboardPage() {
             </Link>
           );
 
+          const incompleteFolders = [...handoffPending, ...ownIncomplete];
+
           return (
             <div className="space-y-6">
-              {/* 引き継ぎフォルダ（未処理） */}
-              {handoffPending.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Send className="w-5 h-5 text-cyan-500" />
-                    <h2 className="text-base md:text-lg font-bold text-gray-900">引き継ぎフォルダ</h2>
-                    <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-cyan-500 rounded-full">
-                      {handoffPending.length}
+              {/* 未完了タスク */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-amber-500" />
+                  <h2 className="text-base md:text-lg font-bold text-gray-900">未完了タスク</h2>
+                  {incompleteFolders.length > 0 && (
+                    <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-amber-500 rounded-full">
+                      {incompleteFolders.length}
                     </span>
+                  )}
+                </div>
+                {incompleteFolders.length === 0 ? (
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                    <p className="text-sm text-green-700">すべてのタスクが完了しています</p>
                   </div>
+                ) : (
                   <div className="space-y-2">
-                    {handoffPending.map((f, idx) => (
+                    {incompleteFolders.map((f, idx) => (
                       <div key={f.id} className="relative">
-                        {renderFolderCard(f, getATypeBadge(f), true)}
+                        {renderFolderCard(f, getATypeBadge(f), f.handoffStatus === "handed_off")}
                         {idx === 0 && (
                           <div className="absolute left-4 -bottom-2 translate-y-full bg-amber-500 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
-                            引き継ぎフォルダを確認しましょう →
+                            {f.handoffStatus === "handed_off"
+                              ? "引き継ぎフォルダを確認しましょう →"
+                              : "このフォルダを開いて作業しましょう →"
+                            }
                             <div className="absolute bottom-full left-6 border-8 border-transparent border-b-amber-500" />
                           </div>
                         )}
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {/* 自分のフォルダ（作業中） */}
-              {ownIncomplete.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-amber-500" />
-                    <h2 className="text-base md:text-lg font-bold text-gray-900">作業中</h2>
-                    <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-amber-500 rounded-full">
-                      {ownIncomplete.length}
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {ownIncomplete.map((f) => renderFolderCard(f, getATypeBadge(f)))}
-                  </div>
-                </div>
-              )}
-
-              {/* 引き継ぎも作業中もない場合 */}
-              {handoffPending.length === 0 && ownIncomplete.length === 0 && completedFolders.length === 0 && (
-                <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-                  <p className="text-sm text-green-700">現在タスクはありません</p>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* 完了済み */}
               {completedFolders.length > 0 && (
