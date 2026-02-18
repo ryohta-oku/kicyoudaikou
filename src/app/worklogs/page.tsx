@@ -121,11 +121,17 @@ export default function WorkLogsPage() {
   const [viewMode, setViewMode] = useState<"sessions" | "chart">("sessions");
 
   const fetchSessions = useCallback(async () => {
+    if (!session?.user?.id) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (dateFrom) params.set("from", dateFrom);
       if (dateTo) params.set("to", dateTo);
+      // A型/B型は自分のデータのみ取得
+      if (userRole === "user_a" || userRole === "user_b") {
+        params.set("userId", session.user.id);
+        params.set("userRole", userRole);
+      }
       const res = await fetch(`/api/worksessions?${params.toString()}`);
       const data = await res.json();
       setSessions(data.sessions || []);
@@ -134,7 +140,7 @@ export default function WorkLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo]);
+  }, [dateFrom, dateTo, session?.user?.id, userRole]);
 
   useEffect(() => {
     fetchSessions();

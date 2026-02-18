@@ -157,11 +157,15 @@ export default function DashboardPage() {
       const res = await fetch("/api/worksessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          userId: session?.user?.id || "",
+          userName: session?.user?.name || "",
+          userRole: userRole,
+        }),
       });
       const data = await res.json();
-      if (res.ok && data.session) {
-        const sid = data.session.id;
+      if (res.ok && data.workSession) {
+        const sid = data.workSession.id;
         setWorkSessionId(sid);
         setIsWorkStarted(true);
         setShowUpload(true);

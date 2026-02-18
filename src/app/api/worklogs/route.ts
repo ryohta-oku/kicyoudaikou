@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
-import { getEffectiveRole } from "@/lib/roleSimulation";
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,30 +26,16 @@ export async function POST(request: NextRequest) {
       durationSec?: number;
     };
 
-    // sendBeaconの場合はsessionからユーザー情報を取れない場合があるため、bodyから取得
-    let finalUserId = userId || "";
-    let finalUserName = userName || "";
-    let finalUserRole = userRole || "";
-
-    if (!finalUserId) {
-      const session = await auth();
-      if (session?.user) {
-        finalUserId = session.user.id!;
-        finalUserName = session.user.name || "";
-        finalUserRole = getEffectiveRole(session.user.role || "");
-      }
-    }
-
-    if (!finalUserId) {
-      return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+    if (!userId) {
+      return NextResponse.json({ error: "ユーザーIDが必要です" }, { status: 400 });
     }
 
     const workLog = await prisma.workLog.create({
       data: {
         sessionId: sessionId || null,
-        userId: finalUserId,
-        userName: finalUserName,
-        userRole: finalUserRole,
+        userId: userId,
+        userName: userName || "",
+        userRole: userRole || "",
         folderId: folderId || null,
         folderName: folderName || "",
         documentId: documentId || null,
@@ -71,24 +55,19 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
+    const userRole = searchParams.get("userRole");
     const folderId = searchParams.get("folderId");
     const sessionId = searchParams.get("sessionId");
     const from = searchParams.get("from");
     const to = searchParams.get("to");
-    const effectiveRole = getEffectiveRole(session.user.role || "");
 
     const where: Record<string, unknown> = {};
 
-    // A型/B型は自分のデータのみ
-    if (effectiveRole === "user_a" || effectiveRole === "user_b") {
-      where.userId = session.user.id;
+    // A型/B型は自分のデータのみ（クライアントからuserIdを渡す）
+    if (userRole === "user_a" || userRole === "user_b") {
+      if (userId) where.userId = userId;
     } else if (userId) {
       where.userId = userId;
     }

@@ -1,29 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
-import { getEffectiveRole } from "@/lib/roleSimulation";
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
-    }
+    const { userId, userName, userRole, folderId, folderName } = await request.json();
 
-    const { folderId, folderName } = await request.json();
-    const effectiveRole = getEffectiveRole(session.user.role || "");
+    if (!userId) {
+      return NextResponse.json({ error: "ユーザーIDが必要です" }, { status: 400 });
+    }
 
     const workSession = await prisma.workSession.create({
       data: {
-        userId: session.user.id!,
-        userName: session.user.name || "",
-        userRole: effectiveRole,
+        userId,
+        userName: userName || "",
+        userRole: userRole || "",
         folderId: folderId || null,
         folderName: folderName || "",
       },
     });
 
-    return NextResponse.json({ session: workSession });
+    return NextResponse.json({ workSession });
   } catch (error) {
     console.error("WorkSession create error:", error);
     const detail = error instanceof Error ? error.message : String(error);
@@ -33,22 +29,17 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
+    const userRole = searchParams.get("userRole");
     const from = searchParams.get("from");
     const to = searchParams.get("to");
-    const effectiveRole = getEffectiveRole(session.user.role || "");
 
     const where: Record<string, unknown> = {};
 
-    // A型/B型は自分のデータのみ
-    if (effectiveRole === "user_a" || effectiveRole === "user_b") {
-      where.userId = session.user.id;
+    // A型/B型は自分のデータのみ（クライアントからuserIdを渡す）
+    if (userRole === "user_a" || userRole === "user_b") {
+      if (userId) where.userId = userId;
     } else if (userId) {
       where.userId = userId;
     }
