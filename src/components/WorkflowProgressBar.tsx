@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useEffect, useState, useCallback } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getEffectiveRole } from "@/lib/roleSimulation";
@@ -11,7 +12,8 @@ interface Step {
   label: string;
 }
 
-const STEPS_A: Step[] = [
+// A型: 全工程
+const STEPS_A_FULL: Step[] = [
   { id: "upload", label: "アップロード" },
   { id: "ocr", label: "OCR読み取り" },
   { id: "ocr_confirm", label: "OCR確認" },
@@ -20,45 +22,118 @@ const STEPS_A: Step[] = [
   { id: "done", label: "完了" },
 ];
 
+// A型: 引き継ぎ受け（B型がOCR確認まで完了済み）
+const STEPS_A_HANDOFF: Step[] = [
+  { id: "classify", label: "仕訳分類" },
+  { id: "review", label: "仕訳確認" },
+  { id: "done", label: "完了" },
+];
+
+// B型: アップロード〜OCR確認〜引き継ぎ
 const STEPS_B: Step[] = [
   { id: "upload", label: "アップロード" },
   { id: "ocr", label: "OCR読み取り" },
   { id: "ocr_confirm", label: "OCR確認" },
-  { id: "done", label: "完了" },
+  { id: "handoff", label: "引き継ぎ" },
 ];
 
-function getCurrentStep(pathname: string): string | null {
-  if (pathname === "/") return "upload";
+interface FolderInfo {
+  handoffStatus: string | null;
+  documents: { status: string }[];
+}
 
-  // フォルダ詳細 (/folders/[id])
-  if (pathname.match(/^\/folders\/[^/]+$/)) return "ocr";
+/** フォルダ内ドキュメントの実際のステータスから現在のステップを算出 */
+function computeCurrentStep(folder: FolderInfo, isTypeB: boolean): string {
+  const docs = folder.documents;
+  if (docs.length === 0) return "upload";
 
-  // ドキュメント系 (/documents/[id]/xxx) とフォルダ系 (/folders/[id]/xxx)
-  if (pathname.match(/^\/(documents|folders)\/[^/]+\/ocr-review$/)) return "ocr_confirm";
-  if (pathname.match(/^\/(documents|folders)\/[^/]+\/classify$/)) return "classify";
-  if (pathname.match(/^\/(documents|folders)\/[^/]+\/final-review$/)) return "review";
-  if (pathname.match(/^\/(documents|folders)\/[^/]+\/export$/)) return "done";
+  const statuses = docs.map((d) => d.status);
 
-  // 管理ページ等 → 非表示
-  return null;
+  // B型: 引き継ぎ済みなら最終ステップ
+  if (isTypeB && folder.handoffStatus === "handed_off") return "handoff";
+
+  // 全ドキュメントのステータスで判定
+  if (statuses.some((s) => s === "uploaded" || s === "ocr_processing")) return "ocr";
+  if (statuses.some((s) => s === "ocr_complete")) return "ocr_confirm";
+  if (statuses.every((s) => s === "ocr_confirmed")) {
+    // B型ならOCR確認完了 → 引き継ぎ待ち
+    if (isTypeB) return "handoff";
+    return "classify";
+  }
+  if (statuses.some((s) => s === "classified")) return "review";
+  if (statuses.some((s) => s === "reviewed")) return "review";
+  if (statuses.every((s) => s === "exported")) return "done";
+
+  // classified以降が混在
+  return "classify";
+}
+
+/** パス名からフォルダIDを取得 */
+function extractFolderId(pathname: string): string | null {
+  const match = pathname.match(/^\/folders\/([^/]+)/);
+  return match ? match[1] : null;
 }
 
 export default function WorkflowProgressBar() {
   const pathname = usePathname();
   const { data: session } = useSession();
-
-  const currentStepId = getCurrentStep(pathname);
-  if (!currentStepId) return null;
+  const [folderInfo, setFolderInfo] = useState<FolderInfo | null>(null);
 
   const role = session?.user?.role
     ? getEffectiveRole(session.user.role as string)
     : null;
-
   const isTypeB = role === "user_b";
-  const steps = isTypeB ? STEPS_B : STEPS_A;
 
+  const folderId = extractFolderId(pathname);
+
+  const fetchFolderInfo = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/folders/${id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.folder) {
+        setFolderInfo({
+          handoffStatus: data.folder.handoffStatus || null,
+          documents: (data.folder.documents || []).map((d: { status: string }) => ({
+            status: d.status,
+          })),
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    if (folderId) {
+      fetchFolderInfo(folderId);
+    } else {
+      setFolderInfo(null);
+    }
+  }, [folderId, fetchFolderInfo]);
+
+  // ダッシュボードや管理ページでは非表示
+  if (!folderId) return null;
+
+  // フォルダ情報がまだ読み込まれていない場合は非表示（ちらつき防止）
+  if (!folderInfo) return null;
+
+  // ステップセットの決定
+  let steps: Step[];
+  if (isTypeB) {
+    steps = STEPS_B;
+  } else if (folderInfo.handoffStatus === "handed_off") {
+    // A型で引き継ぎ受けフォルダ
+    steps = STEPS_A_HANDOFF;
+  } else {
+    // A型で自分が最初からやるフォルダ
+    steps = STEPS_A_FULL;
+  }
+
+  const currentStepId = computeCurrentStep(folderInfo, isTypeB);
   const currentIndex = steps.findIndex((s) => s.id === currentStepId);
-  // B型でA型専用ステップにいる場合は非表示
+
+  // 現在のステップがこのステップセットにない場合は非表示
   if (currentIndex === -1) return null;
 
   return (
