@@ -291,6 +291,22 @@ export default function ClassifyPage({
     }
   }, []);
 
+  // 全エントリ確認済みの classified ドキュメントを自動で reviewed に昇格
+  const autoReviewedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    documents.forEach((doc) => {
+      if (
+        doc.status === "classified" &&
+        doc.journalEntries.length > 0 &&
+        doc.journalEntries.every((e) => e.isConfirmed) &&
+        !autoReviewedRef.current.has(doc.id)
+      ) {
+        autoReviewedRef.current.add(doc.id);
+        handleAllEntriesConfirmed(doc.id);
+      }
+    });
+  }, [documents, handleAllEntriesConfirmed]);
+
   // 全ドキュメント完了チェック
   useEffect(() => {
     if (documents.length === 0 || !folder) return;
@@ -301,10 +317,14 @@ export default function ClassifyPage({
         d.status === "reviewed" ||
         d.status === "exported"
     ).length;
-    const reviewedCount = documents.filter(
-      (d) => d.status === "reviewed" || d.status === "exported"
+    // ステータスが reviewed/exported、またはエントリが全確認済みなら完了とみなす
+    const doneCount = documents.filter(
+      (d) =>
+        d.status === "reviewed" ||
+        d.status === "exported" ||
+        (d.journalEntries.length > 0 && d.journalEntries.every((e) => e.isConfirmed))
     ).length;
-    setAllDone(eligibleCount > 0 && reviewedCount >= eligibleCount);
+    setAllDone(eligibleCount > 0 && doneCount >= eligibleCount);
   }, [documents, folder]);
 
   if (loading) {
