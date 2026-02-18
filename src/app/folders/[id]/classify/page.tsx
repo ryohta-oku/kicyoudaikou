@@ -267,6 +267,16 @@ export default function ClassifyPage({
       body: JSON.stringify({ id: entryId, isConfirmed: true }),
     });
     if (!res.ok) throw new Error("確認に失敗しました");
+
+    // ローカルのdocumentsステートも同期
+    setDocuments((prev) =>
+      prev.map((d) => ({
+        ...d,
+        journalEntries: d.journalEntries.map((e) =>
+          e.id === entryId ? { ...e, isConfirmed: true } : e
+        ),
+      }))
+    );
   }, []);
 
   /** 全エントリ確認完了時 → ステータスを reviewed に更新 */
