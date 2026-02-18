@@ -386,13 +386,20 @@ export default function FileUpload({
               </button>
             )}
             {!isProcessing && hasPendingFiles && (
-              <button
-                onClick={handleBulkProcess}
-                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-              >
-                <Send className="w-4 h-4" />
-                送信してOCR処理を開始
-              </button>
+              <div className="relative">
+                <button
+                  onClick={handleBulkProcess}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                >
+                  <Send className="w-4 h-4" />
+                  送信してOCR処理を開始
+                </button>
+                <div className="absolute -top-9 right-0">
+                  <span className="bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap inline-block">
+                    ↓ ここを押して送信！
+                  </span>
+                </div>
+              </div>
             )}
           </div>
         </div>
