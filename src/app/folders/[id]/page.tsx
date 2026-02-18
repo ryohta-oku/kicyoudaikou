@@ -569,6 +569,7 @@ export default function FolderDetailPage({
             d.status === "reviewed" ||
             d.status === "exported"
         ) && (
+          <>
           <div className="flex items-center justify-between gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
             <div className="flex items-center gap-3">
               <Send className="h-5 w-5 text-green-600 flex-shrink-0" />
@@ -609,6 +610,12 @@ export default function FolderDetailPage({
               引き継ぎ完了
             </button>
           </div>
+          <div className="flex justify-end -mt-3">
+            <span className="bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce">
+              ↑ A型利用者に引き継ぎしましょう
+            </span>
+          </div>
+          </>
         )}
 
       {/* フォルダ詳細情報カード */}
@@ -887,6 +894,15 @@ export default function FolderDetailPage({
         </>
       )}
 
+      {/* ステップガイド: OCR確認が必要 */}
+      {folder.documents.some(d => d.status === "ocr_complete") && (
+        <div className="flex justify-center">
+          <span className="inline-flex items-center gap-1.5 bg-amber-500 text-white text-sm rounded-full px-4 py-2 shadow-lg animate-bounce">
+            ↓ 下にスクロールしてOCR内容を確認してください
+          </span>
+        </div>
+      )}
+
       {/* 仕訳明細セクション (Money Forward風) - B型は非表示 */}
       {canViewJournal && (() => {
         const classifiedDocs = folder.documents.filter(
@@ -981,6 +997,15 @@ export default function FolderDetailPage({
                 仕訳確認・編集
               </Link>
             </div>
+
+            {/* ステップガイド: 全確認済み → エクスポート */}
+            {confirmedCount === allEntries.length && alertCount === 0 && allEntries.length > 0 && (
+              <div className="flex justify-center">
+                <span className="inline-flex items-center gap-1.5 bg-amber-500 text-white text-sm rounded-full px-4 py-2 shadow-lg animate-bounce">
+                  全て確認済み！ドキュメント一覧からCSV出力できます ↑
+                </span>
+              </div>
+            )}
 
             {/* アラートバナー */}
             {(missingFieldCount > 0 || duplicateCount > 0) && (
@@ -1278,13 +1303,20 @@ export default function FolderDetailPage({
                 )}
               </h2>
               {canViewJournal && allOcrConfirmed && hasClassifyTarget && (
-                <button
-                  onClick={() => router.push(`/folders/${id}/classify`)}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  一括仕訳分類
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => router.push(`/folders/${id}/classify`)}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    一括仕訳分類
+                  </button>
+                  <div className="absolute top-full mt-1 right-0">
+                    <span className="bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap inline-block">
+                      ↑ 次はこちら
+                    </span>
+                  </div>
+                </div>
               )}
             </div>
 

@@ -282,30 +282,37 @@ export default function DashboardPage() {
               </span>
             </div>
             <div className="space-y-2">
-              {handoffFolders.map((f) => (
-                <Link
-                  key={f.id}
-                  href={`/folders/${f.id}`}
-                  className="flex items-center justify-between gap-3 bg-cyan-50 border border-cyan-200 rounded-xl p-3 md:p-4 hover:bg-cyan-100 transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Send className="w-5 h-5 text-cyan-600 flex-shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-base font-medium text-gray-900 truncate">{f.name}</p>
-                      <div className="flex items-center gap-2 text-sm text-gray-500 mt-0.5">
-                        <span>引継元: {f.handoffBy || "-"}</span>
-                        {f.handoffAt && (
-                          <span>{new Date(f.handoffAt).toLocaleString("ja-JP")}</span>
-                        )}
-                        <span className="inline-flex items-center gap-1">
-                          <FileText className="w-3.5 h-3.5" />
-                          {f.documents.length}件
-                        </span>
+              {handoffFolders.map((f, idx) => (
+                <div key={f.id} className="relative">
+                  <Link
+                    href={`/folders/${f.id}`}
+                    className="flex items-center justify-between gap-3 bg-cyan-50 border border-cyan-200 rounded-xl p-3 md:p-4 hover:bg-cyan-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Send className="w-5 h-5 text-cyan-600 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-base font-medium text-gray-900 truncate">{f.name}</p>
+                        <div className="flex items-center gap-2 text-sm text-gray-500 mt-0.5">
+                          <span>引継元: {f.handoffBy || "-"}</span>
+                          {f.handoffAt && (
+                            <span>{new Date(f.handoffAt).toLocaleString("ja-JP")}</span>
+                          )}
+                          <span className="inline-flex items-center gap-1">
+                            <FileText className="w-3.5 h-3.5" />
+                            {f.documents.length}件
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                </Link>
+                    <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                  </Link>
+                  {idx === 0 && (
+                    <div className="absolute left-4 -bottom-2 translate-y-full bg-amber-500 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
+                      引き継ぎフォルダを確認しましょう →
+                      <div className="absolute bottom-full left-6 border-8 border-transparent border-b-amber-500" />
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -416,7 +423,17 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {incompleteFolders.map((f) => renderFolderCard(f, getBTypeBadge(f)))}
+                    {incompleteFolders.map((f, idx) => (
+                      <div key={f.id} className="relative">
+                        {renderFolderCard(f, getBTypeBadge(f))}
+                        {idx === 0 && (
+                          <div className="absolute left-4 -bottom-2 translate-y-full bg-amber-500 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
+                            このフォルダを開いて確認しましょう →
+                            <div className="absolute bottom-full left-6 border-8 border-transparent border-b-amber-500" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
