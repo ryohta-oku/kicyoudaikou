@@ -368,56 +368,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* A型: 引き継ぎフォルダセクション */}
-      {userRole === "user_a" && (() => {
-        const handoffFolders = folders.filter((f) => f.handoffStatus === "handed_off");
-        if (handoffFolders.length === 0) return null;
-        return (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base md:text-lg font-bold text-gray-900">引き継ぎフォルダ</h2>
-              <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-cyan-500 rounded-full">
-                {handoffFolders.length}
-              </span>
-            </div>
-            <div className="space-y-2">
-              {handoffFolders.map((f, idx) => (
-                <div key={f.id} className="relative">
-                  <Link
-                    href={`/folders/${f.id}`}
-                    className="flex items-center justify-between gap-3 bg-cyan-50 border border-cyan-200 rounded-xl p-3 md:p-4 hover:bg-cyan-100 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Send className="w-5 h-5 text-cyan-600 flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-base font-medium text-gray-900 truncate">{f.name}</p>
-                        <div className="flex items-center gap-2 text-sm text-gray-500 mt-0.5">
-                          <span>引継元: {f.handoffBy || "-"}</span>
-                          {f.handoffAt && (
-                            <span>{new Date(f.handoffAt).toLocaleString("ja-JP")}</span>
-                          )}
-                          <span className="inline-flex items-center gap-1">
-                            <FileText className="w-3.5 h-3.5" />
-                            {f.documents.length}件
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                  </Link>
-                  {idx === 0 && (
-                    <div className="absolute left-4 -bottom-2 translate-y-full bg-amber-500 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
-                      引き継ぎフォルダを確認しましょう →
-                      <div className="absolute bottom-full left-6 border-8 border-transparent border-b-amber-500" />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
       {/* フォルダ一覧 */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -573,8 +523,160 @@ export default function DashboardPage() {
             </div>
           );
         })()
+      ) : userRole === "user_a" ? (
+        /* ===== A型専用: タスク状況別ビュー ===== */
+        (() => {
+          const isFolderCompleted = (f: Folder) =>
+            f.documents.length > 0 &&
+            f.documents.every((d) => d.status === "exported" || d.status === "reviewed");
+
+          // 引き継ぎフォルダ（未処理のみ）
+          const handoffPending = folders.filter(
+            (f) => f.handoffStatus === "handed_off" && !isFolderCompleted(f)
+          );
+          // 自分の作業中フォルダ（引き継ぎ以外の未完了）
+          const ownIncomplete = folders.filter(
+            (f) => f.handoffStatus !== "handed_off" && !isFolderCompleted(f)
+          );
+          // 完了済み（引き継ぎ・自作問わず）
+          const completedFolders = folders.filter((f) => isFolderCompleted(f));
+
+          const getATypeBadge = (f: Folder): { label: string; color: string } => {
+            if (f.documents.length === 0) return { label: "ファイルなし", color: "bg-gray-100 text-gray-600" };
+            const status = getFolderStatus(f);
+            if (f.handoffStatus === "handed_off") return { label: "引き継ぎ", color: "bg-cyan-100 text-cyan-800" };
+            return { label: STATUS_LABELS[status] || status, color: STATUS_COLORS[status] || "bg-gray-100 text-gray-800" };
+          };
+
+          const renderFolderCard = (folder: Folder, badge?: { label: string; color: string }, isHandoff?: boolean) => (
+            <Link
+              key={folder.id}
+              href={`/folders/${folder.id}`}
+              className={cn(
+                "flex items-center justify-between gap-3 rounded-xl border p-3 md:p-4 transition-colors",
+                isHandoff
+                  ? "bg-cyan-50 border-cyan-200 hover:bg-cyan-100"
+                  : "bg-white hover:bg-gray-50"
+              )}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                {isHandoff ? (
+                  <Send className="w-5 h-5 text-cyan-600 flex-shrink-0" />
+                ) : (
+                  <FolderOpen className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                )}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-base font-medium text-gray-900 truncate">{folder.name}</p>
+                    {badge && (
+                      <span className={cn("inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium", badge.color)}>
+                        {badge.label}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
+                    {isHandoff && folder.handoffBy && (
+                      <span>引継元: {folder.handoffBy}</span>
+                    )}
+                    <span>{new Date(folder.createdAt).toLocaleDateString("ja-JP")}</span>
+                    <span className="inline-flex items-center gap-1">
+                      <FileText className="w-3.5 h-3.5" />
+                      {folder.documents.length}件
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(folder.id); }}
+                  disabled={deletingId === folder.id}
+                  className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {deletingId === folder.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </button>
+                <ChevronRight className="w-4 h-4 text-gray-400" />
+              </div>
+            </Link>
+          );
+
+          return (
+            <div className="space-y-6">
+              {/* 引き継ぎフォルダ（未処理） */}
+              {handoffPending.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Send className="w-5 h-5 text-cyan-500" />
+                    <h2 className="text-base md:text-lg font-bold text-gray-900">引き継ぎフォルダ</h2>
+                    <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-cyan-500 rounded-full">
+                      {handoffPending.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {handoffPending.map((f, idx) => (
+                      <div key={f.id} className="relative">
+                        {renderFolderCard(f, getATypeBadge(f), true)}
+                        {idx === 0 && (
+                          <div className="absolute left-4 -bottom-2 translate-y-full bg-amber-500 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
+                            引き継ぎフォルダを確認しましょう →
+                            <div className="absolute bottom-full left-6 border-8 border-transparent border-b-amber-500" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 自分のフォルダ（作業中） */}
+              {ownIncomplete.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-amber-500" />
+                    <h2 className="text-base md:text-lg font-bold text-gray-900">作業中</h2>
+                    <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-amber-500 rounded-full">
+                      {ownIncomplete.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {ownIncomplete.map((f) => renderFolderCard(f, getATypeBadge(f)))}
+                  </div>
+                </div>
+              )}
+
+              {/* 引き継ぎも作業中もない場合 */}
+              {handoffPending.length === 0 && ownIncomplete.length === 0 && completedFolders.length === 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                  <p className="text-sm text-green-700">現在タスクはありません</p>
+                </div>
+              )}
+
+              {/* 完了済み */}
+              {completedFolders.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-5 h-5 text-green-500" />
+                    <h2 className="text-base md:text-lg font-bold text-gray-900">完了済み</h2>
+                    <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-green-500 rounded-full">
+                      {completedFolders.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {completedFolders.map((f) => renderFolderCard(f, {
+                      label: f.handoffStatus === "handed_off" ? "引き継ぎ完了" : "エクスポート済",
+                      color: f.handoffStatus === "handed_off" ? "bg-cyan-100 text-cyan-800" : "bg-emerald-100 text-emerald-800",
+                    }))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()
       ) : (
-        /* ===== 通常のフォルダ一覧（A型・管理者等） ===== */
+        /* ===== 管理者等のフォルダ一覧 ===== */
         <>
           {/* デスクトップ: テーブル表示 */}
           <div className="hidden md:block bg-white rounded-xl border overflow-hidden">
