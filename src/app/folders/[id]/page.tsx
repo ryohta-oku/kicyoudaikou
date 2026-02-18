@@ -458,6 +458,22 @@ export default function FolderDetailPage({
     }
   }, []);
 
+  // A型: 引き継ぎフォルダは自動的に仕訳分類ページへ遷移
+  const autoClassifyRedirected = useRef(false);
+  useEffect(() => {
+    if (!folder || !canViewJournal) return;
+    if (folder.handoffStatus !== "handed_off") return;
+    // ocr_confirmed（未分類）or classified（確認待ち）がある場合にリダイレクト
+    const hasWorkToDo = folder.documents.some(
+      d => d.status === "ocr_confirmed" || d.status === "classified"
+    );
+    if (!hasWorkToDo) return;
+    if (autoClassifyRedirected.current) return;
+
+    autoClassifyRedirected.current = true;
+    router.push(`/folders/${id}/classify`);
+  }, [folder, canViewJournal, router, id]);
+
   // ocrDocsData の変更を監視して、全ページ確認済みのドキュメントを自動検出
   useEffect(() => {
     Object.entries(ocrDocsData).forEach(([docId, doc]) => {
@@ -606,6 +622,16 @@ export default function FolderDetailPage({
                     }),
                   });
                   if (!res.ok) throw new Error("引き継ぎに失敗しました");
+                  // バックグラウンドでAI仕訳分類を先行開始（A型の待ち時間削減）
+                  folder.documents
+                    .filter(d => d.status === "ocr_confirmed")
+                    .forEach(doc => {
+                      fetch("/api/classify", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ documentId: doc.id }),
+                      }).catch(() => {});
+                    });
                   await fetchFolder();
                 } catch (err) {
                   alert(err instanceof Error ? err.message : "引き継ぎに失敗しました");
