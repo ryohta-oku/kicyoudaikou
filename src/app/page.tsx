@@ -328,29 +328,22 @@ export default function DashboardPage() {
       ) : userRole === "user_b" ? (
         /* ===== B型専用: タスク状況別ビュー ===== */
         (() => {
-          // B型のフォルダを3カテゴリに分類
-          const ocrIncompleteFolders = folders.filter((f) => {
-            if (f.handoffStatus === "handed_off") return false;
-            if (f.documents.length === 0) return true;
-            return f.documents.some(
-              (d) =>
-                d.status === "uploaded" ||
-                d.status === "ocr_processing" ||
-                d.status === "ocr_complete"
+          // B型のフォルダを2カテゴリに分類: 未完了（引き継ぎ前）と完了（引き継ぎ済）
+          const incompleteFolders = folders.filter((f) => f.handoffStatus !== "handed_off");
+          const completedFolders = folders.filter((f) => f.handoffStatus === "handed_off");
+
+          // 未完了フォルダのサブ分類（バッジ用）
+          const getBTypeBadge = (f: Folder): { label: string; color: string } => {
+            if (f.documents.length === 0) return { label: "ファイルなし", color: "bg-gray-100 text-gray-600" };
+            const hasIncomplete = f.documents.some(
+              (d) => d.status === "uploaded" || d.status === "ocr_processing" || d.status === "ocr_complete"
             );
-          });
-          const readyForHandoff = folders.filter((f) => {
-            if (f.handoffStatus === "handed_off") return false;
-            if (f.documents.length === 0) return false;
-            return f.documents.every(
-              (d) =>
-                d.status === "ocr_confirmed" ||
-                d.status === "classified" ||
-                d.status === "reviewed" ||
-                d.status === "exported"
-            );
-          });
-          const handedOff = folders.filter((f) => f.handoffStatus === "handed_off");
+            if (hasIncomplete) {
+              const status = getFolderStatus(f);
+              return { label: STATUS_LABELS[status] || status, color: STATUS_COLORS[status] || "bg-gray-100 text-gray-800" };
+            }
+            return { label: "引き継ぎ可能", color: "bg-green-100 text-green-800" };
+          };
 
           const renderFolderCard = (folder: Folder, badge?: { label: string; color: string }) => (
             <Link
@@ -397,60 +390,40 @@ export default function DashboardPage() {
 
           return (
             <div className="space-y-6">
-              {/* OCR確認待ち（未完了タスク） */}
-              {ocrIncompleteFolders.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-amber-500" />
-                    <h2 className="text-base md:text-lg font-bold text-gray-900">OCR確認待ち</h2>
+              {/* 未完了タスク */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-amber-500" />
+                  <h2 className="text-base md:text-lg font-bold text-gray-900">未完了タスク</h2>
+                  {incompleteFolders.length > 0 && (
                     <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold text-white bg-amber-500 rounded-full">
-                      {ocrIncompleteFolders.length}
+                      {incompleteFolders.length}
                     </span>
-                  </div>
-                  <div className="space-y-2">
-                    {ocrIncompleteFolders.map((f) => {
-                      const status = getFolderStatus(f);
-                      return renderFolderCard(f, {
-                        label: STATUS_LABELS[status] || status,
-                        color: STATUS_COLORS[status] || "bg-gray-100 text-gray-800",
-                      });
-                    })}
-                  </div>
+                  )}
                 </div>
-              )}
+                {incompleteFolders.length === 0 ? (
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                    <p className="text-sm text-green-700">すべてのタスクが完了しています</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {incompleteFolders.map((f) => renderFolderCard(f, getBTypeBadge(f)))}
+                  </div>
+                )}
+              </div>
 
-              {/* 引き継ぎ可能（完了タスク） */}
-              {readyForHandoff.length > 0 && (
+              {/* 完了済みタスク */}
+              {completedFolders.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <Send className="w-5 h-5 text-green-500" />
-                    <h2 className="text-base md:text-lg font-bold text-gray-900">引き継ぎ可能</h2>
+                    <Check className="w-5 h-5 text-green-500" />
+                    <h2 className="text-base md:text-lg font-bold text-gray-900">完了済み</h2>
                     <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold text-white bg-green-500 rounded-full">
-                      {readyForHandoff.length}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500 -mt-1">OCR確認が完了しています。フォルダを開いてA型利用者に引き継ぎしてください。</p>
-                  <div className="space-y-2">
-                    {readyForHandoff.map((f) => renderFolderCard(f, {
-                      label: "引き継ぎ可能",
-                      color: "bg-green-100 text-green-800",
-                    }))}
-                  </div>
-                </div>
-              )}
-
-              {/* 引き継ぎ済 */}
-              {handedOff.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Check className="w-5 h-5 text-cyan-500" />
-                    <h2 className="text-base md:text-lg font-bold text-gray-900">引き継ぎ済</h2>
-                    <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold text-white bg-cyan-500 rounded-full">
-                      {handedOff.length}
+                      {completedFolders.length}
                     </span>
                   </div>
                   <div className="space-y-2">
-                    {handedOff.map((f) => renderFolderCard(f, {
+                    {completedFolders.map((f) => renderFolderCard(f, {
                       label: "引き継ぎ済",
                       color: "bg-cyan-100 text-cyan-800",
                     }))}
