@@ -600,6 +600,7 @@ export default function FolderDetailPage({
           </div>
         </div>
       )}
+      {/* B型: 引き継ぎ可能バナー（インライン通知のみ） */}
       {userRole === "user_b" &&
         !folder.handoffStatus &&
         folder.documents.length > 0 &&
@@ -610,63 +611,12 @@ export default function FolderDetailPage({
             d.status === "reviewed" ||
             d.status === "exported"
         ) && (
-          <>
-          <div className="flex items-center justify-between gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-            <div className="flex items-center gap-3">
-              <Send className="h-5 w-5 text-green-600 flex-shrink-0" />
-              <span className="text-sm text-green-800">
-                全ドキュメントのOCR確認が完了しました。A型利用者に引き継ぎできます。
-              </span>
-            </div>
-            <button
-              onClick={async () => {
-                if (!confirm("このフォルダをA型利用者に引き継ぎますか？")) return;
-                setHandingOff(true);
-                try {
-                  const userName = session?.user?.name || session?.user?.email || "";
-                  const res = await fetch(`/api/folders/${id}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      handoffStatus: "handed_off",
-                      handoffBy: userName,
-                    }),
-                  });
-                  if (!res.ok) throw new Error("引き継ぎに失敗しました");
-                  // バックグラウンドでAI仕訳分類を先行開始（A型の待ち時間削減）
-                  folder.documents
-                    .filter(d => d.status === "ocr_confirmed")
-                    .forEach(doc => {
-                      fetch("/api/classify", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ documentId: doc.id }),
-                      }).catch(() => {});
-                    });
-                  await fetchFolder();
-                } catch (err) {
-                  alert(err instanceof Error ? err.message : "引き継ぎに失敗しました");
-                } finally {
-                  setHandingOff(false);
-                }
-              }}
-              disabled={handingOff}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
-            >
-              {handingOff ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
-              引き継ぎ完了
-            </button>
-          </div>
-          <div className="flex justify-end -mt-3">
-            <span className="bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce">
-              ↑ A型利用者に引き継ぎしましょう
+          <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+            <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
+            <span className="text-sm text-green-800">
+              全ドキュメントのOCR確認が完了しました。
             </span>
           </div>
-          </>
         )}
 
       {/* フォルダ詳細情報カード */}
@@ -1854,6 +1804,67 @@ export default function FolderDetailPage({
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* B型: フローティング引き継ぎ完了ボタン */}
+      {userRole === "user_b" &&
+        !folder.handoffStatus &&
+        folder.documents.length > 0 &&
+        folder.documents.every(
+          (d) =>
+            d.status === "ocr_confirmed" ||
+            d.status === "classified" ||
+            d.status === "reviewed" ||
+            d.status === "exported"
+        ) && (
+        <div className="fixed bottom-6 right-6 z-40">
+          <div className="relative">
+            <span className="absolute -top-10 right-0 bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">
+              全て確認済み！引き継ぎしましょう ↓
+            </span>
+            <button
+              onClick={async () => {
+                if (!confirm("このフォルダをA型利用者に引き継ぎますか？")) return;
+                setHandingOff(true);
+                try {
+                  const userName = session?.user?.name || session?.user?.email || "";
+                  const res = await fetch(`/api/folders/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      handoffStatus: "handed_off",
+                      handoffBy: userName,
+                    }),
+                  });
+                  if (!res.ok) throw new Error("引き継ぎに失敗しました");
+                  folder.documents
+                    .filter(d => d.status === "ocr_confirmed")
+                    .forEach(doc => {
+                      fetch("/api/classify", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ documentId: doc.id }),
+                      }).catch(() => {});
+                    });
+                  await fetchFolder();
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : "引き継ぎに失敗しました");
+                } finally {
+                  setHandingOff(false);
+                }
+              }}
+              disabled={handingOff}
+              className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-white bg-green-600 hover:bg-green-700 rounded-full shadow-xl transition-colors disabled:opacity-50"
+            >
+              {handingOff ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
+              引き継ぎ完了
+            </button>
           </div>
         </div>
       )}
