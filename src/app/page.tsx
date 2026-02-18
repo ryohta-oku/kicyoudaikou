@@ -175,9 +175,9 @@ export default function DashboardPage() {
           </button>
           {/* ステップガイド: 未完了タスクが無い＆アップロード未展開時に表示 */}
           {!showUpload && !loading && folders.filter((f) => userRole === "user_b" ? f.handoffStatus !== "handed_off" : true).filter((f) => f.documents.length > 0).length === 0 && (
-            <div className="absolute top-full right-0 mt-2 whitespace-nowrap bg-blue-600 text-white text-sm rounded-lg px-4 py-2 shadow-lg animate-bounce z-10">
-              まずはここからファイルをアップロード
-              <div className="absolute bottom-full right-6 border-8 border-transparent border-b-blue-600" />
+            <div className="absolute top-full right-2 mt-3 whitespace-nowrap bg-amber-500 text-white text-sm font-medium rounded-full px-5 py-2 shadow-lg animate-bounce z-10">
+              ↑ ここから始めましょう！
+              <div className="absolute bottom-full right-8 border-8 border-transparent border-b-amber-500" />
             </div>
           )}
         </div>
