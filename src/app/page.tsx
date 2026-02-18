@@ -165,13 +165,22 @@ export default function DashboardPage() {
             アップロードされたフォルダの管理
           </p>
         </div>
-        <button
-          onClick={() => setShowUpload(!showUpload)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex-shrink-0"
-        >
-          <Upload className="w-4 h-4" />
-          <span className="hidden sm:inline">ファイルを</span>アップロード
-        </button>
+        <div className="relative flex-shrink-0">
+          <button
+            onClick={() => setShowUpload(!showUpload)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+          >
+            <Upload className="w-4 h-4" />
+            <span className="hidden sm:inline">ファイルを</span>アップロード
+          </button>
+          {/* ステップガイド: 未完了タスクが無い＆アップロード未展開時に表示 */}
+          {!showUpload && !loading && folders.filter((f) => userRole === "user_b" ? f.handoffStatus !== "handed_off" : true).filter((f) => f.documents.length > 0).length === 0 && (
+            <div className="absolute top-full right-0 mt-2 whitespace-nowrap bg-blue-600 text-white text-sm rounded-lg px-4 py-2 shadow-lg animate-bounce z-10">
+              まずはここからファイルをアップロード
+              <div className="absolute bottom-full right-6 border-8 border-transparent border-b-blue-600" />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 重複アラート */}
