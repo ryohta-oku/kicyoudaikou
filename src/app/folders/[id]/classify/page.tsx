@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ClassifyEditor, { type ClassifyEntry } from "@/components/ClassifyEditor";
+import { useWorkLogger } from "@/hooks/useWorkLogger";
 
 interface Document {
   id: string;
@@ -62,6 +63,15 @@ export default function ClassifyPage({
   const classifyStartedRef = useRef(false);
 
   const effectiveRole = getEffectiveRole(session?.user?.role || "");
+
+  // 工数記録: 仕訳分類ページの滞在時間
+  useWorkLogger("classify", effectiveRole !== "user_b", {
+    sessionId: typeof window !== "undefined" ? localStorage.getItem("workSessionId") : null,
+    userId: session?.user?.id || "",
+    userName: session?.user?.name || "",
+    userRole: effectiveRole,
+    folderId: id,
+  });
 
   // B型利用者はアクセス不可 → フォルダ詳細にリダイレクト
   useEffect(() => {

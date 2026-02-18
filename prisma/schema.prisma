@@ -119,6 +119,39 @@ model JournalEntry {
   page     DocumentPage? @relation(fields: [pageId], references: [id])
 }
 
+// 作業セッション（全体時間を管理）
+model WorkSession {
+  id            String    @id @default(uuid())
+  userId        String
+  userName      String    @default("")
+  userRole      String    @default("")
+  folderId      String?
+  folderName    String    @default("")
+  status        String    @default("active")  // "active", "completed"
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  totalSec      Int       @default(0)
+  documentCount Int       @default(0)
+  workLogs      WorkLog[]
+}
+
+// 各工程の詳細ログ
+model WorkLog {
+  id          String       @id @default(uuid())
+  sessionId   String?
+  session     WorkSession? @relation(fields: [sessionId], references: [id])
+  userId      String
+  userName    String       @default("")
+  userRole    String       @default("")
+  folderId    String?
+  folderName  String       @default("")
+  documentId  String?
+  action      String       // "work_session", "upload", "ocr_confirm", "handoff", "classify_complete", "entry_confirm", "export"
+  workType    String       // "preparation", "ocr_review", "classify", "review", "export", "upload", "handoff"
+  durationSec Int          @default(0)
+  createdAt   DateTime     @default(now())
+}
+
 // 勘定科目マスター
 model Account {
   id          String       @id @default(uuid())

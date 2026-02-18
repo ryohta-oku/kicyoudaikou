@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
+import { getEffectiveRole } from "@/lib/roleSimulation";
 
 export async function GET(
   _request: NextRequest,
@@ -60,6 +62,52 @@ export async function PATCH(
       where: { id },
       data,
     });
+
+    // WorkLog: 引き継ぎ完了を記録 + セッション自動完了
+    if (handoffStatus === "handed_off") {
+      try {
+        const userSession = await auth();
+        if (userSession?.user) {
+          const effectiveRole = getEffectiveRole(userSession.user.role || "");
+          await prisma.workLog.create({
+            data: {
+              userId: userSession.user.id!,
+              userName: userSession.user.name || "",
+              userRole: effectiveRole,
+              folderId: id,
+              action: "handoff",
+              workType: "handoff",
+            },
+          });
+
+          // B型のセッションを自動完了
+          const activeSessions = await prisma.workSession.findMany({
+            where: { userId: userSession.user.id!, status: "active" },
+            include: { workLogs: true },
+          });
+          for (const ws of activeSessions) {
+            const totalSec = ws.workLogs.reduce((sum, l) => sum + l.durationSec, 0);
+            const folderData = await prisma.folder.findUnique({
+              where: { id },
+              include: { documents: { select: { id: true } } },
+            });
+            await prisma.workSession.update({
+              where: { id: ws.id },
+              data: {
+                status: "completed",
+                completedAt: new Date(),
+                totalSec,
+                documentCount: folderData?.documents.length || 0,
+                folderId: id,
+                folderName: folderData?.name || "",
+              },
+            });
+          }
+        }
+      } catch (logError) {
+        console.error("WorkLog create error (handoff):", logError);
+      }
+    }
 
     return NextResponse.json({ folder });
   } catch (error) {

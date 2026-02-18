@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { classifyWithAI, classifyText, parseOCRText } from "@/lib/classifier";
+import { auth } from "@/lib/auth";
+import { getEffectiveRole } from "@/lib/roleSimulation";
 
 export async function POST(request: NextRequest) {
   try {
@@ -138,6 +140,27 @@ export async function POST(request: NextRequest) {
       where: { id: documentId },
       data: { status: "classified" },
     });
+
+    // WorkLog: 分類完了を記録
+    try {
+      const userSession = await auth();
+      if (userSession?.user) {
+        const effectiveRole = getEffectiveRole(userSession.user.role || "");
+        await prisma.workLog.create({
+          data: {
+            userId: userSession.user.id!,
+            userName: userSession.user.name || "",
+            userRole: effectiveRole,
+            folderId: document.folderId || null,
+            documentId,
+            action: "classify_complete",
+            workType: "classify",
+          },
+        });
+      }
+    } catch (logError) {
+      console.error("WorkLog create error (classify):", logError);
+    }
 
     return NextResponse.json({ entries });
   } catch (error) {

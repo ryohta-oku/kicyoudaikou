@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
+import { getEffectiveRole } from "@/lib/roleSimulation";
 
 // 仕訳エントリの更新
 export async function PATCH(request: NextRequest) {
@@ -15,6 +17,33 @@ export async function PATCH(request: NextRequest) {
       where: { id },
       data,
     });
+
+    // WorkLog: 仕訳エントリ確認を記録
+    if (data.isConfirmed === true) {
+      try {
+        const userSession = await auth();
+        if (userSession?.user) {
+          const effectiveRole = getEffectiveRole(userSession.user.role || "");
+          const entryWithDoc = await prisma.journalEntry.findUnique({
+            where: { id },
+            select: { documentId: true, document: { select: { folderId: true } } },
+          });
+          await prisma.workLog.create({
+            data: {
+              userId: userSession.user.id!,
+              userName: userSession.user.name || "",
+              userRole: effectiveRole,
+              folderId: entryWithDoc?.document?.folderId || null,
+              documentId: entryWithDoc?.documentId || null,
+              action: "entry_confirm",
+              workType: "review",
+            },
+          });
+        }
+      } catch (logError) {
+        console.error("WorkLog create error (entry_confirm):", logError);
+      }
+    }
 
     return NextResponse.json({ entry });
   } catch (error) {

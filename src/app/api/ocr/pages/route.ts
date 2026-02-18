@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
+import { getEffectiveRole } from "@/lib/roleSimulation";
 
 // ページのOCRテキストを更新
 export async function PATCH(request: NextRequest) {
@@ -22,6 +24,33 @@ export async function PATCH(request: NextRequest) {
         ...(memo !== undefined && { memo }),
       },
     });
+
+    // WorkLog: OCR確認完了を記録
+    if (isConfirmed === true) {
+      try {
+        const userSession = await auth();
+        if (userSession?.user) {
+          const effectiveRole = getEffectiveRole(userSession.user.role || "");
+          const pageWithDoc = await prisma.documentPage.findUnique({
+            where: { id: pageId },
+            select: { documentId: true, document: { select: { folderId: true } } },
+          });
+          await prisma.workLog.create({
+            data: {
+              userId: userSession.user.id!,
+              userName: userSession.user.name || "",
+              userRole: effectiveRole,
+              folderId: pageWithDoc?.document?.folderId || null,
+              documentId: pageWithDoc?.documentId || null,
+              action: "ocr_confirm",
+              workType: "ocr_review",
+            },
+          });
+        }
+      } catch (logError) {
+        console.error("WorkLog create error (ocr_confirm):", logError);
+      }
+    }
 
     return NextResponse.json({ page });
   } catch (error) {

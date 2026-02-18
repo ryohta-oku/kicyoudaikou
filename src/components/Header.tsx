@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { FileText, Home, Settings, Building2, Plus, ChevronDown, Search, Shield, LogOut, Menu, User, ShieldCheck, X, Eye } from "lucide-react";
+import { FileText, Home, Settings, Building2, Plus, ChevronDown, Search, Shield, LogOut, Menu, User, ShieldCheck, X, Eye, Clock } from "lucide-react";
 import { getSelectedClientId, setSelectedClientId } from "@/lib/client";
 import { getSimulatedRole, setSimulatedRole } from "@/lib/roleSimulation";
 
@@ -39,6 +39,7 @@ export default function Header() {
 
   const navItems = [
     { href: "/", label: "ダッシュボード", icon: Home },
+    { href: "/worklogs", label: "工数管理", icon: Clock },
     { href: "/accounts", label: "勘定科目管理", icon: Settings },
     { href: "/clients", label: "得意先管理", icon: Building2 },
   ];

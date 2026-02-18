@@ -27,6 +27,7 @@ import { getSelectedClientId } from "@/lib/client";
 import Image from "next/image";
 import OCREditor, { type PageUpdateData } from "@/components/OCREditor";
 import SubAccountCombobox from "@/components/SubAccountCombobox";
+import { useWorkLogger } from "@/hooks/useWorkLogger";
 
 interface AccountData {
   id: string;
@@ -140,6 +141,16 @@ export default function FolderDetailPage({
   const [dismissingDuplicate, setDismissingDuplicate] = useState(false);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const [handingOff, setHandingOff] = useState(false);
+
+  // 工数記録: ロールに応じてworkTypeを切り替え
+  const workType = userRole === "user_b" ? "ocr_review" : "review";
+  useWorkLogger(workType, true, {
+    sessionId: typeof window !== "undefined" ? localStorage.getItem("workSessionId") : null,
+    userId: session?.user?.id || "",
+    userName: session?.user?.name || "",
+    userRole: userRole,
+    folderId: id,
+  });
 
   const fetchFolder = useCallback(async () => {
     try {

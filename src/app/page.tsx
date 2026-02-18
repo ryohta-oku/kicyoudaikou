@@ -22,10 +22,12 @@ import {
   ArrowRight,
   Check,
   Clock,
+  Timer,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
 import FileUpload from "@/components/FileUpload";
+import { useWorkLogger } from "@/hooks/useWorkLogger";
 
 interface FolderDocument {
   id: string;
@@ -71,6 +73,17 @@ export default function DashboardPage() {
   const [scanFiles, setScanFiles] = useState<{ name: string; size: number; modifiedAt: string }[]>([]);
   const [scanConfigured, setScanConfigured] = useState(false);
   const [scanImporting, setScanImporting] = useState(false);
+  const [isWorkStarted, setIsWorkStarted] = useState(false);
+  const [workSessionId, setWorkSessionId] = useState<string | null>(null);
+  const [workStarting, setWorkStarting] = useState(false);
+
+  // 作業開始後のダッシュボード滞在時間を計測
+  useWorkLogger("preparation", isWorkStarted, {
+    sessionId: workSessionId,
+    userId: session?.user?.id || "",
+    userName: session?.user?.name || "",
+    userRole: userRole,
+  });
   const checkScanFolder = useCallback(async () => {
     try {
       const res = await fetch("/api/scan");
@@ -129,6 +142,38 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // localStorage からセッションIDを復元
+  useEffect(() => {
+    const storedSessionId = localStorage.getItem("workSessionId");
+    if (storedSessionId) {
+      setWorkSessionId(storedSessionId);
+      setIsWorkStarted(true);
+    }
+  }, []);
+
+  const handleWorkStart = async () => {
+    setWorkStarting(true);
+    try {
+      const res = await fetch("/api/worksessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (res.ok && data.session) {
+        const sid = data.session.id;
+        setWorkSessionId(sid);
+        setIsWorkStarted(true);
+        setShowUpload(true);
+        localStorage.setItem("workSessionId", sid);
+      }
+    } catch (error) {
+      console.error("Failed to start work session:", error);
+    } finally {
+      setWorkStarting(false);
+    }
+  };
+
   useEffect(() => {
     fetchFolders();
     fetchDuplicates();
@@ -166,17 +211,32 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="relative flex-shrink-0">
-          <button
-            onClick={() => setShowUpload(!showUpload)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-          >
-            <Upload className="w-4 h-4" />
-            <span className="hidden sm:inline">ファイルを</span>アップロード
-          </button>
-          {/* ステップガイド: 未完了タスクが無い＆アップロード未展開時に表示 */}
-          {!showUpload && !loading && folders.filter((f) => userRole === "user_b" ? f.handoffStatus !== "handed_off" : true).filter((f) => f.documents.length > 0).length === 0 && (
+          {isWorkStarted ? (
+            <button
+              onClick={() => setShowUpload(!showUpload)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              <Upload className="w-4 h-4" />
+              <span className="hidden sm:inline">ファイルを</span>アップロード
+            </button>
+          ) : (
+            <button
+              onClick={handleWorkStart}
+              disabled={workStarting}
+              className="flex items-center gap-2 px-5 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors text-base font-bold shadow-lg disabled:opacity-50"
+            >
+              {workStarting ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Timer className="w-5 h-5" />
+              )}
+              作業開始
+            </button>
+          )}
+          {/* ステップガイド: 作業未開始時に表示 */}
+          {!isWorkStarted && !loading && (
             <div className="absolute top-full right-2 mt-3 whitespace-nowrap bg-amber-500 text-white text-sm font-medium rounded-full px-5 py-2 shadow-lg animate-bounce z-10">
-              ↑ ここから始めましょう！
+              ↑ まずここから始めましょう！
               <div className="absolute bottom-full right-8 border-8 border-transparent border-b-amber-500" />
             </div>
           )}
@@ -333,13 +393,28 @@ export default function DashboardPage() {
           <p className="text-xs md:text-sm text-gray-500 mb-6 px-4">
             PDF・画像ファイルをアップロードして記帳作業を始めましょう
           </p>
-          <button
-            onClick={() => setShowUpload(true)}
-            className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-          >
-            <Upload className="w-4 h-4" />
-            アップロード
-          </button>
+          {isWorkStarted ? (
+            <button
+              onClick={() => setShowUpload(true)}
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              <Upload className="w-4 h-4" />
+              アップロード
+            </button>
+          ) : (
+            <button
+              onClick={handleWorkStart}
+              disabled={workStarting}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors text-base font-bold shadow-lg disabled:opacity-50"
+            >
+              {workStarting ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Timer className="w-5 h-5" />
+              )}
+              作業開始
+            </button>
+          )}
         </div>
       ) : userRole === "user_b" ? (
         /* ===== B型専用: タスク状況別ビュー ===== */

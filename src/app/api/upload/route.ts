@@ -5,6 +5,8 @@ import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { getUploadBaseDir } from "@/lib/storage";
 import convert from "heic-convert";
+import { auth } from "@/lib/auth";
+import { getEffectiveRole } from "@/lib/roleSimulation";
 
 const ACCEPTED_MIME_TYPES = [
   "application/pdf",
@@ -126,6 +128,27 @@ export async function POST(request: NextRequest) {
           status: "uploaded",
         },
       });
+    }
+
+    // WorkLog: アップロード成功を記録
+    try {
+      const userSession = await auth();
+      if (userSession?.user) {
+        const effectiveRole = getEffectiveRole(userSession.user.role || "");
+        await prisma.workLog.create({
+          data: {
+            userId: userSession.user.id!,
+            userName: userSession.user.name || "",
+            userRole: effectiveRole,
+            folderId: folderId || null,
+            documentId: document.id,
+            action: "upload",
+            workType: "upload",
+          },
+        });
+      }
+    } catch (logError) {
+      console.error("WorkLog create error (upload):", logError);
     }
 
     return NextResponse.json({ document: { id: document.id, filename: document.filename, filepath: document.filepath, fileType: document.fileType, status: document.status } });

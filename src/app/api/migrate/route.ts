@@ -228,6 +228,52 @@ export async function GET() {
       results.push("SubAccount テーブルは既に存在します");
     }
 
+    // --- WorkSession テーブル ---
+    if (!existingTables.includes("WorkSession")) {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE "WorkSession" (
+          "id" TEXT PRIMARY KEY NOT NULL,
+          "userId" TEXT NOT NULL,
+          "userName" TEXT NOT NULL DEFAULT '',
+          "userRole" TEXT NOT NULL DEFAULT '',
+          "folderId" TEXT,
+          "folderName" TEXT NOT NULL DEFAULT '',
+          "status" TEXT NOT NULL DEFAULT 'active',
+          "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "completedAt" DATETIME,
+          "totalSec" INTEGER NOT NULL DEFAULT 0,
+          "documentCount" INTEGER NOT NULL DEFAULT 0
+        )
+      `);
+      results.push("✓ WorkSession テーブルを作成しました");
+    } else {
+      results.push("WorkSession テーブルは既に存在します");
+    }
+
+    // --- WorkLog テーブル ---
+    if (!existingTables.includes("WorkLog")) {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE "WorkLog" (
+          "id" TEXT PRIMARY KEY NOT NULL,
+          "sessionId" TEXT,
+          "userId" TEXT NOT NULL,
+          "userName" TEXT NOT NULL DEFAULT '',
+          "userRole" TEXT NOT NULL DEFAULT '',
+          "folderId" TEXT,
+          "folderName" TEXT NOT NULL DEFAULT '',
+          "documentId" TEXT,
+          "action" TEXT NOT NULL,
+          "workType" TEXT NOT NULL,
+          "durationSec" INTEGER NOT NULL DEFAULT 0,
+          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY ("sessionId") REFERENCES "WorkSession" ("id")
+        )
+      `);
+      results.push("✓ WorkLog テーブルを作成しました");
+    } else {
+      results.push("WorkLog テーブルは既に存在します");
+    }
+
     // 最終テーブル一覧を確認
     const finalTables = await prisma.$queryRawUnsafe<{ name: string }[]>(
       "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
