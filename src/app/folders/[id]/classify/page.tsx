@@ -474,41 +474,22 @@ export default function ClassifyPage({
           </div>
         ))}
 
-      {/* 全ドキュメント完了時 */}
+      {/* フローティング仕訳完了ボタン */}
       {allDone && (
-        <>
-          <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-            <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto mb-2" />
-            <p className="text-sm font-medium text-green-900 mb-4">
-              全ドキュメントの仕訳確認が完了しました
-            </p>
+        <div className="fixed bottom-6 right-6 z-40">
+          <div className="relative">
+            <span className="absolute -top-10 right-0 bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">
+              全て確認済み！次へ進みましょう ↓
+            </span>
             <Link
               href={`/folders/${id}`}
-              className={cn(
-                "inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium rounded-lg transition-colors",
-                "text-white bg-green-600 hover:bg-green-700"
-              )}
+              className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-white bg-green-600 hover:bg-green-700 rounded-full shadow-xl transition-colors"
             >
-              <Sparkles className="w-4 h-4" />
-              フォルダに戻る
+              <CheckCircle2 className="w-5 h-5" />
+              仕訳完了
             </Link>
           </div>
-          {/* フローティング仕訳完了ボタン */}
-          <div className="fixed bottom-6 right-6 z-40">
-            <div className="relative">
-              <span className="absolute -top-10 right-0 bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">
-                全て確認済み！次へ進みましょう ↓
-              </span>
-              <Link
-                href={`/folders/${id}`}
-                className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-white bg-green-600 hover:bg-green-700 rounded-full shadow-xl transition-colors"
-              >
-                <CheckCircle2 className="w-5 h-5" />
-                仕訳完了
-              </Link>
-            </div>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
