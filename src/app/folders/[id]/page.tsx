@@ -547,16 +547,30 @@ export default function FolderDetailPage({
 
       {/* B型: 引き継ぎ済バッジ or 引き継ぎボタン */}
       {userRole === "user_b" && folder.handoffStatus === "handed_off" && (
-        <div className="flex items-center gap-3 bg-cyan-50 border border-cyan-200 rounded-lg px-4 py-3">
-          <Send className="h-5 w-5 text-cyan-600 flex-shrink-0" />
-          <span className="text-sm text-cyan-800">
-            このフォルダはA型利用者に引き継ぎ済みです
-            {folder.handoffAt && (
-              <span className="text-xs text-cyan-600 ml-2">
-                ({new Date(folder.handoffAt).toLocaleString("ja-JP")})
-              </span>
-            )}
-          </span>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 bg-cyan-50 border border-cyan-200 rounded-lg px-4 py-3">
+            <Send className="h-5 w-5 text-cyan-600 flex-shrink-0" />
+            <span className="text-sm text-cyan-800">
+              このフォルダはA型利用者に引き継ぎ済みです
+              {folder.handoffAt && (
+                <span className="text-xs text-cyan-600 ml-2">
+                  ({new Date(folder.handoffAt).toLocaleString("ja-JP")})
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              ダッシュボードに戻る
+            </Link>
+            <span className="bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce">
+              ← こちらからトップに戻りましょう
+            </span>
+          </div>
         </div>
       )}
       {userRole === "user_b" &&
