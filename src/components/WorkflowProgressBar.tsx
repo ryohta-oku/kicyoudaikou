@@ -131,10 +131,13 @@ export default function WorkflowProgressBar() {
   }
 
   const currentStepId = computeCurrentStep(folderInfo, isTypeB);
-  const currentIndex = steps.findIndex((s) => s.id === currentStepId);
+  const rawIndex = steps.findIndex((s) => s.id === currentStepId);
 
   // 現在のステップがこのステップセットにない場合は非表示
-  if (currentIndex === -1) return null;
+  if (rawIndex === -1) return null;
+
+  // 最終ステップに到達したら全ステップを完了表示
+  const currentIndex = rawIndex === steps.length - 1 ? steps.length : rawIndex;
 
   return (
     <div className="bg-white border-b">
