@@ -3,15 +3,12 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, userName, userRole, folderId, folderName } = await request.json();
-
-    if (!userId) {
-      return NextResponse.json({ error: "ユーザーIDが必要です" }, { status: 400 });
-    }
+    const body = await request.json();
+    const { userId, userName, userRole, folderId, folderName } = body || {};
 
     const workSession = await prisma.workSession.create({
       data: {
-        userId,
+        userId: userId || "unknown",
         userName: userName || "",
         userRole: userRole || "",
         folderId: folderId || null,

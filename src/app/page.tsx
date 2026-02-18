@@ -154,25 +154,33 @@ export default function DashboardPage() {
   const handleWorkStart = async () => {
     setWorkStarting(true);
     try {
+      const userId = session?.user?.id || "unknown";
+      const userName = session?.user?.name || "";
       const res = await fetch("/api/worksessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: session?.user?.id || "",
-          userName: session?.user?.name || "",
+          userId,
+          userName,
           userRole: userRole,
         }),
       });
       const data = await res.json();
-      if (res.ok && data.workSession) {
-        const sid = data.workSession.id;
-        setWorkSessionId(sid);
+      if (!res.ok) {
+        console.error("WorkSession API error:", data);
+        alert(`作業開始に失敗しました: ${data.error || "不明なエラー"}`);
+        return;
+      }
+      const ws = data.workSession;
+      if (ws) {
+        setWorkSessionId(ws.id);
         setIsWorkStarted(true);
         setShowUpload(true);
-        localStorage.setItem("workSessionId", sid);
+        localStorage.setItem("workSessionId", ws.id);
       }
     } catch (error) {
       console.error("Failed to start work session:", error);
+      alert("作業開始に失敗しました。ネットワークエラーが発生しました。");
     } finally {
       setWorkStarting(false);
     }
