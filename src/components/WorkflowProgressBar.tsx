@@ -42,8 +42,19 @@ interface FolderInfo {
   documents: { status: string }[];
 }
 
+/** ステップの順序マップ（大きいほど進んでいる） */
+const STEP_ORDER: Record<string, number> = {
+  upload: 0,
+  ocr: 1,
+  ocr_confirm: 2,
+  classify: 3,
+  review: 4,
+  done: 5,
+  handoff: 3, // B型の引き継ぎはOCR確認の次
+};
+
 /** フォルダ内ドキュメントの実際のステータスから現在のステップを算出 */
-function computeCurrentStep(folder: FolderInfo, isTypeB: boolean): string {
+function computeCurrentStep(folder: FolderInfo, isTypeB: boolean, pathname: string): string {
   const docs = folder.documents;
   if (docs.length === 0) return "upload";
 
@@ -52,20 +63,35 @@ function computeCurrentStep(folder: FolderInfo, isTypeB: boolean): string {
   // B型: 引き継ぎ済みなら最終ステップ
   if (isTypeB && folder.handoffStatus === "handed_off") return "handoff";
 
-  // 全ドキュメントのステータスで判定
-  if (statuses.some((s) => s === "uploaded" || s === "ocr_processing")) return "ocr";
-  if (statuses.some((s) => s === "ocr_complete")) return "ocr_confirm";
-  if (statuses.every((s) => s === "ocr_confirmed")) {
-    // B型ならOCR確認完了 → 引き継ぎ待ち
-    if (isTypeB) return "handoff";
-    return "classify";
+  // ドキュメントステータスからステップを算出
+  let statusStep: string;
+  if (statuses.some((s) => s === "uploaded" || s === "ocr_processing")) {
+    statusStep = "ocr";
+  } else if (statuses.some((s) => s === "ocr_complete")) {
+    statusStep = "ocr_confirm";
+  } else if (statuses.every((s) => s === "ocr_confirmed")) {
+    statusStep = isTypeB ? "handoff" : "classify";
+  } else if (statuses.every((s) => s === "reviewed" || s === "exported")) {
+    statusStep = "done";
+  } else if (statuses.some((s) => s === "classified" || s === "reviewed")) {
+    statusStep = "review";
+  } else {
+    statusStep = "classify";
   }
-  // 全ドキュメントが reviewed 以上なら完了
-  if (statuses.every((s) => s === "reviewed" || s === "exported")) return "done";
-  if (statuses.some((s) => s === "classified" || s === "reviewed")) return "review";
 
-  // classified以降が混在
-  return "classify";
+  // 現在のページに対応するステップ
+  let pageStep: string | null = null;
+  if (pathname.endsWith("/classify")) {
+    pageStep = "classify";
+  }
+
+  // ページのステップとドキュメントステータスの低い方を採用
+  // （classifyページにいるのに「完了」になるのを防ぐ）
+  if (pageStep && (STEP_ORDER[statusStep] ?? 0) > (STEP_ORDER[pageStep] ?? 0)) {
+    return pageStep;
+  }
+
+  return statusStep;
 }
 
 /** パス名からフォルダIDを取得 */
@@ -134,7 +160,7 @@ export default function WorkflowProgressBar() {
     steps = STEPS_A_FULL;
   }
 
-  const currentStepId = computeCurrentStep(folderInfo, isTypeB);
+  const currentStepId = computeCurrentStep(folderInfo, isTypeB, pathname);
   const rawIndex = steps.findIndex((s) => s.id === currentStepId);
 
   // 現在のステップがこのステップセットにない場合は非表示
