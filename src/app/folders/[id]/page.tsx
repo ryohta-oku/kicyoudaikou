@@ -141,6 +141,8 @@ export default function FolderDetailPage({
   const [dismissingDuplicate, setDismissingDuplicate] = useState(false);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const [handingOff, setHandingOff] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [showFormatPicker, setShowFormatPicker] = useState(false);
 
   // 工数記録: ロールに応じてworkTypeを切り替え
   const workType = userRole === "user_b" ? "ocr_review" : "review";
@@ -512,11 +514,41 @@ export default function FolderDetailPage({
       case "classified":
         return canViewJournal ? { href: `/folders/${id}/classify`, label: "仕訳確認" } : { href: null, label: "" };
       case "reviewed":
-        return canViewJournal ? { href: `/documents/${docId}/export`, label: "エクスポート" } : { href: null, label: "" };
+        return { href: null, label: "" };
       case "exported":
-        return canViewJournal ? { href: `/documents/${docId}/export`, label: "再エクスポート" } : { href: null, label: "" };
+        return { href: null, label: "" };
       default:
         return { href: null, label: "" };
+    }
+  };
+
+  const handleFolderExport = async (format: "generic" | "yayoi" | "freee") => {
+    setExporting(true);
+    try {
+      const res = await fetch("/api/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId: id, format }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "エクスポートに失敗しました");
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = window.document.createElement("a");
+      a.href = url;
+      a.download = `journal_entries_${format}.csv`;
+      window.document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      setShowFormatPicker(false);
+      await fetchFolder();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "エクスポートに失敗しました");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -778,14 +810,12 @@ export default function FolderDetailPage({
                     <th className="px-4 py-3 text-left font-medium text-gray-600">作成日</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">ファイル名</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">ステータス</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-600">エクスポート</th>
                     <th className="px-4 py-3 text-center font-medium text-gray-600">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {folder.documents.map((doc) => {
                     const nextAction = getNextAction(doc.status, doc.id);
-                    const canExport = canViewJournal && (doc.status === "reviewed" || doc.status === "exported");
                     const isProcessing = ocrProcessingIds.has(doc.id);
                     return (
                       <tr key={doc.id} className="border-b hover:bg-gray-50">
@@ -805,13 +835,6 @@ export default function FolderDetailPage({
                               {isProcessing ? "OCR処理中..." : STATUS_LABELS[doc.status] || doc.status}
                             </span>
                           </div>
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {canExport ? (
-                            <Link href={`/documents/${doc.id}/export`} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">
-                              <Download className="w-3.5 h-3.5" />CSV出力
-                            </Link>
-                          ) : <span className="text-xs text-gray-400">-</span>}
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex items-center justify-center gap-2">
@@ -846,7 +869,6 @@ export default function FolderDetailPage({
           <div className="md:hidden space-y-3">
             {folder.documents.map((doc) => {
               const nextAction = getNextAction(doc.status, doc.id);
-              const canExport = canViewJournal && (doc.status === "reviewed" || doc.status === "exported");
               const isProcessing = ocrProcessingIds.has(doc.id);
               return (
                 <div key={doc.id} className="bg-white rounded-xl border p-4 space-y-3">
@@ -877,11 +899,6 @@ export default function FolderDetailPage({
                           {nextAction.label}
                         </button>
                       ) : null
-                    )}
-                    {canExport && (
-                      <Link href={`/documents/${doc.id}/export`} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">
-                        <Download className="w-3.5 h-3.5" />CSV出力
-                      </Link>
                     )}
                     <button onClick={() => handleDeleteDocument(doc.id)} disabled={deletingId === doc.id || isProcessing} className="ml-auto inline-flex items-center gap-1 px-2 py-1.5 text-xs text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
                       {deletingId === doc.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
@@ -999,14 +1016,6 @@ export default function FolderDetailPage({
               </Link>
             </div>
 
-            {/* ステップガイド: 全確認済み → エクスポート */}
-            {confirmedCount === allEntries.length && alertCount === 0 && allEntries.length > 0 && (
-              <div className="flex justify-center">
-                <span className="inline-flex items-center gap-1.5 bg-amber-500 text-white text-sm rounded-full px-4 py-2 shadow-lg animate-bounce">
-                  全て確認済み！ドキュメント一覧からCSV出力できます ↑
-                </span>
-              </div>
-            )}
 
             {/* アラートバナー */}
             {(missingFieldCount > 0 || duplicateCount > 0) && (
@@ -1864,6 +1873,56 @@ export default function FolderDetailPage({
                 <Send className="w-5 h-5" />
               )}
               引き継ぎ完了
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* A型: フローティングCSVエクスポートボタン */}
+      {canViewJournal &&
+        folder.documents.length > 0 &&
+        folder.documents.every(
+          (d) => d.status === "reviewed" || d.status === "exported"
+        ) && (
+        <div className="fixed bottom-6 right-6 z-40">
+          <div className="relative">
+            {!showFormatPicker && (
+              <span className="absolute -top-10 right-0 bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">
+                全て確認済み！エクスポートしましょう ↓
+              </span>
+            )}
+            {showFormatPicker && (
+              <div className="absolute bottom-full right-0 mb-2 bg-white rounded-xl shadow-2xl border p-3 w-56">
+                <p className="text-xs font-medium text-gray-500 mb-2">出力形式を選択</p>
+                <div className="space-y-1">
+                  {[
+                    { value: "generic" as const, label: "汎用CSV" },
+                    { value: "yayoi" as const, label: "弥生会計形式" },
+                    { value: "freee" as const, label: "freee形式" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => handleFolderExport(opt.value)}
+                      disabled={exporting}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button
+              onClick={() => setShowFormatPicker(!showFormatPicker)}
+              disabled={exporting}
+              className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full shadow-xl transition-colors disabled:opacity-50"
+            >
+              {exporting ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Download className="w-5 h-5" />
+              )}
+              CSVエクスポート
             </button>
           </div>
         </div>

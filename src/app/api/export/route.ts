@@ -6,19 +6,59 @@ import { getEffectiveRole } from "@/lib/roleSimulation";
 
 export async function POST(request: NextRequest) {
   try {
-    const { documentId, format = "generic" } = await request.json() as {
-      documentId: string;
+    const { documentId, folderId, format = "generic" } = await request.json() as {
+      documentId?: string;
+      folderId?: string;
       format?: CSVFormat;
     };
 
-    if (!documentId) {
-      return NextResponse.json({ error: "ドキュメントIDが必要です", code: "EXPORT_NO_DOCUMENT_ID" }, { status: 400 });
+    if (!documentId && !folderId) {
+      return NextResponse.json({ error: "ドキュメントIDまたはフォルダIDが必要です", code: "EXPORT_NO_ID" }, { status: 400 });
     }
 
-    const entries = await prisma.journalEntry.findMany({
-      where: { documentId, isConfirmed: true },
-      orderBy: { date: "asc" },
-    });
+    let entries;
+    let exportFolderId = folderId || null;
+    let folderName = "";
+
+    if (folderId) {
+      // フォルダ単位エクスポート: フォルダ内の全確認済み仕訳を取得
+      const folder = await prisma.folder.findUnique({
+        where: { id: folderId },
+        select: { name: true, documents: { select: { id: true } } },
+      });
+      if (!folder) {
+        return NextResponse.json({ error: "フォルダが見つかりません", code: "EXPORT_FOLDER_NOT_FOUND" }, { status: 404 });
+      }
+      folderName = folder.name;
+      const docIds = folder.documents.map((d) => d.id);
+      entries = await prisma.journalEntry.findMany({
+        where: { documentId: { in: docIds }, isConfirmed: true },
+        orderBy: { date: "asc" },
+      });
+
+      // 全ドキュメントのステータスを更新
+      await prisma.document.updateMany({
+        where: { id: { in: docIds }, status: { not: "exported" } },
+        data: { status: "exported" },
+      });
+    } else {
+      // 単一ドキュメントエクスポート（後方互換）
+      entries = await prisma.journalEntry.findMany({
+        where: { documentId: documentId!, isConfirmed: true },
+        orderBy: { date: "asc" },
+      });
+
+      await prisma.document.update({
+        where: { id: documentId! },
+        data: { status: "exported" },
+      });
+
+      const doc = await prisma.document.findUnique({
+        where: { id: documentId! },
+        select: { folderId: true },
+      });
+      exportFolderId = doc?.folderId || null;
+    }
 
     if (entries.length === 0) {
       return NextResponse.json({ error: "確認済みの仕訳がありません", code: "EXPORT_NO_ENTRIES" }, { status: 400 });
@@ -26,28 +66,17 @@ export async function POST(request: NextRequest) {
 
     const csv = generateCSV(entries, format);
 
-    // ドキュメントのステータスを更新
-    await prisma.document.update({
-      where: { id: documentId },
-      data: { status: "exported" },
-    });
-
     // WorkLog: エクスポート完了を記録 + セッション自動完了
     try {
       const userSession = await auth();
       if (userSession?.user) {
         const effectiveRole = getEffectiveRole(userSession.user.role || "");
-        const doc = await prisma.document.findUnique({
-          where: { id: documentId },
-          select: { folderId: true },
-        });
         await prisma.workLog.create({
           data: {
             userId: userSession.user.id!,
             userName: userSession.user.name || "",
             userRole: effectiveRole,
-            folderId: doc?.folderId || null,
-            documentId,
+            folderId: exportFolderId,
             action: "export",
             workType: "export",
           },
@@ -60,9 +89,9 @@ export async function POST(request: NextRequest) {
         });
         for (const ws of activeSessions) {
           const totalSec = ws.workLogs.reduce((sum, l) => sum + l.durationSec, 0);
-          const folderData = doc?.folderId
+          const folderData = exportFolderId
             ? await prisma.folder.findUnique({
-                where: { id: doc.folderId },
+                where: { id: exportFolderId },
                 include: { documents: { select: { id: true } } },
               })
             : null;
@@ -73,8 +102,8 @@ export async function POST(request: NextRequest) {
               completedAt: new Date(),
               totalSec,
               documentCount: folderData?.documents.length || 0,
-              folderId: doc?.folderId || null,
-              folderName: folderData?.name || "",
+              folderId: exportFolderId,
+              folderName: folderData?.name || folderName,
             },
           });
         }
@@ -83,10 +112,14 @@ export async function POST(request: NextRequest) {
       console.error("WorkLog create error (export):", logError);
     }
 
+    const filename = folderId
+      ? `journal_entries_folder_${format}.csv`
+      : `journal_entries_${format}.csv`;
+
     return new NextResponse(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="journal_entries_${documentId}.csv"`,
+        "Content-Disposition": `attachment; filename="${filename}"`,
       },
     });
   } catch (error) {
