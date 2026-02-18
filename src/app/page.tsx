@@ -149,8 +149,8 @@ export default function DashboardPage() {
     const storedRole = localStorage.getItem("workSessionRole");
     if (!storedSessionId) return;
 
-    // ロールが変わった場合はクリア
-    if (storedRole && storedRole !== userRole) {
+    // ロール情報がない（旧セッション）またはロールが変わった場合はクリア
+    if (!storedRole || storedRole !== userRole) {
       localStorage.removeItem("workSessionId");
       localStorage.removeItem("workSessionRole");
       return;
