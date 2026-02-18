@@ -107,10 +107,14 @@ export default function WorkflowProgressBar() {
   useEffect(() => {
     if (folderId) {
       fetchFolderInfo(folderId);
+      // ドキュメントステータスが変わる可能性があるため定期的に再取得
+      const interval = setInterval(() => fetchFolderInfo(folderId), 3000);
+      return () => clearInterval(interval);
     } else {
       setFolderInfo(null);
     }
-  }, [folderId, fetchFolderInfo]);
+    // pathname変更時（同一フォルダ内のページ遷移）も再取得
+  }, [folderId, pathname, fetchFolderInfo]);
 
   // ダッシュボードや管理ページでは非表示
   if (!folderId) return null;
