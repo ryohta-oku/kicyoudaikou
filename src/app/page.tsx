@@ -20,6 +20,8 @@ import {
   MonitorSmartphone,
   Send,
   ArrowRight,
+  Check,
+  Clock,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
@@ -258,43 +260,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* B型: OCR未完了フォルダ警告バナー */}
-      {userRole === "user_b" && (() => {
-        const incompleteFolders = folders.filter((f) => {
-          if (f.documents.length === 0) return false;
-          if (f.handoffStatus === "handed_off") return false;
-          return f.documents.some(
-            (d) =>
-              d.status === "uploaded" ||
-              d.status === "ocr_processing" ||
-              d.status === "ocr_complete"
-          );
-        });
-        if (incompleteFolders.length === 0) return null;
-        return (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 md:p-4 space-y-2">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
-              <span className="text-xs md:text-sm font-medium text-amber-800">
-                OCR確認が完了していないフォルダが {incompleteFolders.length} 件あります
-              </span>
-            </div>
-            <div className="space-y-1 ml-8">
-              {incompleteFolders.map((f) => (
-                <Link
-                  key={f.id}
-                  href={`/folders/${f.id}`}
-                  className="flex items-center gap-2 text-xs text-amber-700 hover:text-amber-900 hover:underline"
-                >
-                  <ArrowRight className="w-3 h-3" />
-                  {f.name}
-                </Link>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
       {/* A型: 引き継ぎフォルダセクション */}
       {userRole === "user_a" && (() => {
         const handoffFolders = folders.filter((f) => f.handoffStatus === "handed_off");
@@ -360,7 +325,143 @@ export default function DashboardPage() {
             アップロード
           </button>
         </div>
+      ) : userRole === "user_b" ? (
+        /* ===== B型専用: タスク状況別ビュー ===== */
+        (() => {
+          // B型のフォルダを3カテゴリに分類
+          const ocrIncompleteFolders = folders.filter((f) => {
+            if (f.handoffStatus === "handed_off") return false;
+            if (f.documents.length === 0) return true;
+            return f.documents.some(
+              (d) =>
+                d.status === "uploaded" ||
+                d.status === "ocr_processing" ||
+                d.status === "ocr_complete"
+            );
+          });
+          const readyForHandoff = folders.filter((f) => {
+            if (f.handoffStatus === "handed_off") return false;
+            if (f.documents.length === 0) return false;
+            return f.documents.every(
+              (d) =>
+                d.status === "ocr_confirmed" ||
+                d.status === "classified" ||
+                d.status === "reviewed" ||
+                d.status === "exported"
+            );
+          });
+          const handedOff = folders.filter((f) => f.handoffStatus === "handed_off");
+
+          const renderFolderCard = (folder: Folder, badge?: { label: string; color: string }) => (
+            <Link
+              key={folder.id}
+              href={`/folders/${folder.id}`}
+              className="flex items-center justify-between gap-3 bg-white rounded-xl border p-3 md:p-4 hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <FolderOpen className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-900 truncate">{folder.name}</p>
+                    {badge && (
+                      <span className={cn("inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium", badge.color)}>
+                        {badge.label}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                    <span>{new Date(folder.createdAt).toLocaleDateString("ja-JP")}</span>
+                    <span className="inline-flex items-center gap-1">
+                      <FileText className="w-3 h-3" />
+                      {folder.documents.length}件
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(folder.id); }}
+                  disabled={deletingId === folder.id}
+                  className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {deletingId === folder.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </button>
+                <ChevronRight className="w-4 h-4 text-gray-400" />
+              </div>
+            </Link>
+          );
+
+          return (
+            <div className="space-y-6">
+              {/* OCR確認待ち（未完了タスク） */}
+              {ocrIncompleteFolders.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-amber-500" />
+                    <h2 className="text-base md:text-lg font-bold text-gray-900">OCR確認待ち</h2>
+                    <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold text-white bg-amber-500 rounded-full">
+                      {ocrIncompleteFolders.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {ocrIncompleteFolders.map((f) => {
+                      const status = getFolderStatus(f);
+                      return renderFolderCard(f, {
+                        label: STATUS_LABELS[status] || status,
+                        color: STATUS_COLORS[status] || "bg-gray-100 text-gray-800",
+                      });
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 引き継ぎ可能（完了タスク） */}
+              {readyForHandoff.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Send className="w-5 h-5 text-green-500" />
+                    <h2 className="text-base md:text-lg font-bold text-gray-900">引き継ぎ可能</h2>
+                    <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold text-white bg-green-500 rounded-full">
+                      {readyForHandoff.length}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 -mt-1">OCR確認が完了しています。フォルダを開いてA型利用者に引き継ぎしてください。</p>
+                  <div className="space-y-2">
+                    {readyForHandoff.map((f) => renderFolderCard(f, {
+                      label: "引き継ぎ可能",
+                      color: "bg-green-100 text-green-800",
+                    }))}
+                  </div>
+                </div>
+              )}
+
+              {/* 引き継ぎ済 */}
+              {handedOff.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-5 h-5 text-cyan-500" />
+                    <h2 className="text-base md:text-lg font-bold text-gray-900">引き継ぎ済</h2>
+                    <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold text-white bg-cyan-500 rounded-full">
+                      {handedOff.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {handedOff.map((f) => renderFolderCard(f, {
+                      label: "引き継ぎ済",
+                      color: "bg-cyan-100 text-cyan-800",
+                    }))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()
       ) : (
+        /* ===== 通常のフォルダ一覧（A型・管理者等） ===== */
         <>
           {/* デスクトップ: テーブル表示 */}
           <div className="hidden md:block bg-white rounded-xl border overflow-hidden">
