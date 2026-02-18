@@ -74,7 +74,7 @@ export default function WorkflowProgressBar() {
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <div
                     className={cn(
-                      "flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold transition-colors flex-shrink-0",
+                      "flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-colors flex-shrink-0",
                       isCompleted
                         ? "bg-blue-600 text-white"
                         : isCurrent
@@ -90,7 +90,7 @@ export default function WorkflowProgressBar() {
                   </div>
                   <span
                     className={cn(
-                      "text-xs font-medium whitespace-nowrap hidden sm:inline",
+                      "text-sm font-medium whitespace-nowrap hidden sm:inline",
                       isCurrent
                         ? "text-blue-600"
                         : isCompleted

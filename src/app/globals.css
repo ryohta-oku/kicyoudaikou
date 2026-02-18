@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+html {
+  font-size: 18px; /* デフォルト16px → 18pxに拡大（年配ユーザー対応） */
+}
+
 :root {
   --background: #f9fafb;
   --foreground: #171717;

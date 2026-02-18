@@ -274,7 +274,7 @@ export default function Header() {
               <FileText className="h-7 w-7 md:h-8 md:w-8 text-blue-600" />
               <div>
                 <h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">記帳代行ツール</h1>
-                <p className="text-[10px] md:text-xs text-gray-500 hidden sm:block">Bookkeeping Assistant</p>
+                <p className="text-xs text-gray-500 hidden sm:block">Bookkeeping Assistant</p>
               </div>
             </Link>
 
@@ -394,14 +394,14 @@ export default function Header() {
 
       {/* ロールシミュレーション中バナー */}
       {session.user.role === "admin" && simulatedRole && (
-        <div className="bg-violet-600 text-white text-center py-1.5 text-xs font-medium sticky top-14 md:top-16 z-40 flex items-center justify-center gap-2">
-          <Eye className="h-3.5 w-3.5" />
+        <div className="bg-violet-600 text-white text-center py-1.5 text-sm font-medium sticky top-14 md:top-16 z-40 flex items-center justify-center gap-2">
+          <Eye className="h-4 w-4" />
           <span>
             {ROLE_VIEW_OPTIONS.find((o) => o.value === simulatedRole)?.label || simulatedRole}
           </span>
           <button
             onClick={() => handleRoleSimulation("")}
-            className="ml-2 px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded text-[11px] transition-colors"
+            className="ml-2 px-2.5 py-0.5 bg-white/20 hover:bg-white/30 rounded text-xs transition-colors"
           >
             解除
           </button>
