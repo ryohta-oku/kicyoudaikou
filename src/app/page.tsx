@@ -142,14 +142,40 @@ export default function DashboardPage() {
     }
   }, []);
 
-  // localStorage からセッションIDを復元
+  // localStorage からセッションIDを復元（ロール変更時やセッション完了時はクリア）
   useEffect(() => {
+    if (!userRole) return; // セッション読み込み待ち
     const storedSessionId = localStorage.getItem("workSessionId");
-    if (storedSessionId) {
-      setWorkSessionId(storedSessionId);
-      setIsWorkStarted(true);
+    const storedRole = localStorage.getItem("workSessionRole");
+    if (!storedSessionId) return;
+
+    // ロールが変わった場合はクリア
+    if (storedRole && storedRole !== userRole) {
+      localStorage.removeItem("workSessionId");
+      localStorage.removeItem("workSessionRole");
+      return;
     }
-  }, []);
+
+    // セッションがまだ有効か確認
+    fetch(`/api/worksessions/${storedSessionId}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        const ws = data?.workSession;
+        if (ws && ws.status === "active") {
+          setWorkSessionId(storedSessionId);
+          setIsWorkStarted(true);
+        } else {
+          // 完了済み or 見つからない → クリア
+          localStorage.removeItem("workSessionId");
+          localStorage.removeItem("workSessionRole");
+        }
+      })
+      .catch(() => {
+        // エラー時もクリア
+        localStorage.removeItem("workSessionId");
+        localStorage.removeItem("workSessionRole");
+      });
+  }, [userRole]);
 
   const handleWorkStart = async () => {
     setWorkStarting(true);
@@ -177,6 +203,7 @@ export default function DashboardPage() {
         setIsWorkStarted(true);
         setShowUpload(true);
         localStorage.setItem("workSessionId", ws.id);
+        localStorage.setItem("workSessionRole", userRole);
       }
     } catch (error) {
       console.error("Failed to start work session:", error);
