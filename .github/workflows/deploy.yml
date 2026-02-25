@@ -6,192 +6,46 @@ on:
       - main
 
 jobs:
-  # ステップ1: GitHub Actions上でビルドテスト（VPSに触らずに検証）
-  build-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci --production=false
-
-      - name: Generate Prisma client
-        run: npx prisma generate
-
-      - name: TypeScript type check
-        run: npx tsc --noEmit
-
-      - name: Build Next.js
-        run: npm run build
-        env:
-          DATABASE_URL: "file:./dev.db"
-
-  # ステップ2: ビルドテスト成功後にVPSへデプロイ
   deploy:
-    runs-on: ubuntu-latest
-    needs: build-check
-    steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT }}
-          command_timeout: 10m
-          script: |
-            set -e
-            cd /var/www/kicyoudaikou
+    uses: ryohta-oku/deploy-workflows/.github/workflows/nextjs-deploy.yml@main
+    with:
+      app_name: kicyoudaikou
+      port: 3000
+      health_check_path: "/login"
+      migrate_timing: after_build
+      ci_run_migrate: false
+      ci_database_url: "file:./dev.db"
+      seed_command: "npx tsx prisma/seed-admin.ts 2>/dev/null || echo '>>> シードスクリプトスキップ'"
+      env_setup_script: |
+        if ! grep -q "^NEXTAUTH_SECRET" /var/www/kicyoudaikou/.env; then
+          NEW_SECRET=$(openssl rand -base64 32)
+          echo "NEXTAUTH_SECRET=\"$NEW_SECRET\"" >> /var/www/kicyoudaikou/.env
+          echo ">>> NEXTAUTH_SECRET を追加しました"
+        fi
 
-            echo "=== デプロイ開始 ==="
+        if ! grep -q "^AUTH_SECRET" /var/www/kicyoudaikou/.env; then
+          AUTH_VAL=$(grep "^NEXTAUTH_SECRET" /var/www/kicyoudaikou/.env | cut -d'=' -f2-)
+          echo "AUTH_SECRET=$AUTH_VAL" >> /var/www/kicyoudaikou/.env
+          echo ">>> AUTH_SECRET を追加しました"
+        fi
 
-            # --- .env チェック ---
-            echo ">>> .env チェック..."
+        if ! grep -q "^AUTH_URL" /var/www/kicyoudaikou/.env; then
+          echo 'AUTH_URL="http://162.43.7.199"' >> /var/www/kicyoudaikou/.env
+          echo ">>> AUTH_URL を追加しました"
+        fi
 
-            if ! grep -q "^NEXTAUTH_SECRET" /var/www/kicyoudaikou/.env; then
-              NEW_SECRET=$(openssl rand -base64 32)
-              echo "NEXTAUTH_SECRET=\"$NEW_SECRET\"" >> /var/www/kicyoudaikou/.env
-              echo ">>> NEXTAUTH_SECRET を追加しました"
-            fi
+        if ! grep -q "^APP_URL" /var/www/kicyoudaikou/.env; then
+          echo 'APP_URL="http://162.43.7.199"' >> /var/www/kicyoudaikou/.env
+          echo ">>> APP_URL を追加しました"
+        fi
 
-            if ! grep -q "^AUTH_SECRET" /var/www/kicyoudaikou/.env; then
-              AUTH_VAL=$(grep "^NEXTAUTH_SECRET" /var/www/kicyoudaikou/.env | cut -d'=' -f2-)
-              echo "AUTH_SECRET=$AUTH_VAL" >> /var/www/kicyoudaikou/.env
-              echo ">>> AUTH_SECRET を追加しました"
-            fi
+        if ! grep -q "^RESEND_API_KEY" /var/www/kicyoudaikou/.env; then
+          echo 'RESEND_API_KEY="re_8XQPe29r_4nnm7BiVDa3UvFjHV8u9CQdj"' >> /var/www/kicyoudaikou/.env
+          echo ">>> RESEND_API_KEY を追加しました"
+        fi
 
-            if ! grep -q "^AUTH_URL" /var/www/kicyoudaikou/.env; then
-              echo 'AUTH_URL="http://162.43.7.199"' >> /var/www/kicyoudaikou/.env
-              echo ">>> AUTH_URL を追加しました"
-            fi
-
-            if ! grep -q "^APP_URL" /var/www/kicyoudaikou/.env; then
-              echo 'APP_URL="http://162.43.7.199"' >> /var/www/kicyoudaikou/.env
-              echo ">>> APP_URL を追加しました"
-            fi
-
-            if ! grep -q "^RESEND_API_KEY" /var/www/kicyoudaikou/.env; then
-              echo 'RESEND_API_KEY="re_8XQPe29r_4nnm7BiVDa3UvFjHV8u9CQdj"' >> /var/www/kicyoudaikou/.env
-              echo ">>> RESEND_API_KEY を追加しました"
-            fi
-
-            if ! grep -q "^RESEND_FROM" /var/www/kicyoudaikou/.env; then
-              echo 'RESEND_FROM="記帳代行ツール <noreply@coco-star.jp>"' >> /var/www/kicyoudaikou/.env
-              echo ">>> RESEND_FROM を追加しました"
-            fi
-
-            echo ">>> .env キー一覧:"
-            grep -E "^[A-Z_]+=" /var/www/kicyoudaikou/.env | sed 's/=.*/=***/'
-
-            # --- バックアップ作成 ---
-            echo ">>> 旧ビルドをバックアップ中..."
-            BACKUP_DIR="/var/www/kicyoudaikou/.deploy-backup"
-            rm -rf "$BACKUP_DIR"
-            mkdir -p "$BACKUP_DIR"
-
-            # 現在のビルド成果物とnode_modulesをバックアップ
-            if [ -d ".next" ]; then
-              cp -a .next "$BACKUP_DIR/.next"
-            fi
-            # 現在のgit HEADを記録（ロールバック用）
-            git rev-parse HEAD > "$BACKUP_DIR/git-head.txt"
-            echo ">>> バックアップ完了: $(cat $BACKUP_DIR/git-head.txt)"
-
-            # --- ロールバック関数 ---
-            rollback() {
-              echo "!!! デプロイ失敗 - ロールバック開始 !!!"
-
-              # gitを元のコミットに戻す
-              if [ -f "$BACKUP_DIR/git-head.txt" ]; then
-                PREV_HEAD=$(cat "$BACKUP_DIR/git-head.txt")
-                echo ">>> git checkout $PREV_HEAD..."
-                git checkout "$PREV_HEAD" -- . 2>/dev/null || true
-              fi
-
-              # .nextを復元
-              if [ -d "$BACKUP_DIR/.next" ]; then
-                echo ">>> .next を復元中..."
-                rm -rf .next
-                cp -a "$BACKUP_DIR/.next" .next
-              fi
-
-              # PM2を再起動（旧バージョンで）
-              echo ">>> PM2 を旧バージョンで再起動..."
-              pm2 startOrRestart ecosystem.config.cjs --env production 2>/dev/null || true
-              sleep 5
-              echo ">>> ロールバック完了"
-              pm2 status
-              exit 1
-            }
-
-            # --- コード取得 ---
-            echo ">>> git pull..."
-            git pull origin main || rollback
-
-            # --- 依存パッケージ ---
-            echo ">>> npm ci..."
-            npm ci --production=false || rollback
-
-            # --- Prisma ---
-            echo ">>> Prisma generate..."
-            npx prisma generate || rollback
-
-            # --- ビルド ---
-            echo ">>> npm run build..."
-            npm run build || rollback
-
-            # ビルド成果物の確認
-            if [ ! -d ".next" ]; then
-              echo "エラー: .next ディレクトリが見つかりません"
-              rollback
-            fi
-            echo ">>> ビルド成功"
-
-            # --- DBマイグレーション ---
-            echo ">>> Prisma migrate..."
-            npx prisma migrate deploy || rollback
-
-            # --- シード ---
-            echo ">>> ユーザーチェック..."
-            npx tsx prisma/seed-admin.ts 2>/dev/null || echo ">>> シードスクリプトスキップ"
-
-            # --- PM2再起動 ---
-            echo ">>> PM2 restart..."
-            pm2 startOrRestart ecosystem.config.cjs --env production || rollback
-
-            # --- ヘルスチェック ---
-            echo ">>> ヘルスチェック中（最大30秒）..."
-            HEALTH_OK=false
-            for i in $(seq 1 6); do
-              sleep 5
-              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/login 2>/dev/null || echo "000")
-              echo ">>> 試行 $i/6: HTTP $HTTP_CODE"
-              if [ "$HTTP_CODE" = "200" ]; then
-                HEALTH_OK=true
-                break
-              fi
-            done
-
-            if [ "$HEALTH_OK" = false ]; then
-              echo "!!! ヘルスチェック失敗（HTTP応答なし）"
-              echo ">>> PM2 ログ:"
-              pm2 logs --nostream --lines 30
-              rollback
-            fi
-
-            echo ">>> ヘルスチェック成功"
-
-            # --- 完了 ---
-            echo ">>> PM2 status:"
-            pm2 status
-            echo ">>> PM2 logs (最新10行):"
-            pm2 logs --nostream --lines 10
-
-            # バックアップを保持（次回デプロイまで残す）
-            echo "=== デプロイ完了（正常） ==="
+        if ! grep -q "^RESEND_FROM" /var/www/kicyoudaikou/.env; then
+          echo 'RESEND_FROM="記帳代行ツール <noreply@coco-star.jp>"' >> /var/www/kicyoudaikou/.env
+          echo ">>> RESEND_FROM を追加しました"
+        fi
+    secrets: inherit
