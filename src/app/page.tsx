@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -76,6 +76,7 @@ export default function DashboardPage() {
   const [isWorkStarted, setIsWorkStarted] = useState(false);
   const [workSessionId, setWorkSessionId] = useState<string | null>(null);
   const [workStarting, setWorkStarting] = useState(false);
+  const scanInFlightRef = useRef(false);
 
   // 作業開始後のダッシュボード滞在時間を計測
   useWorkLogger("preparation", isWorkStarted, {
@@ -85,6 +86,9 @@ export default function DashboardPage() {
     userRole: userRole,
   });
   const checkScanFolder = useCallback(async () => {
+    // 同時実行防止: 既にフェッチ中の場合はスキップ
+    if (scanInFlightRef.current) return;
+    scanInFlightRef.current = true;
     try {
       const res = await fetch("/api/scan");
       const data = await res.json();
@@ -92,6 +96,8 @@ export default function DashboardPage() {
       setScanFiles(data.files || []);
     } catch {
       // ignore
+    } finally {
+      scanInFlightRef.current = false;
     }
   }, []);
 
@@ -221,7 +227,8 @@ export default function DashboardPage() {
     // スキャンフォルダを5秒ごとにポーリング
     const interval = setInterval(checkScanFolder, 5000);
     return () => clearInterval(interval);
-  }, [fetchFolders, fetchDuplicates, checkScanFolder]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleBulkUploadComplete = (folderId: string) => {
     // アップロード完了後、フォルダ詳細ページへ遷移（OCRはそこで自動開始）

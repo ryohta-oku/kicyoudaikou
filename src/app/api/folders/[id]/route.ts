@@ -14,6 +14,7 @@ export async function GET(
       include: {
         client: { select: { id: true, name: true } },
         documents: {
+          omit: { fileData: true }, // バイナリデータ除外（Vercel用フィールド、APIレスポンスには不要）
           include: {
             pages: { select: { id: true, imagePath: true, pageNumber: true }, orderBy: { pageNumber: "asc" } },
             _count: { select: { journalEntries: true } },

@@ -126,6 +126,7 @@ export default function FolderDetailPage({
   const [ocrProcessingIds, setOcrProcessingIds] = useState<Set<string>>(new Set());
   const [ocrErrors, setOcrErrors] = useState<Record<string, string>>({});
   const ocrStartedRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [ocrDocsData, setOcrDocsData] = useState<Record<string, FullDocument>>({});
   const [detailEntry, setDetailEntry] = useState<(JournalEntryData & { documentId: string; filename: string; filepath: string; fileType: string; pages: { id: string; imagePath: string; pageNumber: number }[] }) | null>(null);
   const [editForm, setEditForm] = useState<Partial<JournalEntryData>>({});
@@ -154,10 +155,18 @@ export default function FolderDetailPage({
     folderId: id,
   });
 
-  const fetchFolder = useCallback(async () => {
+  const fetchFolder = useCallback(async (force = false) => {
+    // 前回のリクエストをキャンセル（React Strict Mode対策）
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       setFetchError(null);
-      const res = await fetch(`/api/folders/${id}`);
+      const res = await fetch(`/api/folders/${id}`, { signal: controller.signal });
       const data = await res.json();
 
       if (!res.ok) {
@@ -192,12 +201,19 @@ export default function FolderDetailPage({
       setFolder(folderData);
       return folderData;
     } catch (error) {
+      // AbortErrorは無視（キャンセルされたリクエスト）
+      if (error instanceof Error && error.name === "AbortError") {
+        return null;
+      }
       const msg = error instanceof Error ? error.message : String(error);
       setFetchError(`Fetch failed: ${msg}`);
       console.error("Failed to fetch folder:", error);
       return null;
     } finally {
       setLoading(false);
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
     }
   }, [id]);
 
@@ -250,7 +266,7 @@ export default function FolderDetailPage({
       if (!res.ok) throw new Error("更新に失敗しました");
 
       // フォルダデータを再取得して反映
-      await fetchFolder();
+      await fetchFolder(true);
       setDetailEntry(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : "更新に失敗しました");
@@ -354,7 +370,8 @@ export default function FolderDetailPage({
     [runOCR]
   );
 
-  // 初回ロード時に自動OCR開始 & OCR完了ドキュメントの詳細を一括取得
+  // 初回ロード & Turbopackリロード時のデータ取得
+  // sessionStorageキャッシュにより重複フェッチを防止、AbortControllerで前回リクエストをキャンセル
   useEffect(() => {
     fetchFolder().then(async (folderData) => {
       if (!folderData) return;
@@ -389,7 +406,15 @@ export default function FolderDetailPage({
         }
       }
     });
-  }, [fetchFolder, startAutoOCR, fetchDocFullData]);
+
+    // クリーンアップ: アンマウント時に進行中のリクエストをキャンセル
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const handleDeleteDocument = async (docId: string) => {
     if (!confirm("このドキュメントを削除してもよろしいですか？")) return;
@@ -544,7 +569,7 @@ export default function FolderDetailPage({
       window.URL.revokeObjectURL(url);
       a.remove();
       setShowFormatPicker(false);
-      await fetchFolder();
+      await fetchFolder(true);
     } catch (err) {
       alert(err instanceof Error ? err.message : "エクスポートに失敗しました");
     } finally {
@@ -1504,7 +1529,7 @@ export default function FolderDetailPage({
                           if (doc && doc.journalEntries.filter(e => e.id !== item.id).length === 0) {
                             await fetch(`/api/documents/${item.documentId}`, { method: "DELETE" });
                           }
-                          await fetchFolder();
+                          await fetchFolder(true);
                           setDuplicateCompare(null);
                         } catch (err) {
                           alert(err instanceof Error ? err.message : "削除に失敗しました");
@@ -1547,7 +1572,7 @@ export default function FolderDetailPage({
                           body: JSON.stringify({ id: duplicateCompare.paired.id, duplicateDismissed: true }),
                         }),
                       ]);
-                      await fetchFolder();
+                      await fetchFolder(true);
                       setDuplicateCompare(null);
                     } catch (err) {
                       alert(err instanceof Error ? err.message : "更新に失敗しました");
@@ -1857,7 +1882,7 @@ export default function FolderDetailPage({
                         body: JSON.stringify({ documentId: doc.id }),
                       }).catch(() => {});
                     });
-                  await fetchFolder();
+                  await fetchFolder(true);
                 } catch (err) {
                   alert(err instanceof Error ? err.message : "引き継ぎに失敗しました");
                 } finally {
