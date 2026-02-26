@@ -269,18 +269,18 @@ export default function Header() {
     <>
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-14 md:h-16">
+          <div className="flex justify-between items-center h-14 lg:h-16">
             {/* ロゴ */}
             <Link href="/" className="flex items-center gap-2 flex-shrink-0">
               <FileText className="h-7 w-7 md:h-8 md:w-8 text-blue-600" />
               <div>
-                <h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">記帳代行ツール</h1>
-                <p className="text-xs text-gray-500 hidden sm:block">Bookkeeping Assistant</p>
+                <h1 className="text-base lg:text-lg font-bold text-gray-900 leading-tight">記帳代行ツール</h1>
+                <p className="text-xs text-gray-500 hidden lg:block">Bookkeeping Assistant</p>
               </div>
             </Link>
 
             {/* デスクトップ: 得意先セレクタ + ナビ + メニュー */}
-            <div className="hidden md:flex items-center gap-4">
+            <div className="hidden lg:flex items-center gap-2 xl:gap-4 min-w-0">
               {/* 得意先セレクタ */}
               {renderClientSelector()}
 
@@ -314,7 +314,7 @@ export default function Header() {
                       key={item.href}
                       href={item.href}
                       className={cn(
-                        "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                        "flex items-center gap-1.5 px-2.5 xl:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
                         isActive
                           ? "bg-blue-50 text-blue-700"
                           : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
@@ -381,7 +381,7 @@ export default function Header() {
             {/* モバイル: ハンバーガーボタン */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="lg:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             >
               {isMobileMenuOpen ? (
                 <X className="h-6 w-6" />
@@ -395,7 +395,7 @@ export default function Header() {
 
       {/* ロールシミュレーション中バナー */}
       {session.user.role === "admin" && simulatedRole && (
-        <div className="bg-violet-600 text-white text-center py-1.5 text-sm font-medium sticky top-14 md:top-16 z-40 flex items-center justify-center gap-2">
+        <div className="bg-violet-600 text-white text-center py-1.5 text-sm font-medium sticky top-14 lg:top-16 z-40 flex items-center justify-center gap-2">
           <Eye className="h-4 w-4" />
           <span>
             {ROLE_VIEW_OPTIONS.find((o) => o.value === simulatedRole)?.label || simulatedRole}
@@ -411,7 +411,7 @@ export default function Header() {
 
       {/* モバイルメニュー（オーバーレイ） */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
+        <div className="fixed inset-0 z-40 lg:hidden">
           {/* 背景オーバーレイ */}
           <div
             className="absolute inset-0 bg-black/30"

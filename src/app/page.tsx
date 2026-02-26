@@ -667,7 +667,7 @@ export default function DashboardPage() {
         /* ===== 管理者等のフォルダ一覧 ===== */
         <>
           {/* デスクトップ: テーブル表示 */}
-          <div className="hidden md:block bg-white rounded-xl border overflow-hidden">
+          <div className="hidden lg:block bg-white rounded-xl border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -738,7 +738,7 @@ export default function DashboardPage() {
           </div>
 
           {/* モバイル: カード表示 */}
-          <div className="md:hidden space-y-3">
+          <div className="lg:hidden space-y-3">
             {folders.map((folder) => {
               const folderStatus = getFolderStatus(folder);
               return (
