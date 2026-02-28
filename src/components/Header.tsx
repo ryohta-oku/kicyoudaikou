@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { FileText, Home, Settings, Building2, Plus, ChevronDown, Search, Shield, LogOut, Menu, User, ShieldCheck, X, Eye, Clock } from "lucide-react";
+import { FileText, Home, Settings, Building2, Plus, ChevronDown, Search, Shield, LogOut, Menu, User, ShieldCheck, X, Eye, Clock, Users, ExternalLink } from "lucide-react";
 import { getSelectedClientId, setSelectedClientId } from "@/lib/client";
 import { getSimulatedRole, setSimulatedRole } from "@/lib/roleSimulation";
 
@@ -357,14 +357,34 @@ export default function Header() {
                       アカウント情報
                     </Link>
                     {(session.user.role === "admin" || session.user.role === "instructor") && (
-                      <Link
-                        href="/admin"
-                        onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        <ShieldCheck className="h-4 w-4" />
-                        管理画面
-                      </Link>
+                      <>
+                        <Link
+                          href="/admin"
+                          onClick={() => setIsMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <ShieldCheck className="h-4 w-4" />
+                          管理画面
+                        </Link>
+                        <Link
+                          href="/admin/crm"
+                          onClick={() => setIsMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <Users className="h-4 w-4" />
+                          顧客管理
+                        </Link>
+                        <a
+                          href={process.env.NEXT_PUBLIC_CLIENT_HUB_URL || "https://crm.coco-star.jp"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setIsMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Client Hub
+                        </a>
+                      </>
                     )}
                     <button
                       onClick={() => signOut({ callbackUrl: "/login" })}
@@ -495,13 +515,31 @@ export default function Header() {
                 アカウント情報
               </Link>
               {(session.user.role === "admin" || session.user.role === "instructor") && (
-                <Link
-                  href="/admin"
-                  className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  <ShieldCheck className="h-5 w-5" />
-                  管理画面
-                </Link>
+                <>
+                  <Link
+                    href="/admin"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <ShieldCheck className="h-5 w-5" />
+                    管理画面
+                  </Link>
+                  <Link
+                    href="/admin/crm"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Users className="h-5 w-5" />
+                    顧客管理
+                  </Link>
+                  <a
+                    href={process.env.NEXT_PUBLIC_CLIENT_HUB_URL || "https://crm.coco-star.jp"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <ExternalLink className="h-5 w-5" />
+                    Client Hub
+                  </a>
+                </>
               )}
               <button
                 onClick={() => signOut({ callbackUrl: "/login" })}
