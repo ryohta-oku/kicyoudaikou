@@ -299,6 +299,10 @@ export default function FolderDetailPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documentId: docId }),
       });
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error(`OCR処理に失敗しました (HTTP ${res.status})`);
+      }
       const data = await res.json();
       if (!res.ok) {
         const detail = data.detail ? ` (${data.detail})` : "";

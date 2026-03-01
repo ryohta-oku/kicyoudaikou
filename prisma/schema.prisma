@@ -163,11 +163,12 @@ model Account {
 
 // 補助科目マスター
 model SubAccount {
-  id        String  @id @default(uuid())
-  accountId String
-  code      String
-  name      String
-  clientId  String?
+  id         String  @id @default(uuid())
+  accountId  String
+  code       String
+  name       String
+  clientId   String?
+  isApproved Boolean @default(false)
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   client  Company? @relation(fields: [clientId], references: [id])

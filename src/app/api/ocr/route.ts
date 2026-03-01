@@ -37,8 +37,20 @@ async function imageToBase64(filePath: string): Promise<{ base64: string; mimeTy
     ".png": "image/png",
     ".webp": "image/webp",
     ".gif": "image/gif",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
   };
   return { base64: buffer.toString("base64"), mimeType: mimeMap[ext] || "image/jpeg" };
+}
+
+/** heic-convert をタイムアウト付きで実行（メモリ爆発・ハング防止） */
+async function convertHeicWithTimeout(heicBuffer: Buffer, timeoutMs = 15_000): Promise<Buffer> {
+  const convert = (await import("heic-convert")).default;
+  const result = await Promise.race([
+    convert({ buffer: new Uint8Array(heicBuffer) as unknown as ArrayBuffer, format: "JPEG", quality: 0.95 }),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("HEIC conversion timeout")), timeoutMs)),
+  ]);
+  return Buffer.from(result as ArrayBuffer);
 }
 
 // --- OCR + 構造化フィールド抽出（1回のAPI呼び出しで両方実行） ---
@@ -196,7 +208,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "ドキュメントIDが必要です", code: "OCR_NO_DOCUMENT_ID" }, { status: 400 });
     }
 
-    const document = await prisma.document.findUnique({
+    let document = await prisma.document.findUnique({
       where: { id: documentId },
     });
 
@@ -224,16 +236,27 @@ export async function POST(request: NextRequest) {
       fileData: document.fileData,
     });
 
-    let result: OcrResult;
-    let imagePath: string;
+    let result!: OcrResult;
+    let imagePath!: string;
     let imageData: Uint8Array<ArrayBuffer> | null = null;
 
     if (document.fileType === "pdf") {
       // === PDF: Geminiに直接送信（1回のAPI呼び出し） ===
       const pdfBuffer = await readFile(filePath);
-      result = await ocrPdf(pdfBuffer);
-      imagePath = document.filepath; // iframeで元PDFを表示するのでプレースホルダー不要
-    } else {
+      // PDFマジックバイト（%PDF）を検証
+      const isPdf = pdfBuffer[0] === 0x25 && pdfBuffer[1] === 0x50 && pdfBuffer[2] === 0x44 && pdfBuffer[3] === 0x46;
+      if (!isPdf) {
+        // 実際にはPDFでない → ファイル形式を判別してフォールバック
+        // HEIC/HEIF: offset 4 に "ftyp" シグネチャ
+        const isFtyp = pdfBuffer.length > 8 &&
+          pdfBuffer[4] === 0x66 && pdfBuffer[5] === 0x74 && pdfBuffer[6] === 0x79 && pdfBuffer[7] === 0x70;
+        document = { ...document, fileType: isFtyp ? "heic" : "jpeg" };
+      } else {
+        result = await ocrPdf(pdfBuffer);
+        imagePath = document.filepath;
+      }
+    }
+    if (document.fileType !== "pdf") {
       // === 画像: Gemini Vision でOCR ===
       const imagesDir = path.join(getUploadBaseDir(), "pages", documentId);
       await mkdir(imagesDir, { recursive: true });
@@ -241,13 +264,20 @@ export async function POST(request: NextRequest) {
       let fullImagePath: string;
 
       if (document.fileType === "heic" || document.fileType === "heif") {
-        const convert = (await import("heic-convert")).default;
-        const heicBuffer = await readFile(filePath);
-        const jpegData = await convert({ buffer: new Uint8Array(heicBuffer) as unknown as ArrayBuffer, format: "JPEG", quality: 0.95 });
-        const destPath = path.join(imagesDir, "page_1.jpg");
-        await writeFile(destPath, Buffer.from(jpegData as ArrayBuffer));
-        fullImagePath = destPath;
-        imagePath = `/uploads/pages/${documentId}/page_1.jpg`;
+        try {
+          const heicBuffer = await readFile(filePath);
+          const jpegData = await convertHeicWithTimeout(heicBuffer);
+          const destPath = path.join(imagesDir, "page_1.jpg");
+          await writeFile(destPath, jpegData);
+          fullImagePath = destPath;
+          imagePath = `/uploads/pages/${documentId}/page_1.jpg`;
+        } catch {
+          // HEIC変換失敗/タイムアウト → 正しい拡張子でコピーしてGeminiに直接送信
+          const destPath = path.join(imagesDir, "page_1.heic");
+          await copyFile(filePath, destPath);
+          fullImagePath = destPath;
+          imagePath = `/uploads/pages/${documentId}/page_1.heic`;
+        }
       } else {
         const ext = path.extname(document.filename) || `.${document.fileType}`;
         const destPath = path.join(imagesDir, `page_1${ext}`);
