@@ -32,6 +32,9 @@ function isAcceptedFile(file: File): boolean {
 function getFileType(file: File): string {
   const ext = path.extname(file.name).toLowerCase();
   if (HEIC_EXTENSIONS.includes(ext)) return "heic";
+  // 二重拡張子対応: "IMG_8420.HEIC.pdf" のようなケースで .HEIC を検出
+  const nameLower = file.name.toLowerCase();
+  if (HEIC_EXTENSIONS.some((h) => nameLower.includes(h + "."))) return "heic";
   if (file.type === "application/pdf") return "pdf";
   return file.type.replace("image/", "");
 }

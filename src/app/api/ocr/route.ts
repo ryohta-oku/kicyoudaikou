@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "ドキュメントIDが必要です", code: "OCR_NO_DOCUMENT_ID" }, { status: 400 });
     }
 
-    const document = await prisma.document.findUnique({
+    let document = await prisma.document.findUnique({
       where: { id: documentId },
     });
 
@@ -224,16 +224,24 @@ export async function POST(request: NextRequest) {
       fileData: document.fileData,
     });
 
-    let result: OcrResult;
-    let imagePath: string;
+    let result!: OcrResult;
+    let imagePath!: string;
     let imageData: Uint8Array<ArrayBuffer> | null = null;
 
     if (document.fileType === "pdf") {
       // === PDF: Geminiに直接送信（1回のAPI呼び出し） ===
       const pdfBuffer = await readFile(filePath);
-      result = await ocrPdf(pdfBuffer);
-      imagePath = document.filepath; // iframeで元PDFを表示するのでプレースホルダー不要
-    } else {
+      // PDFマジックバイト（%PDF）を検証 — HEICファイルが.pdf拡張子で保存されるケースに対応
+      const isPdf = pdfBuffer[0] === 0x25 && pdfBuffer[1] === 0x50 && pdfBuffer[2] === 0x44 && pdfBuffer[3] === 0x46;
+      if (!isPdf) {
+        // 実際にはPDFでない → 画像としてフォールバック（fileTypeを上書きして下の分岐へ）
+        document = { ...document, fileType: "jpeg" };
+      } else {
+        result = await ocrPdf(pdfBuffer);
+        imagePath = document.filepath; // iframeで元PDFを表示するのでプレースホルダー不要
+      }
+    }
+    if (document.fileType !== "pdf") {
       // === 画像: Gemini Vision でOCR ===
       const imagesDir = path.join(getUploadBaseDir(), "pages", documentId);
       await mkdir(imagesDir, { recursive: true });
