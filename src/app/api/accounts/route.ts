@@ -12,8 +12,8 @@ export async function GET(request: NextRequest) {
     const accounts = await prisma.account.findMany({
       include: {
         subAccounts: clientId
-          ? { where: { clientId } }
-          : true,
+          ? { where: { clientId, isApproved: true } }
+          : { where: { isApproved: true } },
       },
       orderBy: { code: "asc" },
     });

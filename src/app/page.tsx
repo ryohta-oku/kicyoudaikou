@@ -70,6 +70,7 @@ export default function DashboardPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [duplicateCount, setDuplicateCount] = useState(0);
+  const [pendingSubAccountCount, setPendingSubAccountCount] = useState(0);
   const [scanFiles, setScanFiles] = useState<{ name: string; size: number; modifiedAt: string }[]>([]);
   const [scanConfigured, setScanConfigured] = useState(false);
   const [scanImporting, setScanImporting] = useState(false);
@@ -127,6 +128,17 @@ export default function DashboardPage() {
       // ignore
     }
   }, []);
+
+  const fetchPendingSubAccounts = useCallback(async () => {
+    if (userRole !== "admin" && userRole !== "instructor") return;
+    try {
+      const res = await fetch("/api/accounts/sub/pending");
+      const data = await res.json();
+      setPendingSubAccountCount(data.count || 0);
+    } catch {
+      // ignore
+    }
+  }, [userRole]);
 
   const fetchFolders = useCallback(async () => {
     try {
@@ -216,12 +228,13 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchFolders();
     fetchDuplicates();
+    fetchPendingSubAccounts();
     checkScanFolder();
 
     // スキャンフォルダを5秒ごとにポーリング
     const interval = setInterval(checkScanFolder, 5000);
     return () => clearInterval(interval);
-  }, [fetchFolders, fetchDuplicates, checkScanFolder]);
+  }, [fetchFolders, fetchDuplicates, fetchPendingSubAccounts, checkScanFolder]);
 
   const handleBulkUploadComplete = (folderId: string) => {
     // アップロード完了後、フォルダ詳細ページへ遷移（OCRはそこで自動開始）
@@ -291,6 +304,19 @@ export default function DashboardPage() {
           <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
           <span className="text-sm text-amber-800">
             重複の可能性がある得意先が <strong>{duplicateCount} グループ</strong>あります。
+          </span>
+        </Link>
+      )}
+
+      {/* 未承認補助科目アラート */}
+      {pendingSubAccountCount > 0 && (userRole === "admin" || userRole === "instructor") && (
+        <Link
+          href="/accounts/pending"
+          className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-3 md:px-4 py-3 hover:bg-amber-100 transition-colors"
+        >
+          <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+          <span className="text-sm text-amber-800">
+            未承認の補助科目が <strong>{pendingSubAccountCount} 件</strong>あります。
           </span>
         </Link>
       )}
