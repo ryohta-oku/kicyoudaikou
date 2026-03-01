@@ -178,6 +178,7 @@ export default function OCREditor({
       const { value, raw } = await res.json();
       if (value) {
         handleFieldChange(pageId, fieldName, value);
+        setRereadErrors((prev) => { const next = { ...prev }; delete next[pageId]; return next; });
       } else {
         setRereadErrors((prev) => ({
           ...prev,
