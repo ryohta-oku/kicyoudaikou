@@ -44,7 +44,9 @@ export async function PATCH(
       data: body,
     });
 
-    return NextResponse.json({ document });
+    // fileData はバイナリで巨大なためレスポンスから除外
+    const { fileData: _, ...docWithout } = document;
+    return NextResponse.json({ document: docWithout });
   } catch (error) {
     console.error("Error updating document:", error);
     const detail = error instanceof Error ? error.message : String(error);
