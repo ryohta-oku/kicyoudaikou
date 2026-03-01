@@ -37,9 +37,9 @@ export default function Stepper({ steps, currentStep }: StepperProps) {
                   className={cn(
                     "flex items-center justify-center w-10 h-10 rounded-full border-2 text-sm font-bold transition-colors",
                     isCompleted
-                      ? "bg-blue-600 border-blue-600 text-white"
+                      ? "bg-teal-600 border-teal-600 text-white"
                       : isCurrent
-                        ? "border-blue-600 text-blue-600 bg-blue-50"
+                        ? "border-teal-600 text-teal-600 bg-teal-50"
                         : "border-gray-300 text-gray-400 bg-white"
                   )}
                 >
@@ -52,7 +52,7 @@ export default function Stepper({ steps, currentStep }: StepperProps) {
                 <span
                   className={cn(
                     "mt-2 text-xs font-medium text-center whitespace-nowrap",
-                    isCurrent ? "text-blue-600" : isCompleted ? "text-gray-700" : "text-gray-400"
+                    isCurrent ? "text-teal-600" : isCompleted ? "text-gray-700" : "text-gray-400"
                   )}
                 >
                   {step.label}
@@ -62,7 +62,7 @@ export default function Stepper({ steps, currentStep }: StepperProps) {
                 <div
                   className={cn(
                     "flex-1 h-0.5 mx-4 mt-[-1.5rem]",
-                    isCompleted ? "bg-blue-600" : "bg-gray-200"
+                    isCompleted ? "bg-teal-600" : "bg-gray-200"
                   )}
                 />
               )}

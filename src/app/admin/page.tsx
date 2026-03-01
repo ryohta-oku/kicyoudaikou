@@ -33,7 +33,7 @@ const ROLE_LABELS: Record<string, string> = {
 const ROLE_COLORS: Record<string, string> = {
   admin: "bg-amber-50 text-amber-700 border-amber-200",
   instructor: "bg-green-50 text-green-700 border-green-200",
-  user_a: "bg-blue-50 text-blue-700 border-blue-200",
+  user_a: "bg-teal-50 text-teal-700 border-teal-200",
   user_b: "bg-purple-50 text-purple-700 border-purple-200",
   user: "bg-gray-50 text-gray-600 border-gray-200",
 };
@@ -268,7 +268,7 @@ export default function AdminPage() {
                     navigator.clipboard.writeText(setupUrl);
                     setMessage({ type: "success", text: "URLをコピーしました" });
                   }}
-                  className="shrink-0 px-3 py-2 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                  className="shrink-0 px-3 py-2 bg-teal-600 text-white rounded text-xs hover:bg-teal-700"
                 >
                   コピー
                 </button>
@@ -294,7 +294,7 @@ export default function AdminPage() {
                   required
                   value={addName}
                   onChange={(e) => setAddName(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="山田 太郎"
                 />
               </div>
@@ -305,7 +305,7 @@ export default function AdminPage() {
                   required
                   value={addEmail}
                   onChange={(e) => setAddEmail(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="example@mail.com"
                 />
               </div>
@@ -315,7 +315,7 @@ export default function AdminPage() {
                   type="text"
                   value={addPassword}
                   onChange={(e) => setAddPassword(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="空欄なら招待メール送信"
                 />
               </div>
@@ -324,7 +324,7 @@ export default function AdminPage() {
                 <select
                   value={addRole}
                   onChange={(e) => setAddRole(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 >
                   {ROLE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -336,7 +336,7 @@ export default function AdminPage() {
               <button
                 type="submit"
                 disabled={adding}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+                className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 disabled:opacity-50 flex items-center gap-1"
               >
                 {adding && <Loader2 className="h-4 w-4 animate-spin" />}
                 追加
@@ -354,7 +354,7 @@ export default function AdminPage() {
       ) : (
         <button
           onClick={() => setShowAddForm(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors"
         >
           <UserPlus className="h-4 w-4" />
           ユーザーを追加
@@ -392,7 +392,7 @@ export default function AdminPage() {
                     <div className="flex items-center gap-2">
                       {user.name}
                       {isMe && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">自分</span>
+                        <span className="text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded">自分</span>
                       )}
                     </div>
                   </td>
@@ -404,14 +404,14 @@ export default function AdminPage() {
                           type="text"
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
-                          className="w-32 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="w-32 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-teal-500"
                           placeholder="新しいパスワード"
                           autoFocus
                         />
                         <button
                           onClick={() => handleSavePassword(user.id)}
                           disabled={savingPassword || !newPassword.trim()}
-                          className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50"
+                          className="px-2 py-1 bg-teal-600 text-white rounded text-xs hover:bg-teal-700 disabled:opacity-50"
                         >
                           {savingPassword ? <Loader2 className="h-3 w-3 animate-spin" /> : "保存"}
                         </button>

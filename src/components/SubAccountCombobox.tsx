@@ -122,7 +122,7 @@ export default function SubAccountCombobox({
         }}
         onFocus={() => setIsOpen(true)}
         disabled={disabled}
-        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-50 disabled:text-gray-500"
         placeholder="補助科目を入力..."
       />
       {isOpen && !disabled && (
@@ -145,8 +145,8 @@ export default function SubAccountCombobox({
               key={sub.id}
               type="button"
               onClick={() => handleSelect(sub)}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 ${
-                sub.code === value ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700"
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-teal-50 ${
+                sub.code === value ? "bg-teal-50 text-teal-700 font-medium" : "text-gray-700"
               }`}
             >
               {sub.name}
@@ -158,7 +158,7 @@ export default function SubAccountCombobox({
               type="button"
               onClick={handleAdd}
               disabled={adding}
-              className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 border-t flex items-center gap-1"
+              className="w-full text-left px-3 py-2 text-sm text-teal-600 hover:bg-teal-50 border-t flex items-center gap-1"
             >
               {adding ? (
                 <Loader2 className="w-3 h-3 animate-spin" />

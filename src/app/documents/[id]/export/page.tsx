@@ -154,18 +154,18 @@ export default function ExportPage({ params }: { params: Promise<{ id: string }>
                 className={cn(
                   "border rounded-xl p-4 text-left transition-colors",
                   selectedFormat === option.value
-                    ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200"
+                    ? "border-teal-500 bg-teal-50 ring-2 ring-teal-200"
                     : "border-gray-200 hover:border-gray-300"
                 )}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <FileSpreadsheet className={cn(
                     "w-5 h-5",
-                    selectedFormat === option.value ? "text-blue-600" : "text-gray-400"
+                    selectedFormat === option.value ? "text-teal-600" : "text-gray-400"
                   )} />
                   <span className={cn(
                     "font-medium text-sm",
-                    selectedFormat === option.value ? "text-blue-900" : "text-gray-900"
+                    selectedFormat === option.value ? "text-teal-900" : "text-gray-900"
                   )}>
                     {option.label}
                   </span>
@@ -199,7 +199,7 @@ export default function ExportPage({ params }: { params: Promise<{ id: string }>
               "flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium transition-colors",
               exporting || confirmedCount === 0
                 ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-blue-600 text-white hover:bg-blue-700"
+                : "bg-teal-600 text-white hover:bg-teal-700"
             )}
           >
             {exporting ? (

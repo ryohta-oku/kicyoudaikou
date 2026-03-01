@@ -184,9 +184,9 @@ export default function WorkflowProgressBar() {
                     className={cn(
                       "flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-colors flex-shrink-0",
                       isCompleted
-                        ? "bg-blue-600 text-white"
+                        ? "bg-teal-600 text-white"
                         : isCurrent
-                          ? "border-2 border-blue-600 text-blue-600 animate-pulse"
+                          ? "border-2 border-teal-600 text-teal-600 animate-pulse"
                           : "border border-gray-300 text-gray-400"
                     )}
                   >
@@ -200,7 +200,7 @@ export default function WorkflowProgressBar() {
                     className={cn(
                       "text-sm font-medium whitespace-nowrap hidden sm:inline",
                       isCurrent
-                        ? "text-blue-600"
+                        ? "text-teal-600"
                         : isCompleted
                           ? "text-gray-700"
                           : "text-gray-400"
@@ -213,7 +213,7 @@ export default function WorkflowProgressBar() {
                   <div
                     className={cn(
                       "flex-1 h-0.5 mx-2 min-w-[12px]",
-                      isCompleted ? "bg-blue-600" : "bg-gray-200"
+                      isCompleted ? "bg-teal-600" : "bg-gray-200"
                     )}
                   />
                 )}

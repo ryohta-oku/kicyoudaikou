@@ -144,8 +144,8 @@ export default function ClientsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">得意先管理</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-2xl md:text-3xl font-black text-foreground">得意先管理</h1>
+        <p className="text-sm text-teal-700 mt-1">
           得意先の一覧・重複検出・統合
         </p>
       </div>
@@ -185,7 +185,7 @@ export default function ClientsPage() {
                       className={cn(
                         "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors",
                         selectedTargets[group.normalized] === client.id
-                          ? "bg-blue-50 border border-blue-200"
+                          ? "bg-teal-50 border border-teal-200"
                           : "hover:bg-gray-50 border border-transparent"
                       )}
                     >
@@ -200,11 +200,11 @@ export default function ClientsPage() {
                             [group.normalized]: client.id,
                           }))
                         }
-                        className="text-blue-600"
+                        className="text-teal-600"
                       />
                       <span className="text-sm font-medium text-gray-900">{client.name}</span>
                       {selectedTargets[group.normalized] === client.id && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                        <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full">
                           統合先
                         </span>
                       )}
@@ -231,25 +231,25 @@ export default function ClientsPage() {
 
       {/* 得意先一覧 */}
       {clients.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl border">
-          <Building2 className="mx-auto h-16 w-16 text-gray-300 mb-4" />
-          <h3 className="text-lg font-medium text-gray-700 mb-2">
+        <div className="text-center py-16 card-glass rounded-xl">
+          <Building2 className="mx-auto h-16 w-16 text-teal-300 mb-4" />
+          <h3 className="text-lg font-medium text-foreground mb-2">
             得意先がありません
           </h3>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-teal-700">
             ヘッダーの得意先セレクタから追加できます
           </p>
         </div>
       ) : (
-        <div className="bg-white border rounded-xl overflow-hidden">
+        <div className="card-glass rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b">
-                <th className="px-6 py-3 text-left font-medium text-gray-600">得意先名</th>
-                <th className="px-6 py-3 text-left font-medium text-gray-600">フォルダ数</th>
-                <th className="px-6 py-3 text-left font-medium text-gray-600">補助科目数</th>
+              <tr className="bg-teal-50/80 border-b">
+                <th className="px-6 py-3 text-left font-medium text-teal-800">得意先名</th>
+                <th className="px-6 py-3 text-left font-medium text-teal-800">フォルダ数</th>
+                <th className="px-6 py-3 text-left font-medium text-teal-800">補助科目数</th>
                 {canDelete && (
-                  <th className="px-6 py-3 text-left font-medium text-gray-600">操作</th>
+                  <th className="px-6 py-3 text-left font-medium text-teal-800">操作</th>
                 )}
               </tr>
             </thead>
@@ -257,10 +257,10 @@ export default function ClientsPage() {
               {clients.map((client) => {
                 const hasRelations = client._count.folders > 0 || client._count.subAccounts > 0;
                 return (
-                  <tr key={client.id} className="border-b hover:bg-gray-50">
-                    <td className="px-6 py-3 font-medium text-gray-900">{client.name}</td>
-                    <td className="px-6 py-3 text-gray-500">{client._count.folders}</td>
-                    <td className="px-6 py-3 text-gray-500">{client._count.subAccounts}</td>
+                  <tr key={client.id} className="border-b hover:bg-teal-50/50">
+                    <td className="px-6 py-3 font-medium text-foreground">{client.name}</td>
+                    <td className="px-6 py-3 text-teal-700">{client._count.folders}</td>
+                    <td className="px-6 py-3 text-teal-700">{client._count.subAccounts}</td>
                     {canDelete && (
                       <td className="px-6 py-3">
                         <button

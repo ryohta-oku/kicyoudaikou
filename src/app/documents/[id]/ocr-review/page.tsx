@@ -131,7 +131,7 @@ export default function OCRReviewPage({ params }: { params: Promise<{ id: string
     return (
       <div className="text-center py-16">
         <p className="text-gray-500">ドキュメントが見つかりません</p>
-        <Link href="/" className="text-blue-600 hover:underline mt-4 inline-block">
+        <Link href="/" className="text-teal-600 hover:underline mt-4 inline-block">
           ダッシュボードに戻る
         </Link>
       </div>
@@ -166,7 +166,7 @@ export default function OCRReviewPage({ params }: { params: Promise<{ id: string
             <button
               onClick={startOCR}
               disabled={ocrProcessing}
-              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:bg-gray-400"
+              className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium disabled:bg-gray-400"
             >
               {ocrProcessing ? (
                 <>
@@ -200,10 +200,10 @@ export default function OCRReviewPage({ params }: { params: Promise<{ id: string
       )}
 
       {ocrProcessing && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-3" />
-          <p className="text-blue-700 font-medium">OCR処理を実行中です...</p>
-          <p className="text-sm text-blue-600 mt-1">
+        <div className="bg-teal-50 border border-teal-200 rounded-lg p-6 text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-teal-500 mx-auto mb-3" />
+          <p className="text-teal-700 font-medium">OCR処理を実行中です...</p>
+          <p className="text-sm text-teal-600 mt-1">
             PDFの各ページを画像に変換し、テキストを読み取っています
           </p>
         </div>
@@ -222,9 +222,9 @@ export default function OCRReviewPage({ params }: { params: Promise<{ id: string
 
       {!hasPages && !ocrProcessing && (
         <div className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
-            <Play className="w-5 h-5 text-blue-600 flex-shrink-0" />
-            <p className="text-sm text-blue-700">
+          <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 flex items-center gap-3">
+            <Play className="w-5 h-5 text-teal-600 flex-shrink-0" />
+            <p className="text-sm text-teal-700">
               OCR処理を自動的に開始しています...
             </p>
           </div>
