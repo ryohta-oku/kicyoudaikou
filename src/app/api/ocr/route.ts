@@ -231,14 +231,17 @@ export async function POST(request: NextRequest) {
     if (document.fileType === "pdf") {
       // === PDF: Geminiに直接送信（1回のAPI呼び出し） ===
       const pdfBuffer = await readFile(filePath);
-      // PDFマジックバイト（%PDF）を検証 — HEICファイルが.pdf拡張子で保存されるケースに対応
+      // PDFマジックバイト（%PDF）を検証
       const isPdf = pdfBuffer[0] === 0x25 && pdfBuffer[1] === 0x50 && pdfBuffer[2] === 0x44 && pdfBuffer[3] === 0x46;
       if (!isPdf) {
-        // 実際にはPDFでない → 画像としてフォールバック（fileTypeを上書きして下の分岐へ）
-        document = { ...document, fileType: "jpeg" };
+        // 実際にはPDFでない → ファイル形式を判別してフォールバック
+        // HEIC/HEIF: offset 4 に "ftyp" シグネチャ
+        const isFtyp = pdfBuffer.length > 8 &&
+          pdfBuffer[4] === 0x66 && pdfBuffer[5] === 0x74 && pdfBuffer[6] === 0x79 && pdfBuffer[7] === 0x70;
+        document = { ...document, fileType: isFtyp ? "heic" : "jpeg" };
       } else {
         result = await ocrPdf(pdfBuffer);
-        imagePath = document.filepath; // iframeで元PDFを表示するのでプレースホルダー不要
+        imagePath = document.filepath;
       }
     }
     if (document.fileType !== "pdf") {
@@ -249,13 +252,21 @@ export async function POST(request: NextRequest) {
       let fullImagePath: string;
 
       if (document.fileType === "heic" || document.fileType === "heif") {
-        const convert = (await import("heic-convert")).default;
-        const heicBuffer = await readFile(filePath);
-        const jpegData = await convert({ buffer: new Uint8Array(heicBuffer) as unknown as ArrayBuffer, format: "JPEG", quality: 0.95 });
-        const destPath = path.join(imagesDir, "page_1.jpg");
-        await writeFile(destPath, Buffer.from(jpegData as ArrayBuffer));
-        fullImagePath = destPath;
-        imagePath = `/uploads/pages/${documentId}/page_1.jpg`;
+        try {
+          const convert = (await import("heic-convert")).default;
+          const heicBuffer = await readFile(filePath);
+          const jpegData = await convert({ buffer: new Uint8Array(heicBuffer) as unknown as ArrayBuffer, format: "JPEG", quality: 0.95 });
+          const destPath = path.join(imagesDir, "page_1.jpg");
+          await writeFile(destPath, Buffer.from(jpegData as ArrayBuffer));
+          fullImagePath = destPath;
+          imagePath = `/uploads/pages/${documentId}/page_1.jpg`;
+        } catch {
+          // HEIC変換失敗 → そのままコピーしてGeminiに送信
+          const destPath = path.join(imagesDir, "page_1.jpg");
+          await copyFile(filePath, destPath);
+          fullImagePath = destPath;
+          imagePath = `/uploads/pages/${documentId}/page_1.jpg`;
+        }
       } else {
         const ext = path.extname(document.filename) || `.${document.fileType}`;
         const destPath = path.join(imagesDir, `page_1${ext}`);
