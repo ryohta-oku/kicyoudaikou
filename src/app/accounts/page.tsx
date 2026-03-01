@@ -16,7 +16,7 @@ interface Account {
 const CATEGORIES = ["資産", "負債", "純資産", "収益", "費用"];
 
 const CATEGORY_COLORS: Record<string, string> = {
-  "資産": "bg-blue-100 text-blue-800",
+  "資産": "bg-teal-100 text-teal-800",
   "負債": "bg-red-100 text-red-800",
   "純資産": "bg-purple-100 text-purple-800",
   "収益": "bg-green-100 text-green-800",
@@ -87,8 +87,8 @@ export default function AccountsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">勘定科目管理</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl md:text-3xl font-black text-foreground">勘定科目管理</h1>
+          <p className="text-sm text-teal-700 mt-1">
             勘定科目マスターの管理・編集
           </p>
         </div>
@@ -96,7 +96,7 @@ export default function AccountsPage() {
           <button
             onClick={handleSeed}
             disabled={seeding}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 bg-teal-700 text-white rounded-lg hover:bg-teal-800 transition-colors text-sm font-medium disabled:opacity-50"
           >
             {seeding ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -107,7 +107,7 @@ export default function AccountsPage() {
           </button>
           <button
             onClick={() => setShowAddForm(!showAddForm)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium"
           >
             <Plus className="w-4 h-4" />
             科目追加
@@ -123,8 +123,8 @@ export default function AccountsPage() {
 
       {/* 追加フォーム */}
       {showAddForm && (
-        <div className="bg-white border rounded-xl p-6 space-y-4">
-          <h3 className="font-medium text-gray-900">新しい勘定科目を追加</h3>
+        <div className="card-glass rounded-xl p-6 space-y-4">
+          <h3 className="font-medium text-foreground">新しい勘定科目を追加</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <input
               type="text"
@@ -151,7 +151,7 @@ export default function AccountsPage() {
             </select>
             <button
               onClick={handleAddAccount}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+              className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium"
             >
               追加
             </button>
@@ -161,12 +161,12 @@ export default function AccountsPage() {
 
       {/* カテゴリフィルター */}
       <div className="flex items-center gap-2">
-        <span className="text-sm text-gray-600">フィルター:</span>
+        <span className="text-sm text-teal-700">フィルター:</span>
         <button
           onClick={() => setFilterCategory("")}
           className={cn(
             "px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
-            !filterCategory ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            !filterCategory ? "bg-teal-800 text-white" : "bg-teal-50 text-teal-700 hover:bg-teal-100"
           )}
         >
           すべて ({accounts.length})
@@ -180,7 +180,7 @@ export default function AccountsPage() {
               className={cn(
                 "px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
                 filterCategory === cat
-                  ? "bg-gray-800 text-white"
+                  ? "bg-teal-800 text-white"
                   : `${CATEGORY_COLORS[cat]} hover:opacity-80`
               )}
             >
@@ -196,31 +196,31 @@ export default function AccountsPage() {
           <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
         </div>
       ) : filteredAccounts.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl border">
-          <Database className="mx-auto h-16 w-16 text-gray-300 mb-4" />
-          <h3 className="text-lg font-medium text-gray-700 mb-2">
+        <div className="text-center py-16 card-glass rounded-xl">
+          <Database className="mx-auto h-16 w-16 text-teal-300 mb-4" />
+          <h3 className="text-lg font-medium text-foreground mb-2">
             勘定科目がありません
           </h3>
-          <p className="text-sm text-gray-500 mb-6">
+          <p className="text-sm text-teal-700 mb-6">
             「標準科目を一括登録」ボタンで基本的な勘定科目を登録できます
           </p>
         </div>
       ) : (
-        <div className="bg-white border rounded-xl overflow-hidden">
+        <div className="card-glass rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b">
-                <th className="px-6 py-3 text-left font-medium text-gray-600">コード</th>
-                <th className="px-6 py-3 text-left font-medium text-gray-600">勘定科目名</th>
-                <th className="px-6 py-3 text-left font-medium text-gray-600">区分</th>
-                <th className="px-6 py-3 text-left font-medium text-gray-600">補助科目</th>
+              <tr className="bg-teal-50/80 border-b">
+                <th className="px-6 py-3 text-left font-medium text-teal-800">コード</th>
+                <th className="px-6 py-3 text-left font-medium text-teal-800">勘定科目名</th>
+                <th className="px-6 py-3 text-left font-medium text-teal-800">区分</th>
+                <th className="px-6 py-3 text-left font-medium text-teal-800">補助科目</th>
               </tr>
             </thead>
             <tbody>
               {filteredAccounts.map((account) => (
-                <tr key={account.id} className="border-b hover:bg-gray-50">
-                  <td className="px-6 py-3 font-mono text-gray-700">{account.code}</td>
-                  <td className="px-6 py-3 font-medium text-gray-900">{account.name}</td>
+                <tr key={account.id} className="border-b hover:bg-teal-50/50">
+                  <td className="px-6 py-3 font-mono text-teal-700">{account.code}</td>
+                  <td className="px-6 py-3 font-medium text-foreground">{account.name}</td>
                   <td className="px-6 py-3">
                     <span className={cn(
                       "inline-flex px-2.5 py-1 rounded-full text-xs font-medium",
@@ -229,7 +229,7 @@ export default function AccountsPage() {
                       {account.category}
                     </span>
                   </td>
-                  <td className="px-6 py-3 text-gray-500">
+                  <td className="px-6 py-3 text-teal-700">
                     {account.subAccounts.length > 0
                       ? account.subAccounts.map((s) => s.name).join(", ")
                       : "-"

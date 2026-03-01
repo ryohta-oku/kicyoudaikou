@@ -223,7 +223,7 @@ export default function FileUpload({
       case "pending":
         return null;
       case "uploading":
-        return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />;
+        return <Loader2 className="w-4 h-4 animate-spin text-teal-500" />;
       case "uploaded":
         return <CheckCircle2 className="w-4 h-4 text-green-500" />;
       case "error":
@@ -255,33 +255,31 @@ export default function FileUpload({
           onChange={(e) => setFolderName(e.target.value)}
           placeholder="フォルダ名を入力（空欄の場合は日時で自動生成）"
           disabled={isProcessing}
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100"
         />
       </div>
 
       {/* ドロップゾーン */}
-      <div
+      <label
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        htmlFor={isProcessing ? undefined : "file-input-upload"}
         className={cn(
-          "border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer",
+          "block border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer",
           isDragOver
-            ? "border-blue-400 bg-blue-50"
+            ? "border-teal-400 bg-teal-50"
             : "border-gray-300 bg-gray-50 hover:border-gray-400",
           isProcessing && "pointer-events-none opacity-60"
         )}
-        onClick={() =>
-          !isProcessing &&
-          document.getElementById("file-input-multi")?.click()
-        }
       >
         <input
-          id="file-input-multi"
+          id="file-input-upload"
           type="file"
           accept={ACCEPTED_EXTENSIONS}
           multiple
-          className="hidden"
+          className="sr-only"
+          tabIndex={-1}
           onChange={handleFileSelect}
         />
         <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
@@ -291,10 +289,10 @@ export default function FileUpload({
         <p className="text-sm text-gray-500">
           またはクリックしてファイルを選択（PDF, JPEG, PNG, HEIC 等）
         </p>
-        <p className="text-xs text-blue-600 mt-2">
+        <p className="text-xs text-teal-600 mt-2">
           ファイルを追加してから「送信」ボタンでアップロード＆OCR処理を開始します
         </p>
-      </div>
+      </label>
 
       {/* ファイルリスト */}
       {files.length > 0 && (
@@ -305,7 +303,7 @@ export default function FileUpload({
               className="flex items-center gap-3 px-4 py-3"
             >
               {isImageFile(item.file) ? (
-                <ImageIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                <ImageIcon className="w-5 h-5 text-teal-500 flex-shrink-0" />
               ) : (
                 <File className="w-5 h-5 text-red-500 flex-shrink-0" />
               )}
@@ -389,7 +387,7 @@ export default function FileUpload({
               <div className="relative">
                 <button
                   onClick={handleBulkProcess}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium"
                 >
                   <Send className="w-4 h-4" />
                   送信してOCR処理を開始

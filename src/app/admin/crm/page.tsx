@@ -67,7 +67,7 @@ export default async function CrmPage() {
           href={`${CLIENT_HUB_URL}/dashboard`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 transition-colors"
         >
           <ExternalLink size={14} />
           Client Hub を開く
@@ -119,8 +119,8 @@ export default async function CrmPage() {
                 label: "全顧客数",
                 value: total,
                 icon: Users,
-                color: "text-blue-600",
-                bg: "bg-blue-50",
+                color: "text-teal-600",
+                bg: "bg-teal-50",
               },
               {
                 label: "見込み客",
@@ -168,14 +168,14 @@ export default async function CrmPage() {
           <div className="rounded-xl bg-white border overflow-hidden">
             <div className="px-6 py-4 border-b flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <UserSearch size={20} className="text-blue-600" />
+                <UserSearch size={20} className="text-teal-600" />
                 顧客一覧
               </h2>
               <a
                 href={`${CLIENT_HUB_URL}/clients/new`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-medium hover:bg-teal-700 transition-colors"
               >
                 <UserPlus size={12} />
                 新規登録
@@ -249,7 +249,7 @@ export default async function CrmPage() {
                             key={svc.id}
                             className={`inline-flex px-2 py-0.5 rounded-md text-xs ${
                               svc.service === "kicyoudaikou"
-                                ? "bg-blue-50 text-blue-700"
+                                ? "bg-teal-50 text-teal-700"
                                 : "bg-green-50 text-green-700"
                             }`}
                           >
@@ -263,7 +263,7 @@ export default async function CrmPage() {
                         href={`${CLIENT_HUB_URL}/clients/${client.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                        className="text-gray-400 hover:text-teal-600 transition-colors"
                       >
                         <ExternalLink size={14} />
                       </a>

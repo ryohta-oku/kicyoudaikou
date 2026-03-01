@@ -244,8 +244,8 @@ export default function DashboardPage() {
       {/* ヘッダー */}
       <div className="flex items-start sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900">ダッシュボード</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl md:text-3xl font-black text-foreground">ダッシュボード</h1>
+          <p className="text-sm text-teal-700 mt-1">
             アップロードされたフォルダの管理
           </p>
         </div>
@@ -253,7 +253,7 @@ export default function DashboardPage() {
           {isWorkStarted ? (
             <button
               onClick={() => setShowUpload(!showUpload)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium"
             >
               <Upload className="w-4 h-4" />
               <span className="hidden sm:inline">ファイルを</span>アップロード
@@ -262,7 +262,7 @@ export default function DashboardPage() {
             <button
               onClick={handleWorkStart}
               disabled={workStarting}
-              className="flex items-center gap-2 px-5 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors text-base font-bold shadow-lg disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl hover:from-amber-600 hover:to-amber-700 transition-colors text-base font-bold shadow-lg disabled:opacity-50"
             >
               {workStarting ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -297,17 +297,17 @@ export default function DashboardPage() {
 
       {/* スキャン取り込みバナー */}
       {scanConfigured && scanFiles.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 md:p-4">
+        <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 md:p-4">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 md:w-10 md:h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <ScanLine className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
+              <div className="w-9 h-9 md:w-10 md:h-10 bg-teal-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <ScanLine className="w-4 h-4 md:w-5 md:h-5 text-teal-600" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-medium text-blue-900">
+                <p className="text-sm font-medium text-teal-900">
                   ScanSnapから {scanFiles.length} 件のファイルを検出
                 </p>
-                <p className="text-sm text-blue-700 mt-0.5 truncate">
+                <p className="text-sm text-teal-700 mt-0.5 truncate">
                   {scanFiles.map((f) => f.name).join(", ")}
                 </p>
               </div>
@@ -315,7 +315,7 @@ export default function DashboardPage() {
             <button
               onClick={handleScanImport}
               disabled={scanImporting}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 flex-shrink-0"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium disabled:opacity-50 flex-shrink-0"
             >
               {scanImporting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -330,8 +330,8 @@ export default function DashboardPage() {
 
       {/* アップロードエリア */}
       {showUpload && (
-        <div className="bg-white rounded-xl border p-4 md:p-6">
-          <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-4">
+        <div className="card-glass rounded-xl p-4 md:p-6">
+          <h2 className="text-base md:text-lg font-semibold text-foreground mb-4">
             ファイルをアップロード（複数選択可）
           </h2>
           <FileUpload onBulkUploadComplete={handleBulkUploadComplete} />
@@ -339,8 +339,8 @@ export default function DashboardPage() {
       )}
 
       {/* スキャンガイドカード */}
-      <div className="bg-white rounded-xl border p-4 md:p-5">
-        <h3 className="text-base font-semibold text-gray-900 mb-3">
+      <div className="card-glass rounded-xl p-4 md:p-5">
+        <h3 className="text-base font-semibold text-foreground mb-3">
           スキャンの流れ
         </h3>
         <div className="grid grid-cols-4 gap-2 md:gap-4">
@@ -352,13 +352,13 @@ export default function DashboardPage() {
           ].map(({ icon: Icon, label, step }) => (
             <div
               key={step}
-              className="flex flex-col items-center text-center gap-1.5 p-2 md:p-3 rounded-lg bg-gray-50"
+              className="flex flex-col items-center text-center gap-1.5 p-2 md:p-3 rounded-lg bg-teal-50/50"
             >
-              <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <Icon className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-teal-100 flex items-center justify-center">
+                <Icon className="w-4 h-4 md:w-5 md:h-5 text-teal-600" />
               </div>
               <div>
-                <span className="text-xs font-bold text-blue-600">
+                <span className="text-xs font-bold text-teal-600">
                   Step {step}
                 </span>
                 <p className="text-xs md:text-sm text-gray-700 mt-0.5">{label}</p>
@@ -374,18 +374,18 @@ export default function DashboardPage() {
           <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
         </div>
       ) : folders.length === 0 ? (
-        <div className="text-center py-12 md:py-16 bg-white rounded-xl border">
-          <FolderOpen className="mx-auto h-12 w-12 md:h-16 md:w-16 text-gray-300 mb-4" />
-          <h3 className="text-base md:text-lg font-medium text-gray-700 mb-2">
+        <div className="text-center py-12 md:py-16 card-glass rounded-xl">
+          <FolderOpen className="mx-auto h-12 w-12 md:h-16 md:w-16 text-teal-300 mb-4" />
+          <h3 className="text-base md:text-lg font-medium text-foreground mb-2">
             フォルダがありません
           </h3>
-          <p className="text-xs md:text-sm text-gray-500 mb-6 px-4">
+          <p className="text-xs md:text-sm text-teal-700 mb-6 px-4">
             PDF・画像ファイルをアップロードして記帳作業を始めましょう
           </p>
           {isWorkStarted ? (
             <button
               onClick={() => setShowUpload(true)}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium"
             >
               <Upload className="w-4 h-4" />
               アップロード
@@ -394,7 +394,7 @@ export default function DashboardPage() {
             <button
               onClick={handleWorkStart}
               disabled={workStarting}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors text-base font-bold shadow-lg disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl hover:from-amber-600 hover:to-amber-700 transition-colors text-base font-bold shadow-lg disabled:opacity-50"
             >
               {workStarting ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -429,7 +429,7 @@ export default function DashboardPage() {
             <Link
               key={folder.id}
               href={`/folders/${folder.id}`}
-              className="flex items-center justify-between gap-3 bg-white rounded-xl border p-3 md:p-4 hover:bg-gray-50 transition-colors"
+              className="flex items-center justify-between gap-3 card-glass rounded-xl p-3 md:p-4 hover:bg-teal-50/50 transition-colors"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <FolderOpen className="w-5 h-5 text-yellow-500 flex-shrink-0" />
@@ -474,7 +474,7 @@ export default function DashboardPage() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Clock className="w-5 h-5 text-amber-500" />
-                  <h2 className="text-base md:text-lg font-bold text-gray-900">未完了タスク</h2>
+                  <h2 className="text-base md:text-lg font-bold text-foreground">未完了タスク</h2>
                   {incompleteFolders.length > 0 && (
                     <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-amber-500 rounded-full">
                       {incompleteFolders.length}
@@ -507,7 +507,7 @@ export default function DashboardPage() {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <Check className="w-5 h-5 text-green-500" />
-                    <h2 className="text-base md:text-lg font-bold text-gray-900">完了済み</h2>
+                    <h2 className="text-base md:text-lg font-bold text-foreground">完了済み</h2>
                     <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-green-500 rounded-full">
                       {completedFolders.length}
                     </span>
@@ -556,7 +556,7 @@ export default function DashboardPage() {
                 "flex items-center justify-between gap-3 rounded-xl border p-3 md:p-4 transition-colors",
                 isHandoff
                   ? "bg-cyan-50 border-cyan-200 hover:bg-cyan-100"
-                  : "bg-white hover:bg-gray-50"
+                  : "card-glass hover:bg-teal-50/50"
               )}
             >
               <div className="flex items-center gap-3 min-w-0">
@@ -611,7 +611,7 @@ export default function DashboardPage() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Clock className="w-5 h-5 text-amber-500" />
-                  <h2 className="text-base md:text-lg font-bold text-gray-900">未完了タスク</h2>
+                  <h2 className="text-base md:text-lg font-bold text-foreground">未完了タスク</h2>
                   {incompleteFolders.length > 0 && (
                     <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-amber-500 rounded-full">
                       {incompleteFolders.length}
@@ -647,7 +647,7 @@ export default function DashboardPage() {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <Check className="w-5 h-5 text-green-500" />
-                    <h2 className="text-base md:text-lg font-bold text-gray-900">完了済み</h2>
+                    <h2 className="text-base md:text-lg font-bold text-foreground">完了済み</h2>
                     <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-green-500 rounded-full">
                       {completedFolders.length}
                     </span>
@@ -667,37 +667,37 @@ export default function DashboardPage() {
         /* ===== 管理者等のフォルダ一覧 ===== */
         <>
           {/* デスクトップ: テーブル表示 */}
-          <div className="hidden md:block bg-white rounded-xl border overflow-hidden">
+          <div className="hidden md:block card-glass rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50 border-b">
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">作成日</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">フォルダ名</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-600">ファイル数</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">ステータス</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">作成者</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-600">操作</th>
+                  <tr className="bg-teal-50/80 border-b">
+                    <th className="px-4 py-3 text-left font-medium text-teal-800">作成日</th>
+                    <th className="px-4 py-3 text-left font-medium text-teal-800">フォルダ名</th>
+                    <th className="px-4 py-3 text-center font-medium text-teal-800">ファイル数</th>
+                    <th className="px-4 py-3 text-left font-medium text-teal-800">ステータス</th>
+                    <th className="px-4 py-3 text-left font-medium text-teal-800">作成者</th>
+                    <th className="px-4 py-3 text-center font-medium text-teal-800">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {folders.map((folder) => {
                     const folderStatus = getFolderStatus(folder);
                     return (
-                      <tr key={folder.id} className="border-b hover:bg-gray-50">
-                        <td className="px-4 py-4 text-gray-600 whitespace-nowrap">
+                      <tr key={folder.id} className="border-b hover:bg-teal-50/50">
+                        <td className="px-4 py-4 text-teal-700 whitespace-nowrap">
                           {new Date(folder.createdAt).toLocaleDateString("ja-JP")}
                         </td>
                         <td className="px-4 py-4">
                           <Link href={`/folders/${folder.id}`} className="flex items-center gap-2 group">
                             <FolderOpen className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-                            <span className="font-medium text-gray-900 group-hover:text-blue-600 truncate max-w-[250px]">
+                            <span className="font-medium text-foreground group-hover:text-teal-600 truncate max-w-[250px]">
                               {folder.name}
                             </span>
                           </Link>
                         </td>
                         <td className="px-4 py-4 text-center">
-                          <span className="inline-flex items-center gap-1 text-gray-600">
+                          <span className="inline-flex items-center gap-1 text-teal-700">
                             <FileText className="w-3.5 h-3.5" />
                             {folder.documents.length}
                           </span>
@@ -707,12 +707,12 @@ export default function DashboardPage() {
                             {STATUS_LABELS[folderStatus] || folderStatus}
                           </span>
                         </td>
-                        <td className="px-4 py-4 text-gray-600">{folder.creator || "-"}</td>
+                        <td className="px-4 py-4 text-teal-700">{folder.creator || "-"}</td>
                         <td className="px-4 py-4">
                           <div className="flex items-center justify-center gap-2">
                             <Link
                               href={`/folders/${folder.id}`}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
                             >
                               詳細を見る
                             </Link>
@@ -742,13 +742,13 @@ export default function DashboardPage() {
             {folders.map((folder) => {
               const folderStatus = getFolderStatus(folder);
               return (
-                <div key={folder.id} className="bg-white rounded-xl border overflow-hidden">
-                  <Link href={`/folders/${folder.id}`} className="block p-4 active:bg-gray-50">
+                <div key={folder.id} className="card-glass rounded-xl overflow-hidden">
+                  <Link href={`/folders/${folder.id}`} className="block p-4 active:bg-teal-50/50">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 mb-1.5">
                           <FolderOpen className="w-4 h-4 text-yellow-500 flex-shrink-0" />
-                          <span className="font-medium text-gray-900 text-sm truncate">
+                          <span className="font-medium text-foreground text-sm truncate">
                             {folder.name}
                           </span>
                         </div>

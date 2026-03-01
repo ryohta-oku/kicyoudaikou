@@ -16,6 +16,9 @@ const nextConfig: NextConfig = {
       ...config.resolve.alias,
       canvas: false,
     };
+    config.watchOptions = {
+      ignored: /node_modules/,
+    };
     return config;
   },
 };

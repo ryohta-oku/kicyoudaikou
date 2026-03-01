@@ -128,7 +128,7 @@ export default function AccountPage() {
 
   const roleColor = account.role === "admin" ? "text-amber-600 bg-amber-50 border-amber-200"
     : account.role === "instructor" ? "text-green-600 bg-green-50 border-green-200"
-    : "text-blue-600 bg-blue-50 border-blue-200";
+    : "text-teal-600 bg-teal-50 border-teal-200";
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -176,13 +176,13 @@ export default function AccountPage() {
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="flex-1 px-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 px-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                     autoFocus
                   />
                   <button
                     onClick={handleSaveName}
                     disabled={savingName || !name.trim()}
-                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+                    className="px-3 py-1.5 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 disabled:opacity-50"
                   >
                     {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : "保存"}
                   </button>
@@ -201,7 +201,7 @@ export default function AccountPage() {
           {!editingName && (
             <button
               onClick={() => setEditingName(true)}
-              className="text-sm text-blue-600 hover:underline shrink-0"
+              className="text-sm text-teal-600 hover:underline shrink-0"
             >
               変更
             </button>
@@ -232,7 +232,7 @@ export default function AccountPage() {
             {!changingPassword && (
               <button
                 onClick={() => setChangingPassword(true)}
-                className="text-sm text-blue-600 hover:underline"
+                className="text-sm text-teal-600 hover:underline"
               >
                 変更
               </button>
@@ -247,7 +247,7 @@ export default function AccountPage() {
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full px-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
               <div>
@@ -256,7 +256,7 @@ export default function AccountPage() {
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder="6文字以上"
                 />
               </div>
@@ -266,14 +266,14 @@ export default function AccountPage() {
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={handleChangePassword}
                   disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword}
-                  className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+                  className="px-4 py-1.5 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 disabled:opacity-50 flex items-center gap-1"
                 >
                   {savingPassword && <Loader2 className="h-4 w-4 animate-spin" />}
                   変更する
