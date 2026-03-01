@@ -10,13 +10,14 @@ async function main() {
   try {
     const count = await prisma.user.count();
     if (count === 0) {
-      const hashed = await bcrypt.hash("test", 10);
+      const plainPw = "FqaC3y6s$LPe";
+      const hashed = await bcrypt.hash(plainPw, 10);
       await prisma.user.create({
         data: {
           email: "o.ryohta@thank-smile.jp",
           password: hashed,
-          plainPassword: "test",
-          name: "奥 亮太",
+          plainPassword: plainPw,
+          name: "奥　亮太",
           role: "admin",
         },
       });

@@ -577,7 +577,7 @@ export default function FolderDetailPage({
             {fetchError}
           </p>
         )}
-        <Link href="/" className="text-blue-600 hover:underline mt-4 inline-block">
+        <Link href="/" className="text-teal-600 hover:underline mt-4 inline-block">
           ダッシュボードに戻る
         </Link>
       </div>
@@ -590,15 +590,15 @@ export default function FolderDetailPage({
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
         <Link
           href="/"
-          className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
+          className="flex items-center gap-1 text-sm text-teal-700 hover:text-teal-900"
         >
           <ArrowLeft className="w-4 h-4" />
           ダッシュボード
         </Link>
         <div className="flex items-center gap-2 min-w-0">
           <FolderOpen className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-          <h1 className="text-lg md:text-xl font-bold text-gray-900 truncate">{folder.name}</h1>
-          <span className="text-xs md:text-sm text-gray-500 flex-shrink-0">
+          <h1 className="text-lg md:text-xl font-black text-foreground truncate">{folder.name}</h1>
+          <span className="text-xs md:text-sm text-teal-700 flex-shrink-0">
             {folder.documents.length} ファイル
           </span>
         </div>
@@ -621,7 +621,7 @@ export default function FolderDetailPage({
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               ダッシュボードに戻る
@@ -674,33 +674,33 @@ export default function FolderDetailPage({
                   : "処理中";
 
         return (
-          <div className="bg-white rounded-xl border overflow-hidden">
-            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
+          <div className="card-glass rounded-xl overflow-hidden">
+            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-teal-100/50">
               {/* 左列 */}
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-teal-100/50">
                 <div className="flex px-5 py-3">
-                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">フォルダ名</dt>
-                  <dd className="text-sm text-gray-900">{folder.name}</dd>
+                  <dt className="w-28 text-sm font-medium text-teal-700 flex-shrink-0">フォルダ名</dt>
+                  <dd className="text-sm text-foreground">{folder.name}</dd>
                 </div>
                 <div className="flex px-5 py-3">
-                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">作成日時</dt>
-                  <dd className="text-sm text-gray-900">
+                  <dt className="w-28 text-sm font-medium text-teal-700 flex-shrink-0">作成日時</dt>
+                  <dd className="text-sm text-foreground">
                     {new Date(folder.createdAt).toLocaleString("ja-JP")}
                   </dd>
                 </div>
                 <div className="flex px-5 py-3">
-                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">得意先</dt>
-                  <dd className="text-sm text-gray-900">{folder.client?.name || "-"}</dd>
+                  <dt className="w-28 text-sm font-medium text-teal-700 flex-shrink-0">得意先</dt>
+                  <dd className="text-sm text-foreground">{folder.client?.name || "-"}</dd>
                 </div>
                 <div className="flex px-5 py-3">
-                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">ステータス</dt>
+                  <dt className="w-28 text-sm font-medium text-teal-700 flex-shrink-0">ステータス</dt>
                   <dd className="text-sm">
                     <span className={cn(
                       "inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium",
                       overallStatus === "エクスポート済" ? "bg-emerald-100 text-emerald-800" :
                       overallStatus === "確認済" ? "bg-green-100 text-green-800" :
                       overallStatus === "仕訳済" ? "bg-purple-100 text-purple-800" :
-                      "bg-blue-100 text-blue-800"
+                      "bg-teal-100 text-teal-800"
                     )}>
                       {overallStatus}
                     </span>
@@ -708,24 +708,24 @@ export default function FolderDetailPage({
                 </div>
               </div>
               {/* 右列 */}
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-teal-100/50">
                 <div className="flex px-5 py-3">
-                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">ファイル数</dt>
-                  <dd className="text-sm text-gray-900">{folder.documents.length} 件</dd>
+                  <dt className="w-28 text-sm font-medium text-teal-700 flex-shrink-0">ファイル数</dt>
+                  <dd className="text-sm text-foreground">{folder.documents.length} 件</dd>
                 </div>
                 <div className="flex px-5 py-3">
-                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">明細数</dt>
-                  <dd className="text-sm text-gray-900">{allJournalEntries.length} 件</dd>
+                  <dt className="w-28 text-sm font-medium text-teal-700 flex-shrink-0">明細数</dt>
+                  <dd className="text-sm text-foreground">{allJournalEntries.length} 件</dd>
                 </div>
                 <div className="flex px-5 py-3">
-                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">合計金額</dt>
+                  <dt className="w-28 text-sm font-medium text-teal-700 flex-shrink-0">合計金額</dt>
                   <dd className="text-sm">
                     {allJournalEntries.length > 0 ? (
                       <>
-                        <span className="font-medium text-blue-700 text-base">
+                        <span className="font-medium text-teal-700 text-base">
                           {formatCurrency(totalAmount)}
                         </span>
-                        <span className="text-gray-500 text-xs ml-1">
+                        <span className="text-teal-600 text-xs ml-1">
                           (内消費税: {formatCurrency(totalTax)})
                         </span>
                       </>
@@ -735,8 +735,8 @@ export default function FolderDetailPage({
                   </dd>
                 </div>
                 <div className="flex px-5 py-3">
-                  <dt className="w-28 text-sm font-medium text-gray-500 flex-shrink-0">確認状況</dt>
-                  <dd className="text-sm text-gray-900">
+                  <dt className="w-28 text-sm font-medium text-teal-700 flex-shrink-0">確認状況</dt>
+                  <dd className="text-sm text-foreground">
                     {allJournalEntries.length > 0 ? (
                       <span>
                         {confirmedEntryCount}/{allJournalEntries.length} 件確認済
@@ -757,13 +757,13 @@ export default function FolderDetailPage({
 
       {/* OCR処理中バナー */}
       {isAnyProcessing && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
-          <Loader2 className="w-5 h-5 animate-spin text-blue-600 flex-shrink-0" />
+        <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 flex items-center gap-3">
+          <Loader2 className="w-5 h-5 animate-spin text-teal-600 flex-shrink-0" />
           <div>
-            <p className="text-sm font-medium text-blue-900">
+            <p className="text-sm font-medium text-teal-900">
               OCR処理中... ({processedCount}/{totalCount} 完了)
             </p>
-            <p className="text-xs text-blue-700 mt-0.5">
+            <p className="text-xs text-teal-700 mt-0.5">
               処理が完了するまでこのページでお待ちください
             </p>
           </div>
@@ -793,24 +793,24 @@ export default function FolderDetailPage({
 
       {/* ドキュメント一覧 */}
       {folder.documents.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl border">
-          <FileText className="mx-auto h-16 w-16 text-gray-300 mb-4" />
-          <h3 className="text-lg font-medium text-gray-700 mb-2">
+        <div className="text-center py-16 card-glass rounded-xl">
+          <FileText className="mx-auto h-16 w-16 text-teal-300 mb-4" />
+          <h3 className="text-lg font-medium text-foreground mb-2">
             ドキュメントがありません
           </h3>
         </div>
       ) : (
         <>
           {/* デスクトップ: テーブル表示 */}
-          <div className="hidden md:block bg-white rounded-xl border overflow-hidden">
+          <div className="hidden md:block card-glass rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50 border-b">
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">作成日</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">ファイル名</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">ステータス</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-600">操作</th>
+                  <tr className="bg-teal-50/80 border-b">
+                    <th className="px-4 py-3 text-left font-medium text-teal-800">作成日</th>
+                    <th className="px-4 py-3 text-left font-medium text-teal-800">ファイル名</th>
+                    <th className="px-4 py-3 text-left font-medium text-teal-800">ステータス</th>
+                    <th className="px-4 py-3 text-center font-medium text-teal-800">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -818,19 +818,19 @@ export default function FolderDetailPage({
                     const nextAction = getNextAction(doc.status, doc.id);
                     const isProcessing = ocrProcessingIds.has(doc.id);
                     return (
-                      <tr key={doc.id} className="border-b hover:bg-gray-50">
-                        <td className="px-4 py-4 text-gray-600 whitespace-nowrap">
+                      <tr key={doc.id} className="border-b hover:bg-teal-50/50">
+                        <td className="px-4 py-4 text-teal-700 whitespace-nowrap">
                           {new Date(doc.createdAt).toLocaleDateString("ja-JP")}
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-2">
                             <FileText className="w-4 h-4 text-red-500 flex-shrink-0" />
-                            <span className="text-gray-900 truncate max-w-[250px]">{doc.filename}</span>
+                            <span className="text-foreground truncate max-w-[250px]">{doc.filename}</span>
                           </div>
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-2">
-                            {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />}
+                            {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-500" />}
                             <span className={cn("inline-flex px-2.5 py-1 rounded-full text-xs font-medium", STATUS_COLORS[doc.status] || "bg-gray-100 text-gray-800")}>
                               {isProcessing ? "OCR処理中..." : STATUS_LABELS[doc.status] || doc.status}
                             </span>
@@ -839,11 +839,11 @@ export default function FolderDetailPage({
                         <td className="px-4 py-4">
                           <div className="flex items-center justify-center gap-2">
                             {nextAction.label === "" ? null : nextAction.href ? (
-                              <Link href={nextAction.href} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                              <Link href={nextAction.href} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-teal-600 hover:bg-teal-50 rounded-lg transition-colors">
                                 <ArrowRight className="w-4 h-4" />{nextAction.label}
                               </Link>
                             ) : nextAction.action ? (
-                              <button onClick={nextAction.action} disabled={isProcessing} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50">
+                              <button onClick={nextAction.action} disabled={isProcessing} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-teal-600 hover:bg-teal-50 rounded-lg transition-colors disabled:opacity-50">
                                 {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
                                 {nextAction.label}
                               </button>
@@ -871,17 +871,17 @@ export default function FolderDetailPage({
               const nextAction = getNextAction(doc.status, doc.id);
               const isProcessing = ocrProcessingIds.has(doc.id);
               return (
-                <div key={doc.id} className="bg-white rounded-xl border p-4 space-y-3">
+                <div key={doc.id} className="card-glass rounded-xl p-4 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <FileText className="w-4 h-4 text-red-500 flex-shrink-0" />
-                        <span className="text-sm font-medium text-gray-900 truncate">{doc.filename}</span>
+                        <span className="text-sm font-medium text-foreground truncate">{doc.filename}</span>
                       </div>
-                      <p className="text-xs text-gray-500">{new Date(doc.createdAt).toLocaleDateString("ja-JP")}</p>
+                      <p className="text-xs text-teal-700">{new Date(doc.createdAt).toLocaleDateString("ja-JP")}</p>
                     </div>
                     <div className="flex items-center gap-1">
-                      {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />}
+                      {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-500" />}
                       <span className={cn("inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium", STATUS_COLORS[doc.status] || "bg-gray-100 text-gray-800")}>
                         {isProcessing ? "OCR処理中..." : STATUS_LABELS[doc.status] || doc.status}
                       </span>
@@ -890,11 +890,11 @@ export default function FolderDetailPage({
                   <div className="flex items-center gap-2 pt-1 border-t">
                     {nextAction.label !== "" && (
                       nextAction.href ? (
-                        <Link href={nextAction.href} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                        <Link href={nextAction.href} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-teal-600 hover:bg-teal-50 rounded-lg transition-colors">
                           <ArrowRight className="w-3.5 h-3.5" />{nextAction.label}
                         </Link>
                       ) : nextAction.action ? (
-                        <button onClick={nextAction.action} disabled={isProcessing} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50">
+                        <button onClick={nextAction.action} disabled={isProcessing} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-teal-600 hover:bg-teal-50 rounded-lg transition-colors disabled:opacity-50">
                           {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
                           {nextAction.label}
                         </button>
@@ -996,9 +996,9 @@ export default function FolderDetailPage({
         return (
           <section className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <h2 className="text-base md:text-lg font-bold text-gray-900">
+              <h2 className="text-base md:text-lg font-bold text-foreground">
                 仕訳明細
-                <span className="ml-2 text-sm font-normal text-gray-500">
+                <span className="ml-2 text-sm font-normal text-teal-700">
                   {allEntries.length} 件
                   {confirmedCount > 0 && (
                     <span className="text-green-600 ml-1">
@@ -1009,7 +1009,7 @@ export default function FolderDetailPage({
               </h2>
               <Link
                 href={`/folders/${id}/classify`}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors self-start"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-teal-600 hover:bg-teal-50 rounded-lg transition-colors self-start"
               >
                 <Pencil className="w-4 h-4" />
                 仕訳確認・編集
@@ -1040,20 +1040,20 @@ export default function FolderDetailPage({
             )}
 
             {/* デスクトップ: テーブル表示 */}
-            <div className="hidden md:block bg-white rounded-xl border overflow-hidden">
+            <div className="hidden md:block card-glass rounded-xl overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-50 border-b">
-                      <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">日付</th>
-                      <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">アラート</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">支払先・内容</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-600 whitespace-nowrap">金額（税込）</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">勘定科目</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">税区分</th>
-                      <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap">確認</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap">ファイル</th>
-                      <th className="px-4 py-3 text-center font-medium text-gray-600 whitespace-nowrap"></th>
+                    <tr className="bg-teal-50/80 border-b">
+                      <th className="px-4 py-3 text-left font-medium text-teal-800 whitespace-nowrap">日付</th>
+                      <th className="px-4 py-3 text-center font-medium text-teal-800 whitespace-nowrap">アラート</th>
+                      <th className="px-4 py-3 text-left font-medium text-teal-800 whitespace-nowrap">支払先・内容</th>
+                      <th className="px-4 py-3 text-right font-medium text-teal-800 whitespace-nowrap">金額（税込）</th>
+                      <th className="px-4 py-3 text-left font-medium text-teal-800 whitespace-nowrap">勘定科目</th>
+                      <th className="px-4 py-3 text-left font-medium text-teal-800 whitespace-nowrap">税区分</th>
+                      <th className="px-4 py-3 text-center font-medium text-teal-800 whitespace-nowrap">確認</th>
+                      <th className="px-4 py-3 text-left font-medium text-teal-800 whitespace-nowrap">ファイル</th>
+                      <th className="px-4 py-3 text-center font-medium text-teal-800 whitespace-nowrap"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1090,7 +1090,7 @@ export default function FolderDetailPage({
                       <tr
                         key={entry.id}
                         className={cn(
-                          "border-b hover:bg-gray-50 transition-colors",
+                          "border-b hover:bg-teal-50/50 transition-colors",
                           isDuplicate ? "bg-orange-50/40" : "",
                           !isDuplicate && missingAlerts.length > 0 ? "bg-amber-50/40" : "",
                           !isDuplicate && alerts.length === 0 && entry.isConfirmed ? "bg-green-50/30" : "",
@@ -1107,7 +1107,7 @@ export default function FolderDetailPage({
                                   "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer",
                                   badgeColor === "orange" ? "bg-orange-100 hover:bg-orange-200 text-orange-700" :
                                   badgeColor === "amber" ? "bg-amber-100 hover:bg-amber-200 text-amber-700" :
-                                  "bg-blue-50 hover:bg-blue-100 text-blue-600"
+                                  "bg-teal-50 hover:bg-teal-100 text-teal-600"
                                 )}
                                 onClick={() => {
                                   if (isDuplicate) {
@@ -1123,7 +1123,7 @@ export default function FolderDetailPage({
                                   "w-4 h-4",
                                   badgeColor === "orange" ? "text-orange-600" :
                                   badgeColor === "amber" ? "text-amber-600 animate-alert-bounce" :
-                                  "text-blue-500"
+                                  "text-teal-500"
                                 )} />
                                 <span>{isDuplicate ? "重複？" : missingAlerts.length > 0 ? "要確認" : "未確認"}</span>
                               </button>
@@ -1135,7 +1135,7 @@ export default function FolderDetailPage({
                                       <span className={cn(
                                         "w-1.5 h-1.5 rounded-full shrink-0",
                                         d.color === "orange" ? "bg-orange-400" :
-                                        d.color === "amber" ? "bg-amber-400" : "bg-blue-400"
+                                        d.color === "amber" ? "bg-amber-400" : "bg-teal-400"
                                       )} />
                                       {d.label}
                                     </p>
@@ -1146,9 +1146,9 @@ export default function FolderDetailPage({
                               </div>
                               {/* ステップガイド吹き出し */}
                               {isFirstAction && (
-                                <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-blue-600 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10 animate-bounce">
+                                <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-teal-600 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10 animate-bounce">
                                   アラートを確認してください（残り{totalActions}件）
-                                  <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-blue-600" />
+                                  <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-teal-600" />
                                 </div>
                               )}
                             </div>
@@ -1159,17 +1159,17 @@ export default function FolderDetailPage({
                           )}
                         </td>
                         <td className="px-4 py-3 max-w-[280px]">
-                          <div className="truncate text-gray-900">{entry.description}</div>
-                          {entry.subAccountName && <div className="text-xs text-gray-500 truncate">{entry.subAccountName}</div>}
+                          <div className="truncate text-foreground">{entry.description}</div>
+                          {entry.subAccountName && <div className="text-xs text-teal-700 truncate">{entry.subAccountName}</div>}
                         </td>
-                        <td className="px-4 py-3 text-right font-mono whitespace-nowrap text-gray-900">
+                        <td className="px-4 py-3 text-right font-mono whitespace-nowrap text-foreground">
                           {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : "-"}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-gray-700">
                           {entry.accountName}
                           {entry.aiSuggested && !entry.isConfirmed && <span className="ml-1 text-xs text-yellow-600 bg-yellow-100 px-1 rounded">AI</span>}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-600 text-xs">{entry.taxRate || "-"}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-teal-700 text-xs">{entry.taxRate || "-"}</td>
                         <td className="px-4 py-3 text-center">
                           {entry.isConfirmed ? (
                             <span className="inline-flex items-center justify-center w-6 h-6 bg-green-100 text-green-600 rounded-full"><Check className="w-3.5 h-3.5" /></span>
@@ -1181,7 +1181,7 @@ export default function FolderDetailPage({
                           <span className="text-xs text-gray-500 truncate max-w-[120px] block">{entry.filename}</span>
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <button onClick={() => openDetail(entry)} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200">
+                          <button onClick={() => openDetail(entry)} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-teal-600 hover:bg-teal-50 rounded-lg transition-colors border border-teal-200">
                             詳細
                           </button>
                         </td>
@@ -1192,11 +1192,11 @@ export default function FolderDetailPage({
                   </tbody>
                 </table>
               </div>
-              <div className="px-4 py-3 bg-gray-50 border-t flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  合計金額: <span className="font-medium text-gray-900">{formatCurrency(allEntries.reduce((sum, e) => sum + (e.debitAmount || e.creditAmount || 0), 0))}</span>
+              <div className="px-4 py-3 bg-teal-50/80 border-t flex items-center justify-between">
+                <div className="text-sm text-teal-700">
+                  合計金額: <span className="font-medium text-foreground">{formatCurrency(allEntries.reduce((sum, e) => sum + (e.debitAmount || e.creditAmount || 0), 0))}</span>
                 </div>
-                <Link href={`/folders/${id}/classify`} className="text-sm text-blue-600 hover:underline">仕訳確認ページへ →</Link>
+                <Link href={`/folders/${id}/classify`} className="text-sm text-teal-600 hover:underline">仕訳確認ページへ →</Link>
               </div>
             </div>
 
@@ -1210,7 +1210,7 @@ export default function FolderDetailPage({
                 <div
                   key={entry.id}
                   className={cn(
-                    "bg-white rounded-xl border p-4 space-y-2",
+                    "card-glass rounded-xl p-4 space-y-2",
                     isDuplicate ? "border-orange-300 bg-orange-50/40" : "",
                     !isDuplicate && missingAlerts.length > 0 ? "border-amber-300 bg-amber-50/40" : "",
                     alerts.length === 0 && entry.isConfirmed ? "border-green-200 bg-green-50/30" : "",
@@ -1239,11 +1239,11 @@ export default function FolderDetailPage({
                   )}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 truncate">{entry.description || <span className="text-red-400">（摘要なし）</span>}</p>
-                      {entry.subAccountName && <p className="text-xs text-gray-500 truncate">{entry.subAccountName}</p>}
+                      <p className="text-sm font-medium text-foreground truncate">{entry.description || <span className="text-red-400">（摘要なし）</span>}</p>
+                      {entry.subAccountName && <p className="text-xs text-teal-700 truncate">{entry.subAccountName}</p>}
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-mono font-medium text-gray-900">
+                      <p className="text-sm font-mono font-medium text-foreground">
                         {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : "-"}
                       </p>
                     </div>
@@ -1269,7 +1269,7 @@ export default function FolderDetailPage({
                     <span className="text-[10px] text-gray-400 truncate max-w-[150px]">{entry.filename}</span>
                     <button
                       onClick={() => openDetail(entry)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-teal-600 hover:bg-teal-50 rounded-lg transition-colors border border-teal-200"
                     >
                       詳細
                     </button>
@@ -1277,11 +1277,11 @@ export default function FolderDetailPage({
                 </div>
               );
               })}
-              <div className="bg-white rounded-xl border px-4 py-3 flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  合計: <span className="font-medium text-gray-900">{formatCurrency(allEntries.reduce((sum, e) => sum + (e.debitAmount || e.creditAmount || 0), 0))}</span>
+              <div className="card-glass rounded-xl px-4 py-3 flex items-center justify-between">
+                <div className="text-sm text-teal-700">
+                  合計: <span className="font-medium text-foreground">{formatCurrency(allEntries.reduce((sum, e) => sum + (e.debitAmount || e.creditAmount || 0), 0))}</span>
                 </div>
-                <Link href={`/folders/${id}/classify`} className="text-xs text-blue-600 hover:underline">仕訳確認 →</Link>
+                <Link href={`/folders/${id}/classify`} className="text-xs text-teal-600 hover:underline">仕訳確認 →</Link>
               </div>
             </div>
           </section>
@@ -1304,10 +1304,10 @@ export default function FolderDetailPage({
         return (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">
+              <h2 className="text-lg font-bold text-foreground">
                 OCR内容確認
                 {unconfirmedCount > 0 && (
-                  <span className="ml-2 text-sm font-normal text-gray-500">
+                  <span className="ml-2 text-sm font-normal text-teal-700">
                     ({unconfirmedCount} 件未確認)
                   </span>
                 )}
@@ -1316,7 +1316,7 @@ export default function FolderDetailPage({
                 <div className="relative">
                   <button
                     onClick={() => router.push(`/folders/${id}/classify`)}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors"
                   >
                     <Sparkles className="w-4 h-4" />
                     一括仕訳分類
@@ -1343,10 +1343,10 @@ export default function FolderDetailPage({
               if (!fullDoc) return null;
               const isConfirmed = fullyConfirmedDocIds.has(doc.id);
               return (
-                <div key={doc.id} className="bg-white rounded-xl border overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-3 border-b flex items-center gap-2">
+                <div key={doc.id} className="card-glass rounded-xl overflow-hidden">
+                  <div className="bg-teal-50/80 px-4 py-3 border-b flex items-center gap-2">
                     <FileText className="w-4 h-4 text-red-500" />
-                    <h3 className="text-sm font-medium text-gray-700">{doc.filename}</h3>
+                    <h3 className="text-sm font-medium text-teal-800">{doc.filename}</h3>
                     {isConfirmed && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
                         確認完了
@@ -1411,8 +1411,8 @@ export default function FolderDetailPage({
             onClick={(e) => e.stopPropagation()}
           >
             {/* モーダルヘッダー */}
-            <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b bg-gray-50 flex-shrink-0">
-              <h3 className="text-base md:text-lg font-bold text-gray-900 flex items-center gap-2">
+            <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b bg-teal-50/80 flex-shrink-0">
+              <h3 className="text-base md:text-lg font-bold text-foreground flex items-center gap-2">
                 <CircleAlert className="w-5 h-5 text-orange-500" />
                 重複の確認
               </h3>
@@ -1433,8 +1433,8 @@ export default function FolderDetailPage({
                     <h4 className="text-sm font-bold text-gray-700">仕訳 {idx === 0 ? "A" : "B"}</h4>
                     {/* 元ファイル画像プレビュー */}
                     <div className="border rounded-lg overflow-hidden bg-gray-50">
-                      <div className="px-3 py-1.5 bg-gray-100 border-b">
-                        <p className="text-[11px] text-gray-500 truncate">{item.filename}</p>
+                      <div className="px-3 py-1.5 bg-teal-50/80 border-b">
+                        <p className="text-[11px] text-teal-700 truncate">{item.filename}</p>
                       </div>
                       {item.fileType === "pdf" ? (
                         <iframe
@@ -1465,26 +1465,26 @@ export default function FolderDetailPage({
                     </div>
                     <dl className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <dt className="text-gray-500">日付</dt>
-                        <dd className="text-gray-900 font-medium">{item.date || <span className="text-red-400">-</span>}</dd>
+                        <dt className="text-teal-700">日付</dt>
+                        <dd className="text-foreground font-medium">{item.date || <span className="text-red-400">-</span>}</dd>
                       </div>
                       <div className="flex justify-between">
-                        <dt className="text-gray-500">摘要</dt>
-                        <dd className="text-gray-900 font-medium text-right max-w-[200px] truncate">{item.description || "-"}</dd>
+                        <dt className="text-teal-700">摘要</dt>
+                        <dd className="text-foreground font-medium text-right max-w-[200px] truncate">{item.description || "-"}</dd>
                       </div>
                       <div className="flex justify-between">
-                        <dt className="text-gray-500">金額</dt>
-                        <dd className="text-gray-900 font-medium font-mono">
+                        <dt className="text-teal-700">金額</dt>
+                        <dd className="text-foreground font-medium font-mono">
                           {item.debitAmount > 0 ? formatCurrency(item.debitAmount) : item.creditAmount > 0 ? formatCurrency(item.creditAmount) : "-"}
                         </dd>
                       </div>
                       <div className="flex justify-between">
-                        <dt className="text-gray-500">勘定科目</dt>
-                        <dd className="text-gray-900 font-medium">{item.accountName || "-"}</dd>
+                        <dt className="text-teal-700">勘定科目</dt>
+                        <dd className="text-foreground font-medium">{item.accountName || "-"}</dd>
                       </div>
                       <div className="flex justify-between">
-                        <dt className="text-gray-500">税区分</dt>
-                        <dd className="text-gray-900">{item.taxRate || "-"}</dd>
+                        <dt className="text-teal-700">税区分</dt>
+                        <dd className="text-foreground">{item.taxRate || "-"}</dd>
                       </div>
                     </dl>
                     {/* 削除ボタン */}
@@ -1528,8 +1528,8 @@ export default function FolderDetailPage({
             </div>
 
             {/* フッターアクション */}
-            <div className="border-t bg-gray-50 px-4 md:px-6 py-3 md:py-4 flex-shrink-0">
-              <p className="text-sm text-gray-600 mb-3">この2件は重複ですか？</p>
+            <div className="border-t bg-teal-50/80 px-4 md:px-6 py-3 md:py-4 flex-shrink-0">
+              <p className="text-sm text-teal-700 mb-3">この2件は重複ですか？</p>
               <div className="flex flex-col sm:flex-row gap-2">
                 <button
                   onClick={async () => {
@@ -1585,8 +1585,8 @@ export default function FolderDetailPage({
             onClick={(e) => e.stopPropagation()}
           >
             {/* モーダルヘッダー */}
-            <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b bg-gray-50 flex-shrink-0">
-              <h3 className="text-base md:text-lg font-bold text-gray-900">仕訳詳細</h3>
+            <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b bg-teal-50/80 flex-shrink-0">
+              <h3 className="text-base md:text-lg font-bold text-foreground">仕訳詳細</h3>
               <button
                 onClick={() => setDetailEntry(null)}
                 className="p-1.5 text-gray-500 hover:bg-gray-200 rounded-lg transition-colors"
@@ -1600,8 +1600,8 @@ export default function FolderDetailPage({
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
                 {/* 左側: 元画像（モバイルでは折りたたみ） */}
                 <div className="lg:border-r">
-                  <div className="bg-gray-50 px-4 py-2 border-b">
-                    <p className="text-xs font-medium text-gray-500 truncate">
+                  <div className="bg-teal-50/80 px-4 py-2 border-b">
+                    <p className="text-xs font-medium text-teal-700 truncate">
                       元ファイル: {detailEntry.filename}
                     </p>
                   </div>
@@ -1647,7 +1647,7 @@ export default function FolderDetailPage({
                         確認済
                       </span>
                     ) : (
-                      <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+                      <span className="text-xs font-medium text-teal-600 bg-teal-50 px-2.5 py-1 rounded-full">
                         未確認
                       </span>
                     )}
@@ -1662,29 +1662,29 @@ export default function FolderDetailPage({
                   <div className="space-y-3">
                     {/* 日付 */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">日付</label>
+                      <label className="block text-xs font-medium text-teal-700 mb-1">日付</label>
                       <input
                         type="date"
                         value={editForm.date || ""}
                         onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
-                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                       />
                     </div>
 
                     {/* 摘要 */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">摘要</label>
+                      <label className="block text-xs font-medium text-teal-700 mb-1">摘要</label>
                       <input
                         type="text"
                         value={editForm.description || ""}
                         onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                       />
                     </div>
 
                     {/* 勘定科目 */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">勘定科目</label>
+                      <label className="block text-xs font-medium text-teal-700 mb-1">勘定科目</label>
                       <select
                         value={editForm.accountCode || ""}
                         onChange={(e) => {
@@ -1697,7 +1697,7 @@ export default function FolderDetailPage({
                             subAccountName: "",
                           });
                         }}
-                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                       >
                         <option value="">-- 選択してください --</option>
                         {CATEGORY_ORDER.map((category) => {
@@ -1721,7 +1721,7 @@ export default function FolderDetailPage({
 
                     {/* 補助科目 */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">補助科目</label>
+                      <label className="block text-xs font-medium text-teal-700 mb-1">補助科目</label>
                       {(() => {
                         const selectedAcc = accounts.find((a) => a.code === editForm.accountCode);
                         return (
@@ -1742,33 +1742,33 @@ export default function FolderDetailPage({
 
                     {/* 借方金額 */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">借方金額</label>
+                      <label className="block text-xs font-medium text-teal-700 mb-1">借方金額</label>
                       <input
                         type="number"
                         value={editForm.debitAmount || 0}
                         onChange={(e) => setEditForm({ ...editForm, debitAmount: parseInt(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border rounded-lg text-sm text-right font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border rounded-lg text-sm text-right font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                       />
                     </div>
 
                     {/* 貸方金額 */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">貸方金額</label>
+                      <label className="block text-xs font-medium text-teal-700 mb-1">貸方金額</label>
                       <input
                         type="number"
                         value={editForm.creditAmount || 0}
                         onChange={(e) => setEditForm({ ...editForm, creditAmount: parseInt(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border rounded-lg text-sm text-right font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border rounded-lg text-sm text-right font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                       />
                     </div>
 
                     {/* 税区分 */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">税区分</label>
+                      <label className="block text-xs font-medium text-teal-700 mb-1">税区分</label>
                       <select
                         value={editForm.taxRate || ""}
                         onChange={(e) => setEditForm({ ...editForm, taxRate: e.target.value })}
-                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                       >
                         <option value="">-- 選択してください --</option>
                         {TAX_RATE_OPTIONS.map((opt) => (
@@ -1781,7 +1781,7 @@ export default function FolderDetailPage({
                   {/* AI分類理由 */}
                   {detailEntry.aiReasoning && (
                     <div>
-                      <h4 className="text-xs font-medium text-gray-500 mb-1">AI分類理由</h4>
+                      <h4 className="text-xs font-medium text-teal-700 mb-1">AI分類理由</h4>
                       <div className="text-xs text-gray-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 whitespace-pre-wrap">
                         {detailEntry.aiReasoning}
                       </div>
@@ -1793,7 +1793,7 @@ export default function FolderDetailPage({
                     <button
                       onClick={handleUpdateEntry}
                       disabled={savingEntry}
-                      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors"
                     >
                       {savingEntry ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -1857,7 +1857,7 @@ export default function FolderDetailPage({
                         body: JSON.stringify({ documentId: doc.id }),
                       }).catch(() => {});
                     });
-                  await fetchFolder();
+                  router.push("/");
                 } catch (err) {
                   alert(err instanceof Error ? err.message : "引き継ぎに失敗しました");
                 } finally {
@@ -1865,7 +1865,7 @@ export default function FolderDetailPage({
                 }
               }}
               disabled={handingOff}
-              className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-white bg-green-600 hover:bg-green-700 rounded-full shadow-xl transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 rounded-full shadow-xl transition-colors disabled:opacity-50"
             >
               {handingOff ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -1893,7 +1893,7 @@ export default function FolderDetailPage({
             )}
             {showFormatPicker && (
               <div className="absolute bottom-full right-0 mb-2 bg-white rounded-xl shadow-2xl border p-3 w-56">
-                <p className="text-xs font-medium text-gray-500 mb-2">出力形式を選択</p>
+                <p className="text-xs font-medium text-teal-700 mb-2">出力形式を選択</p>
                 <div className="space-y-1">
                   {[
                     { value: "generic" as const, label: "汎用CSV" },
@@ -1904,7 +1904,7 @@ export default function FolderDetailPage({
                       key={opt.value}
                       onClick={() => handleFolderExport(opt.value)}
                       disabled={exporting}
-                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-colors disabled:opacity-50"
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 rounded-lg transition-colors disabled:opacity-50"
                     >
                       {opt.label}
                     </button>
@@ -1915,7 +1915,7 @@ export default function FolderDetailPage({
             <button
               onClick={() => setShowFormatPicker(!showFormatPicker)}
               disabled={exporting}
-              className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full shadow-xl transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-full shadow-xl transition-colors disabled:opacity-50"
             >
               {exporting ? (
                 <Loader2 className="w-5 h-5 animate-spin" />

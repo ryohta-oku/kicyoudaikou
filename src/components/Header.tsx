@@ -188,26 +188,26 @@ export default function Header() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "flex items-center gap-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 transition-colors",
+          "flex items-center gap-2 bg-teal-50 hover:bg-teal-100 rounded-lg text-sm font-medium text-teal-800 transition-colors",
           mobile ? "w-full px-4 py-3 justify-between" : "px-3 py-1.5"
         )}
       >
         <div className="flex items-center gap-2 min-w-0">
-          <Building2 className="h-4 w-4 text-gray-500 flex-shrink-0" />
+          <Building2 className="h-4 w-4 text-teal-600 flex-shrink-0" />
           <span className="truncate">{selectedClient?.name || "得意先を選択"}</span>
         </div>
-        <ChevronDown className={cn("h-3.5 w-3.5 text-gray-400 transition-transform flex-shrink-0", isOpen && "rotate-180")} />
+        <ChevronDown className={cn("h-3.5 w-3.5 text-teal-500 transition-transform flex-shrink-0", isOpen && "rotate-180")} />
       </button>
 
       {isOpen && (
         <div className={cn(
-          "absolute top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50",
+          "absolute top-full mt-1 bg-white/95 backdrop-blur-sm border border-teal-100 rounded-lg shadow-lg z-50",
           mobile ? "left-0 right-0" : "left-0 w-72"
         )}>
           {/* 検索窓 */}
-          <div className="p-2 border-b border-gray-100">
+          <div className="p-2 border-b border-teal-100/50">
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-teal-400" />
               <input
                 ref={mobile ? undefined : inputRef}
                 type="text"
@@ -219,7 +219,7 @@ export default function Header() {
                   }
                 }}
                 placeholder="得意先を検索..."
-                className="w-full pl-8 pr-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-8 pr-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
               />
             </div>
           </div>
@@ -232,17 +232,17 @@ export default function Header() {
                   key={client.id}
                   onClick={() => handleSelect(client.id)}
                   className={cn(
-                    "w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors",
+                    "w-full text-left px-4 py-2 text-sm hover:bg-teal-50/50 transition-colors",
                     client.id === selectedId
-                      ? "bg-blue-50 text-blue-700 font-medium"
-                      : "text-gray-700"
+                      ? "bg-teal-50 text-teal-700 font-medium"
+                      : "text-teal-800"
                   )}
                 >
                   {client.name}
                 </button>
               ))
             ) : query ? (
-              <div className="px-4 py-3 text-sm text-gray-500 text-center">
+              <div className="px-4 py-3 text-sm text-teal-600 text-center">
                 一致する得意先がありません
               </div>
             ) : null}
@@ -250,10 +250,10 @@ export default function Header() {
 
           {/* 追加ボタン */}
           {query && !hasExactMatch && (
-            <div className="border-t border-gray-100 p-1">
+            <div className="border-t border-teal-100/50 p-1">
               <button
                 onClick={handleAdd}
-                className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-md transition-colors flex items-center gap-2"
+                className="w-full text-left px-4 py-2 text-sm text-teal-600 hover:bg-teal-50 rounded-md transition-colors flex items-center gap-2"
               >
                 <Plus className="h-3.5 w-3.5" />
                 「{searchQuery.trim()}」を追加
@@ -267,15 +267,15 @@ export default function Header() {
 
   return (
     <>
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+      <header className="bg-white/90 backdrop-blur-md border-b border-teal-100/50 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 md:h-16">
             {/* ロゴ */}
             <Link href="/" className="flex items-center gap-2 flex-shrink-0">
-              <FileText className="h-7 w-7 md:h-8 md:w-8 text-blue-600" />
+              <FileText className="h-7 w-7 md:h-8 md:w-8 text-teal-600" />
               <div>
-                <h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">記帳代行ツール</h1>
-                <p className="text-xs text-gray-500 hidden sm:block">Bookkeeping Assistant</p>
+                <h1 className="text-base md:text-lg font-bold text-foreground leading-tight">記帳代行ツール</h1>
+                <p className="text-xs text-teal-600 hidden sm:block">Bookkeeping Assistant</p>
               </div>
             </Link>
 
@@ -287,7 +287,7 @@ export default function Header() {
               {/* ロール切替（管理者のみ） */}
               {session.user.role === "admin" && (
                 <div className="flex items-center gap-1.5">
-                  <Eye className="h-3.5 w-3.5 text-gray-400" />
+                  <Eye className="h-3.5 w-3.5 text-teal-400" />
                   <select
                     value={simulatedRole}
                     onChange={(e) => handleRoleSimulation(e.target.value)}
@@ -295,7 +295,7 @@ export default function Header() {
                       "text-xs font-medium px-2 py-1 rounded-lg border appearance-none cursor-pointer pr-6",
                       simulatedRole
                         ? "bg-violet-50 text-violet-700 border-violet-200"
-                        : "bg-gray-50 text-gray-500 border-gray-200"
+                        : "bg-teal-50 text-teal-600 border-teal-200"
                     )}
                   >
                     {ROLE_VIEW_OPTIONS.map((opt) => (
@@ -316,8 +316,8 @@ export default function Header() {
                       className={cn(
                         "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
                         isActive
-                          ? "bg-blue-50 text-blue-700"
-                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                          ? "bg-teal-50 text-teal-700"
+                          : "text-teal-700 hover:bg-teal-50 hover:text-teal-900"
                       )}
                     >
                       <Icon className="h-4 w-4" />
@@ -328,10 +328,10 @@ export default function Header() {
               </nav>
 
               {/* ユーザーメニュー */}
-              <div className="relative pl-3 border-l border-gray-200" ref={menuRef}>
+              <div className="relative pl-3 border-l border-teal-100" ref={menuRef}>
                 <button
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
-                  className="flex items-center gap-2 p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="flex items-center gap-2 p-2 text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
                 >
                   {session.user.role === "admin" && (
                     <Shield className="h-4 w-4 text-amber-500" />
@@ -343,15 +343,15 @@ export default function Header() {
                 </button>
 
                 {isMenuOpen && (
-                  <div className="absolute top-full right-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
-                    <div className="px-4 py-2 border-b border-gray-100">
-                      <p className="text-sm font-medium text-gray-900 truncate">{session.user.name}</p>
-                      <p className="text-xs text-gray-500 truncate">{session.user.email}</p>
+                  <div className="absolute top-full right-0 mt-1 w-56 bg-white/95 backdrop-blur-sm border border-teal-100 rounded-lg shadow-lg z-50 py-1">
+                    <div className="px-4 py-2 border-b border-teal-100/50">
+                      <p className="text-sm font-medium text-foreground truncate">{session.user.name}</p>
+                      <p className="text-xs text-teal-600 truncate">{session.user.email}</p>
                     </div>
                     <Link
                       href="/account"
                       onClick={() => setIsMenuOpen(false)}
-                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-teal-800 hover:bg-teal-50 transition-colors"
                     >
                       <User className="h-4 w-4" />
                       アカウント情報
@@ -361,7 +361,7 @@ export default function Header() {
                         <Link
                           href="/admin"
                           onClick={() => setIsMenuOpen(false)}
-                          className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center gap-2 px-4 py-2.5 text-sm text-teal-800 hover:bg-teal-50 transition-colors"
                         >
                           <ShieldCheck className="h-4 w-4" />
                           管理画面
@@ -369,7 +369,7 @@ export default function Header() {
                         <Link
                           href="/admin/crm"
                           onClick={() => setIsMenuOpen(false)}
-                          className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center gap-2 px-4 py-2.5 text-sm text-teal-800 hover:bg-teal-50 transition-colors"
                         >
                           <Users className="h-4 w-4" />
                           顧客管理
@@ -379,7 +379,7 @@ export default function Header() {
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={() => setIsMenuOpen(false)}
-                          className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center gap-2 px-4 py-2.5 text-sm text-teal-800 hover:bg-teal-50 transition-colors"
                         >
                           <ExternalLink className="h-4 w-4" />
                           Client Hub
@@ -388,7 +388,7 @@ export default function Header() {
                     )}
                     <button
                       onClick={() => signOut({ callbackUrl: "/login" })}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors border-t border-gray-100"
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors border-t border-teal-100/50"
                     >
                       <LogOut className="h-4 w-4" />
                       ログアウト
@@ -401,7 +401,7 @@ export default function Header() {
             {/* モバイル: ハンバーガーボタン */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="md:hidden p-2 text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
             >
               {isMobileMenuOpen ? (
                 <X className="h-6 w-6" />
@@ -438,10 +438,10 @@ export default function Header() {
             onClick={() => setIsMobileMenuOpen(false)}
           />
           {/* メニューパネル */}
-          <div className="absolute top-14 left-0 right-0 bg-white border-b border-gray-200 shadow-lg max-h-[calc(100vh-3.5rem)] overflow-y-auto">
+          <div className="absolute top-14 left-0 right-0 bg-white/95 backdrop-blur-sm border-b border-teal-100 shadow-lg max-h-[calc(100vh-3.5rem)] overflow-y-auto">
             {/* 得意先セレクタ */}
-            <div className="px-4 py-3 border-b border-gray-100">
-              <p className="text-xs font-medium text-gray-500 mb-2">得意先</p>
+            <div className="px-4 py-3 border-b border-teal-100/50">
+              <p className="text-xs font-medium text-teal-700 mb-2">得意先</p>
               {renderClientSelector(true)}
             </div>
 
@@ -457,8 +457,8 @@ export default function Header() {
                     className={cn(
                       "flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors",
                       isActive
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-gray-700 hover:bg-gray-50"
+                        ? "bg-teal-50 text-teal-700"
+                        : "text-teal-800 hover:bg-teal-50"
                     )}
                   >
                     <Icon className="h-5 w-5" />
@@ -469,14 +469,14 @@ export default function Header() {
             </nav>
 
             {/* ユーザー情報 */}
-            <div className="border-t border-gray-100">
+            <div className="border-t border-teal-100/50">
               <div className="px-4 py-3 flex items-center gap-3">
-                <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                  <User className="h-4 w-4 text-gray-500" />
+                <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center">
+                  <User className="h-4 w-4 text-teal-600" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{session.user.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{session.user.email}</p>
+                  <p className="text-sm font-medium text-foreground truncate">{session.user.name}</p>
+                  <p className="text-xs text-teal-600 truncate">{session.user.email}</p>
                 </div>
                 {session.user.role === "admin" && (
                   <span className="ml-auto text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">管理者</span>
@@ -487,8 +487,8 @@ export default function Header() {
               </div>
               {/* モバイル: ロール切替（管理者のみ） */}
               {session.user.role === "admin" && (
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <p className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1">
+                <div className="px-4 py-3 border-b border-teal-100/50">
+                  <p className="text-xs font-medium text-teal-700 mb-2 flex items-center gap-1">
                     <Eye className="h-3 w-3" />表示切替
                   </p>
                   <select
@@ -498,7 +498,7 @@ export default function Header() {
                       "w-full text-sm px-3 py-2 rounded-lg border appearance-none cursor-pointer",
                       simulatedRole
                         ? "bg-violet-50 text-violet-700 border-violet-200"
-                        : "bg-gray-50 text-gray-600 border-gray-200"
+                        : "bg-teal-50 text-teal-600 border-teal-200"
                     )}
                   >
                     {ROLE_VIEW_OPTIONS.map((opt) => (
@@ -509,7 +509,7 @@ export default function Header() {
               )}
               <Link
                 href="/account"
-                className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-3 px-4 py-3 text-sm text-teal-800 hover:bg-teal-50 transition-colors"
               >
                 <User className="h-5 w-5" />
                 アカウント情報
@@ -518,14 +518,14 @@ export default function Header() {
                 <>
                   <Link
                     href="/admin"
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-teal-800 hover:bg-teal-50 transition-colors"
                   >
                     <ShieldCheck className="h-5 w-5" />
                     管理画面
                   </Link>
                   <Link
                     href="/admin/crm"
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-teal-800 hover:bg-teal-50 transition-colors"
                   >
                     <Users className="h-5 w-5" />
                     顧客管理
@@ -534,7 +534,7 @@ export default function Header() {
                     href={process.env.NEXT_PUBLIC_CLIENT_HUB_URL || "https://crm.coco-star.jp"}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-teal-800 hover:bg-teal-50 transition-colors"
                   >
                     <ExternalLink className="h-5 w-5" />
                     Client Hub
@@ -543,7 +543,7 @@ export default function Header() {
               )}
               <button
                 onClick={() => signOut({ callbackUrl: "/login" })}
-                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors border-t border-gray-100"
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors border-t border-teal-100/50"
               >
                 <LogOut className="h-5 w-5" />
                 ログアウト

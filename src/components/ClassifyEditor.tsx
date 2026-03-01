@@ -212,7 +212,7 @@ export default function ClassifyEditor({
               className={cn(
                 "w-10 h-10 rounded-lg text-sm font-medium transition-colors",
                 index === currentEntryIndex
-                  ? "bg-blue-600 text-white"
+                  ? "bg-teal-600 text-white"
                   : confirmedEntries[entry.id]
                     ? "bg-green-100 text-green-700 border border-green-300"
                     : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
@@ -300,7 +300,7 @@ export default function ClassifyEditor({
                       handleFieldChange("subAccountName", "");
                     }}
                     disabled={isDisabled}
-                    className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-50 disabled:text-gray-500"
                   >
                     <option value="">-- 選択してください --</option>
                     {/* AIが選んだコードがマスターにない場合も選択肢に表示 */}
@@ -376,7 +376,7 @@ export default function ClassifyEditor({
                     value={String(getFieldValue("taxRate"))}
                     onChange={(e) => handleFieldChange("taxRate", e.target.value)}
                     disabled={isDisabled}
-                    className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-50 disabled:text-gray-500"
                   >
                     <option value="">-- 選択してください --</option>
                     {TAX_RATE_OPTIONS.map((opt) => (
@@ -441,8 +441,8 @@ export default function ClassifyEditor({
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50",
                   allFieldsChecked && !confirmedEntries[currentEntry.id]
-                    ? "bg-blue-600 hover:bg-blue-700 ring-2 ring-blue-300 ring-offset-1 animate-pulse"
-                    : "bg-blue-600 hover:bg-blue-700"
+                    ? "bg-teal-600 hover:bg-teal-700 ring-2 ring-teal-300 ring-offset-1 animate-pulse"
+                    : "bg-teal-600 hover:bg-teal-700"
                 )}
               >
                 {savingEntries[currentEntry.id] ? (
@@ -453,9 +453,9 @@ export default function ClassifyEditor({
                 確認完了
               </button>
               {allFieldsChecked && !confirmedEntries[currentEntry.id] && (
-                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 whitespace-nowrap bg-blue-700 text-white text-xs rounded-md px-3 py-1.5 shadow-lg z-10 animate-bounce">
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 whitespace-nowrap bg-teal-700 text-white text-xs rounded-md px-3 py-1.5 shadow-lg z-10 animate-bounce">
                   全項目チェック済み！確認完了を押してください
-                  <div className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-blue-700" />
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-teal-700" />
                 </div>
               )}
             </div>
@@ -501,16 +501,16 @@ function ClassifyCheckButton({
           checked
             ? "bg-green-100 border-green-500 text-green-600 hover:bg-green-200"
             : isGuideActive
-              ? "border-blue-400 text-blue-400 ring-2 ring-blue-200 ring-offset-1 animate-pulse hover:border-blue-500"
+              ? "border-teal-400 text-teal-400 ring-2 ring-teal-200 ring-offset-1 animate-pulse hover:border-teal-500"
               : "border-gray-300 text-gray-300 hover:border-gray-400 hover:text-gray-400"
         )}
       >
         {checked && <Check className="w-4 h-4" />}
       </button>
       {isGuideActive && !checked && (
-        <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-blue-600 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10">
+        <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-teal-600 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10">
           <span className="font-bold">{guideStep}/{CLASSIFY_CHECK_FIELDS.length}</span>{" "}内容を確認してチェック →
-          <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-blue-600" />
+          <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-teal-600" />
         </div>
       )}
     </div>

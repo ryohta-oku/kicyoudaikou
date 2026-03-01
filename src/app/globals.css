@@ -5,21 +5,78 @@ html {
 }
 
 :root {
-  --background: #f9fafb;
-  --foreground: #171717;
+  --background: linear-gradient(135deg, #f0fdfa 0%, #f5f3ff 50%, #fefce8 100%);
+  --foreground: #134e4a;
+
+  /* Teal パレット */
+  --teal-950: #042f2e;
+  --teal-900: #134e4a;
+  --teal-800: #115e59;
+  --teal-700: #0f766e;
+  --teal-600: #0d9488;
+  --teal-500: #14b8a6;
+  --teal-400: #2dd4bf;
+  --teal-300: #5eead4;
+  --teal-200: #99f6e4;
+  --teal-100: #ccfbf1;
+  --teal-50: #f0fdfa;
+
+  /* Amber パレット */
+  --amber-600: #d97706;
+  --amber-500: #f59e0b;
+  --amber-400: #fbbf24;
+  --amber-300: #fcd34d;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-foreground: #134e4a;
+  --color-teal-950: #042f2e;
+  --color-teal-900: #134e4a;
+  --color-teal-800: #115e59;
+  --color-teal-700: #0f766e;
+  --color-teal-600: #0d9488;
+  --color-teal-500: #14b8a6;
+  --color-teal-400: #2dd4bf;
+  --color-amber-600: #d97706;
+  --color-amber-500: #f59e0b;
+  --color-amber-400: #fbbf24;
 }
 
 body {
   background: var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+}
+
+/* カードのガラス風スタイル */
+.card-glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(13, 148, 136, 0.08);
+}
+
+/* fade-up アニメーション（ログイン画面のスタガード表示） */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.6s ease-out both;
+}
+
+/* ダーク入力フィールドのフォーカススタイル */
+.login-input:focus {
+  border-color: var(--amber-500);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+  outline: none;
 }
 
 /* アラートアイコンのバウンスアニメーション */

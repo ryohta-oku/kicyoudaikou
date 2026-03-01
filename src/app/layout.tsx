@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
+import { Noto_Sans_JP } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import WorkflowProgressBar from "@/components/WorkflowProgressBar";
 import SessionProvider from "@/components/SessionProvider";
 import AuthGuard from "@/components/AuthGuard";
+
+const notoSansJP = Noto_Sans_JP({
+  subsets: ["latin"],
+  weight: ["400", "700", "900"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "記帳代行ツール",
@@ -17,7 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
-      <body className="antialiased bg-gray-50 min-h-screen font-sans">
+      <body className={`${notoSansJP.className} antialiased min-h-screen`}>
         <SessionProvider>
           <AuthGuard>
             <Header />

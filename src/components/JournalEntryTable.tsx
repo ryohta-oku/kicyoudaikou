@@ -344,7 +344,7 @@ export default function JournalEntryTable({
                           <>
                             <button
                               onClick={() => saveEdit(entry.id)}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                              className="p-1.5 text-teal-600 hover:bg-teal-50 rounded"
                               title="保存"
                             >
                               <Check className="w-4 h-4" />
@@ -394,7 +394,7 @@ export default function JournalEntryTable({
 
             {/* 新規追加行 */}
             {showAddRow && (
-              <tr className="border-b bg-blue-50/50">
+              <tr className="border-b bg-teal-50/50">
                 <td className="px-4 py-3">
                   <input
                     type="date"
@@ -496,7 +496,7 @@ export default function JournalEntryTable({
                   <div className="flex items-center justify-center gap-1">
                     <button
                       onClick={addEntry}
-                      className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                      className="p-1.5 text-teal-600 hover:bg-teal-50 rounded"
                     >
                       <Check className="w-4 h-4" />
                     </button>
@@ -528,7 +528,7 @@ export default function JournalEntryTable({
           <button
             onClick={() => setShowAddRow(true)}
             disabled={showAddRow}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg disabled:opacity-50"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-teal-600 hover:bg-teal-50 rounded-lg disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
             仕訳を追加

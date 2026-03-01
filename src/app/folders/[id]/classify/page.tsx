@@ -359,7 +359,7 @@ export default function ClassifyPage({
     return (
       <div className="text-center py-16">
         <p className="text-gray-500">フォルダが見つかりません</p>
-        <Link href="/" className="text-blue-600 hover:underline mt-4 inline-block">
+        <Link href="/" className="text-teal-600 hover:underline mt-4 inline-block">
           ダッシュボードに戻る
         </Link>
       </div>

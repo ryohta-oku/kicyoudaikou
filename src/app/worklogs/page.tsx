@@ -60,7 +60,7 @@ const WORK_TYPE_LABELS: Record<string, string> = {
 
 const WORK_TYPE_COLORS: Record<string, string> = {
   preparation: "bg-gray-400",
-  ocr_review: "bg-blue-400",
+  ocr_review: "bg-teal-400",
   classify: "bg-purple-400",
   review: "bg-green-400",
   export: "bg-amber-400",
@@ -313,16 +313,16 @@ export default function WorkLogsPage() {
       {/* ヘッダー */}
       <div className="flex items-start sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900">工数管理</h1>
-          <p className="text-sm text-gray-500 mt-1">作業時間の記録と分析</p>
+          <h1 className="text-2xl md:text-3xl font-black text-foreground">工数管理</h1>
+          <p className="text-sm text-teal-700 mt-1">作業時間の記録と分析</p>
         </div>
       </div>
 
       {/* フィルタ */}
-      <div className="bg-white rounded-xl border p-4">
+      <div className="card-glass rounded-xl p-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600 whitespace-nowrap">期間:</label>
+            <label className="text-sm text-teal-700 whitespace-nowrap">期間:</label>
             <input
               type="date"
               value={dateFrom}
@@ -342,7 +342,7 @@ export default function WorkLogsPage() {
               onClick={() => setViewMode("sessions")}
               className={cn(
                 "px-3 py-1.5 text-sm rounded-lg transition-colors",
-                viewMode === "sessions" ? "bg-blue-100 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-100"
+                viewMode === "sessions" ? "bg-teal-100 text-teal-700 font-medium" : "text-gray-600 hover:bg-gray-100"
               )}
             >
               一覧
@@ -351,7 +351,7 @@ export default function WorkLogsPage() {
               onClick={() => setViewMode("chart")}
               className={cn(
                 "px-3 py-1.5 text-sm rounded-lg transition-colors",
-                viewMode === "chart" ? "bg-blue-100 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-100"
+                viewMode === "chart" ? "bg-teal-100 text-teal-700 font-medium" : "text-gray-600 hover:bg-gray-100"
               )}
             >
               推移
@@ -367,9 +367,9 @@ export default function WorkLogsPage() {
       ) : viewMode === "chart" ? (
         /* ===== 推移グラフ ===== */
         <div className="space-y-6">
-          <div className="bg-white rounded-xl border p-4 md:p-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-blue-600" />
+          <div className="card-glass rounded-xl p-4 md:p-6">
+            <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-teal-600" />
               日別作業時間推移（直近14日）
             </h2>
             {dailyData.length === 0 ? (
@@ -420,31 +420,31 @@ export default function WorkLogsPage() {
           {/* 生産性指標 */}
           {productivity && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="bg-white rounded-xl border p-4">
-                <p className="text-xs text-gray-500 mb-1">1枚あたり平均</p>
-                <p className="text-lg font-bold text-gray-900">{formatDuration(productivity.avgSecPerDoc)}</p>
+              <div className="card-glass rounded-xl p-4">
+                <p className="text-xs text-teal-700 mb-1">1枚あたり平均</p>
+                <p className="text-lg font-bold text-foreground">{formatDuration(productivity.avgSecPerDoc)}</p>
               </div>
-              <div className="bg-white rounded-xl border p-4">
-                <p className="text-xs text-gray-500 mb-1">処理速度</p>
-                <p className="text-lg font-bold text-gray-900">{productivity.docsPerHour} 枚/時</p>
+              <div className="card-glass rounded-xl p-4">
+                <p className="text-xs text-teal-700 mb-1">処理速度</p>
+                <p className="text-lg font-bold text-foreground">{productivity.docsPerHour} 枚/時</p>
               </div>
-              <div className="bg-white rounded-xl border p-4">
-                <p className="text-xs text-gray-500 mb-1">処理枚数</p>
-                <p className="text-lg font-bold text-gray-900">{productivity.totalDocs} 枚</p>
+              <div className="card-glass rounded-xl p-4">
+                <p className="text-xs text-teal-700 mb-1">処理枚数</p>
+                <p className="text-lg font-bold text-foreground">{productivity.totalDocs} 枚</p>
               </div>
-              <div className="bg-white rounded-xl border p-4">
-                <p className="text-xs text-gray-500 mb-1">合計時間</p>
-                <p className="text-lg font-bold text-gray-900">{formatDuration(productivity.totalSec)}</p>
+              <div className="card-glass rounded-xl p-4">
+                <p className="text-xs text-teal-700 mb-1">合計時間</p>
+                <p className="text-lg font-bold text-foreground">{formatDuration(productivity.totalSec)}</p>
               </div>
             </div>
           )}
 
           {/* 管理者: 利用者別サマリー */}
           {isManager && sessions.length > 0 && (
-            <div className="bg-white rounded-xl border overflow-hidden">
-              <div className="px-4 py-3 border-b bg-gray-50">
-                <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                  <Users className="w-4 h-4 text-blue-600" />
+            <div className="card-glass rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b bg-teal-50/80">
+                <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Users className="w-4 h-4 text-teal-600" />
                   利用者別サマリー
                 </h2>
               </div>
@@ -452,14 +452,14 @@ export default function WorkLogsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b">
-                      <th className="px-4 py-2.5 text-left font-medium text-gray-600">名前</th>
-                      <th className="px-4 py-2.5 text-left font-medium text-gray-600">ロール</th>
-                      <th className="px-4 py-2.5 text-right font-medium text-gray-600">今週</th>
-                      <th className="px-4 py-2.5 text-right font-medium text-gray-600">先週</th>
-                      <th className="px-4 py-2.5 text-right font-medium text-gray-600">増減</th>
-                      <th className="px-4 py-2.5 text-right font-medium text-gray-600">平均/回</th>
-                      <th className="px-4 py-2.5 text-right font-medium text-gray-600">処理枚数</th>
-                      <th className="px-4 py-2.5 text-right font-medium text-gray-600">枚/時間</th>
+                      <th className="px-4 py-2.5 text-left font-medium text-teal-800">名前</th>
+                      <th className="px-4 py-2.5 text-left font-medium text-teal-800">ロール</th>
+                      <th className="px-4 py-2.5 text-right font-medium text-teal-800">今週</th>
+                      <th className="px-4 py-2.5 text-right font-medium text-teal-800">先週</th>
+                      <th className="px-4 py-2.5 text-right font-medium text-teal-800">増減</th>
+                      <th className="px-4 py-2.5 text-right font-medium text-teal-800">平均/回</th>
+                      <th className="px-4 py-2.5 text-right font-medium text-teal-800">処理枚数</th>
+                      <th className="px-4 py-2.5 text-right font-medium text-teal-800">枚/時間</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -470,9 +470,9 @@ export default function WorkLogsPage() {
                         const docsPerHour = u.totalSec > 0 ? Math.round((u.documentCount / u.totalSec) * 3600 * 10) / 10 : 0;
                         const change = u.lastWeekSec > 0 ? Math.round(((u.thisWeekSec - u.lastWeekSec) / u.lastWeekSec) * 100) : null;
                         return (
-                          <tr key={u.userId} className="border-b hover:bg-gray-50">
-                            <td className="px-4 py-3 font-medium text-gray-900">{u.userName || "-"}</td>
-                            <td className="px-4 py-3 text-gray-600">{ROLE_LABELS[u.userRole] || u.userRole}</td>
+                          <tr key={u.userId} className="border-b hover:bg-teal-50/50">
+                            <td className="px-4 py-3 font-medium text-foreground">{u.userName || "-"}</td>
+                            <td className="px-4 py-3 text-teal-700">{ROLE_LABELS[u.userRole] || u.userRole}</td>
                             <td className="px-4 py-3 text-right">{formatDuration(u.thisWeekSec)}</td>
                             <td className="px-4 py-3 text-right">{formatDuration(u.lastWeekSec)}</td>
                             <td className="px-4 py-3 text-right">
@@ -499,27 +499,27 @@ export default function WorkLogsPage() {
 
           {/* CSV出力 */}
           {isManager && sessions.length > 0 && (
-            <div className="bg-white rounded-xl border p-4">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                <Download className="w-4 h-4 text-gray-500" />
+            <div className="card-glass rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                <Download className="w-4 h-4 text-teal-600" />
                 CSV出力
               </h3>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => handleExportCSV("user")}
-                  className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm bg-teal-50 text-teal-800 hover:bg-teal-100 rounded-lg transition-colors"
                 >
                   利用者別
                 </button>
                 <button
                   onClick={() => handleExportCSV("daily")}
-                  className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm bg-teal-50 text-teal-800 hover:bg-teal-100 rounded-lg transition-colors"
                 >
                   日別
                 </button>
                 <button
                   onClick={() => handleExportCSV("session")}
-                  className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm bg-teal-50 text-teal-800 hover:bg-teal-100 rounded-lg transition-colors"
                 >
                   セッション別
                 </button>
@@ -528,10 +528,10 @@ export default function WorkLogsPage() {
           )}
 
           {/* セッション一覧 */}
-          <div className="bg-white rounded-xl border overflow-hidden">
-            <div className="px-4 py-3 border-b bg-gray-50">
-              <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                <Timer className="w-4 h-4 text-blue-600" />
+          <div className="card-glass rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b bg-teal-50/80">
+              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Timer className="w-4 h-4 text-teal-600" />
                 セッション一覧
                 <span className="text-xs text-gray-500 font-normal">({sessions.length}件)</span>
               </h2>
@@ -554,7 +554,7 @@ export default function WorkLogsPage() {
                     <div key={ws.id}>
                       <button
                         onClick={() => toggleExpand(ws.id)}
-                        className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors"
+                        className="w-full text-left px-4 py-3 hover:bg-teal-50/50 transition-colors"
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0">
