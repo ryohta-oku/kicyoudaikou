@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import path from "path";
 import { mkdir, readFile, copyFile, writeFile } from "fs/promises";
 import { getUploadBaseDir, toPhysicalPath } from "@/lib/storage";
-import { getOpenAIClient, OCR_MODEL } from "@/lib/openai";
+import { getGeminiClient, OCR_MODEL } from "@/lib/gemini";
 
 // Vercel Pro: 60s, Hobby: 10s（プランの上限まで）
 export const maxDuration = 60;
@@ -59,7 +59,7 @@ const OCR_SYSTEM_PROMPT =
   "（読み取ったテキスト全文。レイアウトを維持し、日本語・英語・数字を正確に。金額・日付・店名・品目は特に正確に）\n" +
   "=== FIELDS ===\n" +
   "date: （日付をYYYY-MM-DD形式で。見つからない場合は空欄）\n" +
-  "registrationNumber: （適格請求書発行事業者登録番号、T始まり13桁。見つからない場合は空欄）\n" +
+  "registrationNumber: （適格請求書発行事業者の登録番号。T + 数字13桁 = 合計14文字、例: T1234567890123。この形式に一致しない場合は空欄）\n" +
   "amount: （税込合計金額、数字のみ。見つからない場合は空欄）\n" +
   "tax: （消費税額、数字のみ。見つからない場合は空欄）\n" +
   "memo: （取引先名・品目・摘要の要約を簡潔に）\n\n" +
@@ -73,54 +73,113 @@ function parseOcrResponse(content: string): OcrResult {
   const ocrText = textMatch ? textMatch[1].trim() : content.split("=== FIELDS ===")[0].trim();
   const fieldsSection = content.split(/===\s*FIELDS\s*===/)[1] || "";
   const get = (name: string) => fieldsSection.match(new RegExp(`${name}:\\s*(.+)`))?.[1]?.trim() || "";
+  // 登録番号: T + 13桁の数字のみ許容（それ以外は空）
+  const rawRegNum = get("registrationNumber");
+  const regNumMatch = rawRegNum.match(/T\d{13}/);
+
   return {
     ocrText,
     date: get("date"),
-    registrationNumber: get("registrationNumber"),
+    registrationNumber: regNumMatch ? regNumMatch[0] : "",
     amount: get("amount"),
     tax: get("tax"),
     memo: get("memo"),
   };
 }
 
+const REG_NUM_RETRY_PROMPT =
+  "この書類から適格請求書発行事業者の登録番号を読み取ってください。\n" +
+  "登録番号のフォーマット: T + 数字13桁 = 合計14文字（例: T1234567890123）\n" +
+  "注意:\n" +
+  "- 必ず「T」で始まり、その後に数字が正確に13桁続きます\n" +
+  "- 1桁でも多い・少ない場合は読み取りミスです。書類を再確認してください\n" +
+  "- 番号のみを返してください（T + 13桁の数字）\n" +
+  "- 見つからない場合は「なし」と返してください";
+
+const MAX_REG_NUM_RETRIES = 2;
+
+/** 登録番号が取れなかった場合、集中的に再読み取りする（最大2回） */
+async function retryRegistrationNumber(
+  inlineData: { mimeType: string; data: string },
+): Promise<string> {
+  const ai = getGeminiClient();
+  for (let i = 0; i < MAX_REG_NUM_RETRIES; i++) {
+    const response = await ai.models.generateContent({
+      model: OCR_MODEL,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData },
+            { text: REG_NUM_RETRY_PROMPT },
+          ],
+        },
+      ],
+      config: { maxOutputTokens: 256 },
+    });
+    const raw = (response.text || "").trim();
+    const match = raw.match(/T\d{13}/);
+    if (match) return match[0];
+  }
+  return "";
+}
+
 async function ocrPdf(pdfBuffer: Buffer): Promise<OcrResult> {
-  const client = getOpenAIClient();
+  const ai = getGeminiClient();
   const base64 = pdfBuffer.toString("base64");
-  const response = await client.chat.completions.create({
+  const response = await ai.models.generateContent({
     model: OCR_MODEL,
-    max_tokens: 16384,
-    messages: [
-      { role: "system", content: OCR_SYSTEM_PROMPT },
+    contents: [
       {
         role: "user",
-        content: [
-          { type: "file", file: { filename: "document.pdf", file_data: `data:application/pdf;base64,${base64}` } } as never,
-          { type: "text", text: "このPDFのテキストを読み取り、構造化データを抽出してください。" },
+        parts: [
+          { inlineData: { mimeType: "application/pdf", data: base64 } },
+          { text: "このPDFのテキストを読み取り、構造化データを抽出してください。" },
         ],
       },
     ],
+    config: {
+      systemInstruction: OCR_SYSTEM_PROMPT,
+      maxOutputTokens: 16384,
+    },
   });
-  return parseOcrResponse(response.choices[0]?.message?.content || "テキストなし");
+  const result = parseOcrResponse(response.text || "テキストなし");
+  if (!result.registrationNumber) {
+    result.registrationNumber = await retryRegistrationNumber({
+      mimeType: "application/pdf",
+      data: base64,
+    });
+  }
+  return result;
 }
 
 async function ocrImage(imagePath: string): Promise<OcrResult> {
-  const client = getOpenAIClient();
+  const ai = getGeminiClient();
   const { base64, mimeType } = await imageToBase64(imagePath);
-  const response = await client.chat.completions.create({
+  const response = await ai.models.generateContent({
     model: OCR_MODEL,
-    max_tokens: 4096,
-    messages: [
-      { role: "system", content: OCR_SYSTEM_PROMPT },
+    contents: [
       {
         role: "user",
-        content: [
-          { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64}` } },
-          { type: "text", text: "この画像のテキストを読み取り、構造化データを抽出してください。" },
+        parts: [
+          { inlineData: { mimeType, data: base64 } },
+          { text: "この画像のテキストを読み取り、構造化データを抽出してください。" },
         ],
       },
     ],
+    config: {
+      systemInstruction: OCR_SYSTEM_PROMPT,
+      maxOutputTokens: 4096,
+    },
   });
-  return parseOcrResponse(response.choices[0]?.message?.content || "テキストなし");
+  const result = parseOcrResponse(response.text || "テキストなし");
+  if (!result.registrationNumber) {
+    result.registrationNumber = await retryRegistrationNumber({
+      mimeType,
+      data: base64,
+    });
+  }
+  return result;
 }
 
 export async function POST(request: NextRequest) {
@@ -167,12 +226,12 @@ export async function POST(request: NextRequest) {
     let imageData: Uint8Array<ArrayBuffer> | null = null;
 
     if (document.fileType === "pdf") {
-      // === PDF: OpenAIに直接送信（1回のAPI呼び出し） ===
+      // === PDF: Geminiに直接送信（1回のAPI呼び出し） ===
       const pdfBuffer = await readFile(filePath);
       result = await ocrPdf(pdfBuffer);
       imagePath = document.filepath; // iframeで元PDFを表示するのでプレースホルダー不要
     } else {
-      // === 画像: Vision APIでOCR ===
+      // === 画像: Gemini Vision でOCR ===
       const imagesDir = path.join(getUploadBaseDir(), "pages", documentId);
       await mkdir(imagesDir, { recursive: true });
 
