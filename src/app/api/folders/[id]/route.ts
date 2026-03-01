@@ -14,7 +14,17 @@ export async function GET(
       include: {
         client: { select: { id: true, name: true } },
         documents: {
-          include: {
+          select: {
+            id: true,
+            folderId: true,
+            filename: true,
+            filepath: true,
+            fileType: true,
+            title: true,
+            creator: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
             pages: { select: { id: true, imagePath: true, pageNumber: true }, orderBy: { pageNumber: "asc" } },
             _count: { select: { journalEntries: true } },
             journalEntries: {
