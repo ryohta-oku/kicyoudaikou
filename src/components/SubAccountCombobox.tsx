@@ -33,6 +33,7 @@ export default function SubAccountCombobox({
   const [inputText, setInputText] = useState(valueName || "");
   const [isOpen, setIsOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [addedMessage, setAddedMessage] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // 外部からvalueNameが変わったら入力欄を同期
@@ -94,6 +95,10 @@ export default function SubAccountCombobox({
       setInputText(newSub.name);
       setIsOpen(false);
 
+      // 仮登録フィードバック
+      setAddedMessage("仮登録しました（指導者の承認後に候補に表示されます）");
+      setTimeout(() => setAddedMessage(null), 5000);
+
       // 親にaccountsリストの再取得を通知
       onSubAccountAdded?.();
     } catch {
@@ -105,6 +110,11 @@ export default function SubAccountCombobox({
 
   return (
     <div ref={containerRef} className="relative">
+      {addedMessage && (
+        <div className="absolute -top-8 left-0 right-0 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 z-50">
+          {addedMessage}
+        </div>
+      )}
       <input
         type="text"
         value={inputText}
