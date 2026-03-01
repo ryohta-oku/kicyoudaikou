@@ -5,9 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { FileText, Home, Settings, Building2, Plus, ChevronDown, Search, Shield, LogOut, Menu, User, ShieldCheck, X, Eye, Clock, Users, ExternalLink } from "lucide-react";
+import { FileText, Home, Settings, Building2, Shield, LogOut, Menu, User, ShieldCheck, X, Eye, Clock, Users, ExternalLink } from "lucide-react";
 import { getSelectedClientId, setSelectedClientId } from "@/lib/client";
 import { getSimulatedRole, setSimulatedRole } from "@/lib/roleSimulation";
+import ClientSelector from "@/components/ClientSelector";
 
 const ROLE_VIEW_OPTIONS = [
   { value: "", label: "管理者（自分）" },
@@ -16,26 +17,15 @@ const ROLE_VIEW_OPTIONS = [
   { value: "user_b", label: "B型利用者として表示" },
 ];
 
-interface Client {
-  id: string;
-  name: string;
-}
-
 export default function Header() {
   const { data: session, status } = useSession();
   const pathname = usePathname();
   const router = useRouter();
-  const [clients, setClients] = useState<Client[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
+  const [selectedClientId, setSelectedClientIdState] = useState<string | null>(() => getSelectedClientId());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [simulatedRole, setSimulatedRoleState] = useState<string>("");
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const mobileDropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const navItems = [
     { href: "/", label: "ダッシュボード", icon: Home },
@@ -46,7 +36,6 @@ export default function Header() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      fetchClients();
       // ロールシミュレーション状態を復元
       setSimulatedRoleState(getSimulatedRole() || "");
     }
@@ -60,13 +49,6 @@ export default function Header() {
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
-      const inDesktop = dropdownRef.current?.contains(target);
-      const inMobile = mobileDropdownRef.current?.contains(target);
-      if (!inDesktop && !inMobile) {
-        setIsOpen(false);
-        setSearchQuery("");
-      }
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setIsMenuOpen(false);
       }
@@ -74,12 +56,6 @@ export default function Header() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isOpen]);
 
   // モバイルメニュー開閉時にbodyスクロールを制御
   useEffect(() => {
@@ -101,169 +77,12 @@ export default function Header() {
     return null;
   }
 
-  const fetchClients = async () => {
-    try {
-      const res = await fetch("/api/clients");
-      const data = await res.json();
-      const list: Client[] = data.clients || [];
-      setClients(list);
-
-      const stored = getSelectedClientId();
-      if (stored && list.some((c) => c.id === stored)) {
-        setSelectedId(stored);
-      } else if (list.length > 0) {
-        setSelectedId(list[0].id);
-        setSelectedClientId(list[0].id);
-      }
-    } catch (error) {
-      console.error("Failed to fetch clients:", error);
-    }
-  };
-
-  const handleSelect = (clientId: string) => {
-    setSelectedId(clientId);
+  const handleClientSelect = (clientId: string) => {
+    setSelectedClientIdState(clientId);
     setSelectedClientId(clientId);
-    setIsOpen(false);
-    setSearchQuery("");
     router.refresh();
     window.location.reload();
   };
-
-  const createClient = async (name: string, force: boolean) => {
-    const res = await fetch("/api/clients", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, force }),
-    });
-    return { res, data: await res.json() };
-  };
-
-  const handleAdd = async () => {
-    const name = searchQuery.trim();
-    if (!name) return;
-    if (!confirm(`「${name}」を得意先として追加しますか？`)) return;
-    try {
-      const { res, data } = await createClient(name, false);
-
-      if (res.status === 409 && data.code === "CLIENT_SIMILAR_EXISTS") {
-        const names = data.similarClients.map((c: { name: string }) => c.name).join("\n  ");
-        const confirmed = confirm(
-          `以下の類似する得意先が既に登録されています:\n  ${names}\n\nそれでも「${name}」を追加しますか？`
-        );
-        if (!confirmed) return;
-
-        const { res: res2, data: data2 } = await createClient(name, true);
-        if (res2.ok && data2.client) {
-          setClients((prev) => [...prev, data2.client]);
-          handleSelect(data2.client.id);
-        }
-        return;
-      }
-
-      if (res.ok && data.client) {
-        setClients((prev) => [...prev, data.client]);
-        handleSelect(data.client.id);
-      }
-    } catch (error) {
-      console.error("Failed to create client:", error);
-    }
-  };
-
-  const selectedClient = clients.find((c) => c.id === selectedId);
-
-  // 検索クエリでフィルタ
-  const query = searchQuery.trim().toLowerCase();
-  const filteredClients = query
-    ? clients.filter((c) => c.name.toLowerCase().includes(query))
-    : clients;
-
-  // 完全一致する既存得意先があるか（追加ボタン表示判定用）
-  const hasExactMatch = query
-    ? clients.some((c) => c.name.toLowerCase() === query)
-    : true;
-
-  // 得意先ドロップダウン（デスクトップ・モバイル共通）
-  const renderClientSelector = (mobile?: boolean) => (
-    <div className={cn("relative", mobile && "w-full")} ref={mobile ? mobileDropdownRef : dropdownRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={cn(
-          "flex items-center gap-2 bg-teal-50 hover:bg-teal-100 rounded-lg text-sm font-medium text-teal-800 transition-colors",
-          mobile ? "w-full px-4 py-3 justify-between" : "px-3 py-1.5"
-        )}
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <Building2 className="h-4 w-4 text-teal-600 flex-shrink-0" />
-          <span className="truncate">{selectedClient?.name || "得意先を選択"}</span>
-        </div>
-        <ChevronDown className={cn("h-3.5 w-3.5 text-teal-500 transition-transform flex-shrink-0", isOpen && "rotate-180")} />
-      </button>
-
-      {isOpen && (
-        <div className={cn(
-          "absolute top-full mt-1 bg-white/95 backdrop-blur-sm border border-teal-100 rounded-lg shadow-lg z-50",
-          mobile ? "left-0 right-0" : "left-0 w-72"
-        )}>
-          {/* 検索窓 */}
-          <div className="p-2 border-b border-teal-100/50">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-teal-400" />
-              <input
-                ref={mobile ? undefined : inputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                  }
-                }}
-                placeholder="得意先を検索..."
-                className="w-full pl-8 pr-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
-              />
-            </div>
-          </div>
-
-          {/* 候補リスト */}
-          <div className="max-h-60 overflow-y-auto py-1">
-            {filteredClients.length > 0 ? (
-              filteredClients.map((client) => (
-                <button
-                  key={client.id}
-                  onClick={() => handleSelect(client.id)}
-                  className={cn(
-                    "w-full text-left px-4 py-2 text-sm hover:bg-teal-50/50 transition-colors",
-                    client.id === selectedId
-                      ? "bg-teal-50 text-teal-700 font-medium"
-                      : "text-teal-800"
-                  )}
-                >
-                  {client.name}
-                </button>
-              ))
-            ) : query ? (
-              <div className="px-4 py-3 text-sm text-teal-600 text-center">
-                一致する得意先がありません
-              </div>
-            ) : null}
-          </div>
-
-          {/* 追加ボタン */}
-          {query && !hasExactMatch && (
-            <div className="border-t border-teal-100/50 p-1">
-              <button
-                onClick={handleAdd}
-                className="w-full text-left px-4 py-2 text-sm text-teal-600 hover:bg-teal-50 rounded-md transition-colors flex items-center gap-2"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                「{searchQuery.trim()}」を追加
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <>
@@ -282,7 +101,11 @@ export default function Header() {
             {/* デスクトップ: 得意先セレクタ + ナビ + メニュー */}
             <div className="hidden md:flex items-center gap-4">
               {/* 得意先セレクタ */}
-              {renderClientSelector()}
+              <ClientSelector
+                selectedId={selectedClientId}
+                onSelect={handleClientSelect}
+                variant="header"
+              />
 
               {/* ロール切替（管理者のみ） */}
               {session.user.role === "admin" && (
@@ -442,7 +265,12 @@ export default function Header() {
             {/* 得意先セレクタ */}
             <div className="px-4 py-3 border-b border-teal-100/50">
               <p className="text-xs font-medium text-teal-700 mb-2">得意先</p>
-              {renderClientSelector(true)}
+              <ClientSelector
+                selectedId={selectedClientId}
+                onSelect={handleClientSelect}
+                variant="header"
+                className="w-full"
+              />
             </div>
 
             {/* ナビゲーション */}

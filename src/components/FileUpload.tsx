@@ -12,9 +12,12 @@ import {
   AlertCircle,
   FolderPlus,
   Send,
+  Building2,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getSelectedClientId } from "@/lib/client";
+import { setSelectedClientId } from "@/lib/client";
+import ClientSelector from "@/components/ClientSelector";
 
 const ACCEPTED_TYPES = [
   "application/pdf",
@@ -68,6 +71,9 @@ export default function FileUpload({
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [folderName, setFolderName] = useState("");
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [clientName, setClientName] = useState<string>("");
+  const [clientConfirmed, setClientConfirmed] = useState(false);
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     setError(null);
     const validFiles: FileItem[] = [];
@@ -125,7 +131,6 @@ export default function FileUpload({
 
   /** フォルダを作成 */
   const createFolder = async (name: string): Promise<string> => {
-    const clientId = getSelectedClientId();
     const creator = session?.user?.name || "";
     const res = await fetch("/api/folders", {
       method: "POST",
@@ -165,6 +170,7 @@ export default function FileUpload({
   /** 一括アップロード（OCRはフォルダ詳細ページで自動実行） */
   const handleBulkProcess = async () => {
     if (files.length === 0) return;
+    if (!clientId || !clientConfirmed) return;
 
     // フォルダ名が未入力の場合、日時ベースのデフォルト名を使用
     const name = folderName.trim() || `アップロード ${new Date().toLocaleString("ja-JP")}`;
@@ -259,40 +265,126 @@ export default function FileUpload({
         />
       </div>
 
-      {/* ドロップゾーン */}
-      <label
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        htmlFor={isProcessing ? undefined : "file-input-upload"}
-        className={cn(
-          "block border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer",
-          isDragOver
-            ? "border-teal-400 bg-teal-50"
-            : "border-gray-300 bg-gray-50 hover:border-gray-400",
-          isProcessing && "pointer-events-none opacity-60"
-        )}
-      >
-        <input
-          id="file-input-upload"
-          type="file"
-          accept={ACCEPTED_EXTENSIONS}
-          multiple
-          className="sr-only"
-          tabIndex={-1}
-          onChange={handleFileSelect}
+      {/* 得意先セレクター */}
+      <div className="relative flex items-center gap-3">
+        <Building2 className="w-5 h-5 text-teal-500 flex-shrink-0" />
+        <ClientSelector
+          selectedId={clientId}
+          onSelect={(id, name) => {
+            const changed = id !== clientId;
+            setClientId(id);
+            setClientName(name || "");
+            setSelectedClientId(id);
+            if (changed) setClientConfirmed(false);
+          }}
+          variant="form"
+          autoSelect={false}
+          className="flex-1"
         />
-        <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-        <p className="text-lg font-medium text-gray-700 mb-1">
-          ファイルをドラッグ&ドロップ（複数可）
-        </p>
-        <p className="text-sm text-gray-500">
-          またはクリックしてファイルを選択（PDF, JPEG, PNG, HEIC 等）
-        </p>
-        <p className="text-xs text-teal-600 mt-2">
-          ファイルを追加してから「送信」ボタンでアップロード＆OCR処理を開始します
-        </p>
-      </label>
+        {/* Step 1: 得意先未選択 → 吹き出しナビ */}
+        {!clientId && (
+          <div className="absolute top-full left-8 mt-2 z-10">
+            <div className="relative bg-amber-500 text-white text-sm font-medium rounded-full px-4 py-2 shadow-lg animate-bounce whitespace-nowrap">
+              ↑ まず得意先を選んでください
+              <div className="absolute bottom-full left-6 border-8 border-transparent border-b-amber-500" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 得意先確認チェック */}
+      {clientId && clientName && (
+        <div className="relative">
+          <label
+            className={cn(
+              "flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors",
+              clientConfirmed
+                ? "bg-teal-50/80 border-teal-300"
+                : "bg-amber-50/80 border-amber-300"
+            )}
+          >
+            <input
+              type="checkbox"
+              checked={clientConfirmed}
+              onChange={(e) => setClientConfirmed(e.target.checked)}
+              disabled={isProcessing}
+              className="mt-0.5 h-5 w-5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 accent-teal-600 flex-shrink-0"
+            />
+            <div className="flex-1 min-w-0">
+              <p className={cn(
+                "text-sm font-bold",
+                clientConfirmed ? "text-teal-800" : "text-amber-800"
+              )}>
+                <ShieldCheck className="inline h-4 w-4 mr-1 -mt-0.5" />
+                得意先の確認
+              </p>
+              <p className={cn(
+                "text-sm mt-0.5",
+                clientConfirmed ? "text-teal-700" : "text-amber-700"
+              )}>
+                「<span className="font-bold">{clientName}</span>」のファイルをアップロードします。間違いありませんか？
+              </p>
+            </div>
+          </label>
+          {/* Step 2: 得意先選択済み・未確認 → 吹き出しナビ */}
+          {!clientConfirmed && (
+            <div className="absolute top-full left-8 mt-2 z-10">
+              <div className="relative bg-amber-500 text-white text-sm font-medium rounded-full px-4 py-2 shadow-lg animate-bounce whitespace-nowrap">
+                ↑ チェックを入れて確認してください
+                <div className="absolute bottom-full left-6 border-8 border-transparent border-b-amber-500" />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ドロップゾーン */}
+      <div className="relative">
+        <label
+          onDragOver={clientConfirmed ? handleDragOver : undefined}
+          onDragLeave={clientConfirmed ? handleDragLeave : undefined}
+          onDrop={clientConfirmed ? handleDrop : undefined}
+          htmlFor={isProcessing || !clientConfirmed ? undefined : "file-input-upload"}
+          className={cn(
+            "block border-2 border-dashed rounded-xl p-10 text-center transition-colors",
+            !clientConfirmed
+              ? "border-gray-200 bg-gray-50/50 opacity-50 cursor-not-allowed"
+              : isDragOver
+                ? "border-teal-400 bg-teal-50 cursor-pointer"
+                : "border-gray-300 bg-gray-50 hover:border-gray-400 cursor-pointer",
+            isProcessing && "pointer-events-none opacity-60"
+          )}
+        >
+          <input
+            id="file-input-upload"
+            type="file"
+            accept={ACCEPTED_EXTENSIONS}
+            multiple
+            className="sr-only"
+            tabIndex={-1}
+            onChange={handleFileSelect}
+          />
+          <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+          <p className="text-lg font-medium text-gray-700 mb-1">
+            ファイルをドラッグ&ドロップ（複数可）
+          </p>
+          <p className="text-sm text-gray-500">
+            またはクリックしてファイルを選択（PDF, JPEG, PNG, HEIC 等）
+          </p>
+          <p className="text-xs text-teal-600 mt-2">
+            ファイルを追加してから「送信」ボタンでアップロード＆OCR処理を開始します
+          </p>
+        </label>
+        {/* Step 3: 確認済み・ファイル未追加 → 吹き出しナビ */}
+        {clientConfirmed && files.length === 0 && !isProcessing && (
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+            <div className="relative bg-amber-500 text-white text-sm font-medium rounded-full px-4 py-2 shadow-lg animate-bounce whitespace-nowrap">
+              ↓ ファイルをドラッグ&ドロップ！
+              <div className="absolute left-1/2 -translate-x-1/2 top-full border-8 border-transparent border-t-amber-500" />
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* ファイルリスト */}
       {files.length > 0 && (
