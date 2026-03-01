@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Check, RotateCcw, Loader2, CircleCheck } from "lucide-react";
+import { Check, RotateCcw, Loader2, CircleCheck, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 
@@ -80,6 +80,8 @@ export default function OCREditor({
   });
 
   const [savingPages, setSavingPages] = useState<Record<string, boolean>>({});
+  const [rereadingFields, setRereadingFields] = useState<Record<string, boolean>>({});
+  const [rereadErrors, setRereadErrors] = useState<Record<string, string>>({});
   const [confirmedPages, setConfirmedPages] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     pages.forEach((p) => {
@@ -159,6 +161,39 @@ export default function OCREditor({
     }
   };
 
+  const handleRereadField = useCallback(async (pageId: string, fieldName: string) => {
+    const key = `${pageId}:${fieldName}`;
+    setRereadingFields((prev) => ({ ...prev, [key]: true }));
+    setRereadErrors((prev) => { const next = { ...prev }; delete next[pageId]; return next; });
+    try {
+      const res = await fetch("/api/ocr/reread-field", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageId, fieldName }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "再読み取りに失敗しました");
+      }
+      const { value, raw } = await res.json();
+      if (value) {
+        handleFieldChange(pageId, fieldName, value);
+      } else {
+        setRereadErrors((prev) => ({
+          ...prev,
+          [pageId]: `登録番号を検出できませんでした${raw ? `（AI応答: ${raw}）` : ""}`,
+        }));
+      }
+    } catch (err) {
+      setRereadErrors((prev) => ({
+        ...prev,
+        [pageId]: err instanceof Error ? err.message : "再読み取りに失敗しました",
+      }));
+    } finally {
+      setRereadingFields((prev) => ({ ...prev, [key]: false }));
+    }
+  }, []);
+
   const toggleFieldCheck = useCallback((pageId: string, field: string) => {
     setCheckedFields((prev) => ({
       ...prev,
@@ -191,7 +226,7 @@ export default function OCREditor({
               className={cn(
                 "w-10 h-10 rounded-lg text-sm font-medium transition-colors",
                 index === currentPageIndex
-                  ? "bg-blue-600 text-white"
+                  ? "bg-teal-600 text-white"
                   : confirmedPages[page.id]
                     ? "bg-green-100 text-green-700 border border-green-300"
                     : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
@@ -277,6 +312,9 @@ export default function OCREditor({
                 showCheck={!readOnly}
                 isGuideActive={activeCheckField === "registrationNumber"}
                 guideStep={checkedCount + 1}
+                onReread={!readOnly ? () => handleRereadField(currentPage.id, "registrationNumber") : undefined}
+                isRereading={!!rereadingFields[`${currentPage.id}:registrationNumber`]}
+                emptyHint="空欄です — AIで再読み取りしてください"
               />
               <FieldRow
                 label="金額（税込）"
@@ -302,6 +340,11 @@ export default function OCREditor({
                 isGuideActive={activeCheckField === "tax"}
                 guideStep={checkedCount + 1}
               />
+              {rereadErrors[currentPage.id] && (
+                <div className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+                  {rereadErrors[currentPage.id]}
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">メモ</label>
                 <textarea
@@ -309,7 +352,7 @@ export default function OCREditor({
                   onChange={(e) => handleFieldChange(currentPage.id, "memo", e.target.value)}
                   disabled={isDisabled}
                   rows={2}
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500 resize-none"
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-50 disabled:text-gray-500 resize-none"
                   placeholder="取引先名・品目など"
                 />
               </div>
@@ -327,7 +370,7 @@ export default function OCREditor({
               <textarea
                 value={editedTexts[currentPage.id] || ""}
                 onChange={(e) => handleTextChange(currentPage.id, e.target.value)}
-                className="w-full h-[200px] p-3 border rounded-lg text-sm font-mono resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full h-[200px] p-3 border rounded-lg text-sm font-mono resize-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                 placeholder="OCR結果がここに表示されます..."
                 disabled={isDisabled}
               />
@@ -362,8 +405,8 @@ export default function OCREditor({
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50",
                   allFieldsChecked && !confirmedPages[currentPage.id]
-                    ? "bg-blue-600 hover:bg-blue-700 ring-2 ring-blue-300 ring-offset-1 animate-pulse"
-                    : "bg-blue-600 hover:bg-blue-700"
+                    ? "bg-teal-600 hover:bg-teal-700 ring-2 ring-teal-300 ring-offset-1 animate-pulse"
+                    : "bg-teal-600 hover:bg-teal-700"
                 )}
               >
                 {savingPages[currentPage.id] ? (
@@ -374,9 +417,9 @@ export default function OCREditor({
                 確認完了
               </button>
               {allFieldsChecked && !confirmedPages[currentPage.id] && (
-                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 whitespace-nowrap bg-blue-700 text-white text-xs rounded-md px-3 py-1.5 shadow-lg z-10 animate-bounce">
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 whitespace-nowrap bg-teal-700 text-white text-xs rounded-md px-3 py-1.5 shadow-lg z-10 animate-bounce">
                   全項目チェック済み！確認完了を押してください
-                  <div className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-blue-700" />
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-teal-700" />
                 </div>
               )}
             </div>
@@ -418,16 +461,16 @@ function CheckButton({
           checked
             ? "bg-green-100 border-green-500 text-green-600 hover:bg-green-200"
             : isGuideActive
-              ? "border-blue-400 text-blue-400 ring-2 ring-blue-200 ring-offset-1 animate-pulse hover:border-blue-500"
+              ? "border-teal-400 text-teal-400 ring-2 ring-teal-200 ring-offset-1 animate-pulse hover:border-teal-500"
               : "border-gray-300 text-gray-300 hover:border-gray-400 hover:text-gray-400"
         )}
       >
         {checked && <Check className="w-4 h-4" />}
       </button>
       {isGuideActive && !checked && (
-        <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-blue-600 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10">
+        <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-teal-600 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10">
           <span className="font-bold">{guideStep}/{CHECK_FIELDS.length}</span>{" "}内容を確認してチェック →
-          <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-blue-600" />
+          <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-teal-600" />
         </div>
       )}
     </div>
@@ -445,6 +488,9 @@ function FieldRow({
   showCheck,
   isGuideActive = false,
   guideStep,
+  onReread,
+  isRereading = false,
+  emptyHint,
 }: {
   label: string;
   value: string;
@@ -456,7 +502,11 @@ function FieldRow({
   showCheck: boolean;
   isGuideActive?: boolean;
   guideStep?: number;
+  onReread?: () => void;
+  isRereading?: boolean;
+  emptyHint?: string;
 }) {
+  const showEmptyHint = emptyHint && !value && onReread && !disabled && !isRereading;
   return (
     <div>
       <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
@@ -466,9 +516,36 @@ function FieldRow({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
-          className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+          className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-50 disabled:text-gray-500"
           placeholder={placeholder}
         />
+        {onReread && !disabled && (
+          <div className="relative group">
+            <button
+              type="button"
+              onClick={onReread}
+              disabled={isRereading}
+              className="flex items-center justify-center w-8 h-8 rounded-full text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-50"
+            >
+              {isRereading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+              ) : (
+                <Sparkles className="w-4 h-4" />
+              )}
+            </button>
+            {!isRereading && !showEmptyHint && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 whitespace-nowrap bg-gray-800 text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                AIで再読み取り
+              </div>
+            )}
+            {showEmptyHint && (
+              <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-amber-500 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10 animate-pulse cursor-pointer" onClick={onReread}>
+                {emptyHint} →
+                <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-amber-500" />
+              </div>
+            )}
+          </div>
+        )}
         {showCheck && (
           <CheckButton
             checked={checked}
