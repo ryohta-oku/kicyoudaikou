@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { getOpenAIClient, CLASSIFY_MODEL } from "./openai";
+import { getGeminiClient, CLASSIFY_MODEL } from "./gemini";
 
 export interface ClassificationResult {
   accountCode: string;
@@ -41,22 +41,15 @@ async function getAccountMasterText(): Promise<string> {
 }
 
 /**
- * GPT-4o mini で OCRテキストから仕訳データを抽出・分類する
+ * Gemini 2.5 Flash-Lite で OCRテキストから仕訳データを抽出・分類する
  * 1回のAPI呼び出しで、日付・摘要・金額の抽出と勘定科目の分類を同時に行う
  */
 export async function classifyWithAI(ocrText: string): Promise<ParsedJournalEntry[]> {
-  const client = getOpenAIClient();
+  const ai = getGeminiClient();
   const accountMaster = await getAccountMasterText();
 
-  const response = await client.chat.completions.create({
-    model: CLASSIFY_MODEL,
-    max_tokens: 4096,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content:
-          `あなたは日本の記帳代行の専門家です。OCRで読み取られたテキストから仕訳データを抽出してください。
+  const systemPrompt =
+    `あなたは日本の記帳代行の専門家です。OCRで読み取られたテキストから仕訳データを抽出してください。
 
 以下のJSON形式で返してください:
 {
@@ -93,16 +86,26 @@ export async function classifyWithAI(ocrText: string): Promise<ParsedJournalEntr
   例: レシートの店名「スターバックス」→ subAccountName: "スターバックス"
   例: 請求書の発行元「株式会社ABC」→ subAccountName: "株式会社ABC"
   例: 領収書の宛先が「タクシー代」で店名が「日本交通」→ subAccountName: "日本交通"
-  マスターに該当する補助科目がある場合はそのコードと名前を使用し、なければsubAccountCodeは空文字でsubAccountNameだけ入力する。${accountMaster}`,
-      },
+  マスターに該当する補助科目がある場合はそのコードと名前を使用し、なければsubAccountCodeは空文字でsubAccountNameだけ入力する。${accountMaster}`;
+
+  const response = await ai.models.generateContent({
+    model: CLASSIFY_MODEL,
+    contents: [
       {
         role: "user",
-        content: `以下のOCRテキストから仕訳データを抽出してください:\n\n${ocrText}`,
+        parts: [
+          { text: `以下のOCRテキストから仕訳データを抽出してください:\n\n${ocrText}` },
+        ],
       },
     ],
+    config: {
+      systemInstruction: systemPrompt,
+      responseMimeType: "application/json",
+      maxOutputTokens: 4096,
+    },
   });
 
-  const content = response.choices[0]?.message?.content;
+  const content = response.text;
   if (!content) {
     return [];
   }
