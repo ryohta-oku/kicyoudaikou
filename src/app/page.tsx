@@ -291,6 +291,22 @@ export default function DashboardPage() {
     );
   }, [userRole, folders, session?.user?.role, session?.user?.id]);
 
+  // 未完了タスクがある場合は作業開始ボタンを非表示にする
+  const hasIncompleteTasks = useMemo(() => {
+    if (folders.length === 0) return false;
+    if (userRole === "user_b") {
+      return folders.some(
+        (f) => f.handoffStatus !== "handed_off" && f.doubleCheckStatus !== "pending"
+      );
+    }
+    if (userRole === "user_a") {
+      return folders.some(
+        (f) => !(f.documents.length > 0 && f.documents.every((d) => d.status === "exported" || d.status === "reviewed"))
+      );
+    }
+    return false;
+  }, [userRole, folders]);
+
   return (
     <div className="space-y-6 md:space-y-8">
       {/* ヘッダー */}
@@ -301,8 +317,8 @@ export default function DashboardPage() {
             アップロードされたフォルダの管理
           </p>
         </div>
-        {/* ダブルチェック待ちがある場合はボタンを非表示 */}
-        {!hasDoubleCheckTasks && (
+        {/* 未完了タスクまたはダブルチェック待ちがある場合はボタンを非表示 */}
+        {!hasDoubleCheckTasks && !hasIncompleteTasks && (
           <div className="relative flex-shrink-0">
             {isWorkStarted ? (
               <button
