@@ -30,6 +30,28 @@ interface OcrResult {
 }
 
 function parseOcrResponse(content: string): OcrResult {
+  // Gemini がJSON形式（```json...```）で返す場合に対応
+  const jsonBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (jsonBlockMatch) {
+    try {
+      const parsed = JSON.parse(jsonBlockMatch[1].trim());
+      const fields = parsed.fields || parsed;
+      const rawRegNum = fields.registrationNumber || "";
+      const regNumMatch = rawRegNum.match(/T\d{13}/);
+      return {
+        ocrText: parsed.ocr_text || parsed.ocrText || content,
+        date: fields.date || "",
+        registrationNumber: regNumMatch ? regNumMatch[0] : "",
+        amount: String(fields.amount || ""),
+        tax: String(fields.tax || ""),
+        memo: fields.memo || "",
+      };
+    } catch {
+      // JSONパース失敗 → 通常パースへフォールスルー
+    }
+  }
+
+  // === FIELDS === 形式
   if (!content.includes("=== FIELDS ===")) {
     return { ocrText: content, date: "", registrationNumber: "", amount: "", tax: "", memo: "" };
   }
