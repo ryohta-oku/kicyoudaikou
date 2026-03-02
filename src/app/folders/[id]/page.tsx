@@ -537,7 +537,7 @@ export default function FolderDetailPage({
     }
   };
 
-  /** ダブルチェック完了（B型2人以上パターン） */
+  /** ダブルチェック完了 + 引き継ぎ（B型2人以上パターン） */
   const handleDoubleCheckComplete = async () => {
     if (!session?.user) return;
     setDoubleCheckCompleting(true);
@@ -549,9 +549,11 @@ export default function FolderDetailPage({
           doubleCheckStatus: "completed",
           doubleCheckById: effectiveUserId,
           doubleCheckByName: effectiveUserName,
+          handoffStatus: "handed_off",
+          handoffBy: effectiveUserName,
         }),
       });
-      await fetchFolder();
+      router.push("/");
     } catch (err) {
       alert(err instanceof Error ? err.message : "ダブルチェック完了に失敗しました");
     } finally {
@@ -1674,72 +1676,30 @@ export default function FolderDetailPage({
                 </div>
               )}
 
-            {/* B型: ダブルチェック完了 → 引き継ぎボタン */}
-            {isBTypeDoubleChecker && allPagesDoubleChecked && !folder.handoffStatus && (
-              <div className="flex flex-col items-center gap-3">
-                {folder.doubleCheckStatus !== "completed" && (
-                  <div className="relative">
-                    <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-teal-600 text-white text-sm rounded-full px-4 py-1.5 shadow-lg animate-bounce whitespace-nowrap z-10">
-                      全項目チェック済み！ここをクリック ↓
-                      <span className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-teal-600" />
-                    </span>
-                    <button
-                      onClick={handleDoubleCheckComplete}
-                      disabled={doubleCheckCompleting}
-                      className="inline-flex items-center gap-2 px-6 py-3 text-base font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors shadow-lg disabled:opacity-50"
-                    >
-                      {doubleCheckCompleting ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <Check className="w-5 h-5" />
-                      )}
-                      ダブルチェック完了
-                    </button>
-                  </div>
-                )}
+            {/* B型: ダブルチェック完了 → 引き継ぎ（1ステップ） */}
+            {isBTypeDoubleChecker && allPagesDoubleChecked && !folder.handoffStatus &&
+              folder.doubleCheckStatus !== "completed" && (
+              <div className="flex justify-center">
+                <div className="relative">
+                  <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-teal-600 text-white text-sm rounded-full px-4 py-1.5 shadow-lg animate-bounce whitespace-nowrap z-10">
+                    全項目チェック済み！A型さんに引き継ぎましょう ↓
+                    <span className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-teal-600" />
+                  </span>
+                  <button
+                    onClick={handleDoubleCheckComplete}
+                    disabled={doubleCheckCompleting}
+                    className="inline-flex items-center gap-2 px-6 py-3 text-base font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors shadow-lg disabled:opacity-50"
+                  >
+                    {doubleCheckCompleting ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Send className="w-5 h-5" />
+                    )}
+                    ダブルチェック完了・引き継ぎ
+                  </button>
+                </div>
               </div>
             )}
-
-            {/* B型: ダブルチェック完了後の引き継ぎボタン */}
-            {userRole === "user_b" &&
-              !folder.handoffStatus &&
-              folder.doubleCheckStatus === "completed" && (
-                <div className="flex justify-center">
-                  <div className="relative">
-                    <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-teal-600 text-white text-sm rounded-full px-4 py-1.5 shadow-lg animate-bounce whitespace-nowrap z-10">
-                      A型さんに引き継ぎましょう ↓
-                      <span className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-teal-600" />
-                    </span>
-                    <button
-                      onClick={async () => {
-                        setHandingOff(true);
-                        try {
-                          await fetch(`/api/folders/${id}`, {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              handoffStatus: "handed_off",
-                              handoffBy: effectiveUserName,
-                            }),
-                          });
-                          router.push("/");
-                        } finally {
-                          setHandingOff(false);
-                        }
-                      }}
-                      disabled={handingOff}
-                      className="inline-flex items-center gap-2 px-6 py-3 text-base font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors shadow-lg disabled:opacity-50"
-                    >
-                      {handingOff ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <Send className="w-5 h-5" />
-                      )}
-                      引き継ぎ完了
-                    </button>
-                  </div>
-                </div>
-              )}
 
             {/* B型1人: 従来の引き継ぎボタン（needsDoubleCheck を付与） */}
             {userRole === "user_b" &&
