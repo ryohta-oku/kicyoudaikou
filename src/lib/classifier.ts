@@ -70,6 +70,8 @@ export async function classifyWithAI(ocrText: string): Promise<ParsedJournalEntr
 }
 
 ルール:
+- **1つの書類につき仕訳は必ず1件だけ出力する**（entries配列の要素は常に1つ）
+- 複数の明細や金額がある場合は、合計金額で1件にまとめる
 - 日付が見つからない場合は空文字""にする
 - 金額は税込み総額を使用する。見つからない場合は0
 - reasoningには、なぜその勘定科目を選んだかを日本語1-2文で説明する
