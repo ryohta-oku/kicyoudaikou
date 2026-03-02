@@ -1,16 +1,49 @@
-const STORAGE_KEY = "simulatedRole";
+const ROLE_STORAGE_KEY = "simulatedRole";
+const USER_STORAGE_KEY = "simulatedUser";
+
+export const SIMULATION_PERSONAS = {
+  user_b: [
+    { id: "sim-b-1", name: "B型Aさん" },
+    { id: "sim-b-2", name: "B型Bさん" },
+  ],
+  user_a: [
+    { id: "sim-a-1", name: "A型さん" },
+  ],
+} as const;
 
 export function getSimulatedRole(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(STORAGE_KEY);
+  return localStorage.getItem(ROLE_STORAGE_KEY);
 }
 
 export function setSimulatedRole(role: string | null): void {
   if (typeof window === "undefined") return;
   if (role) {
-    localStorage.setItem(STORAGE_KEY, role);
+    localStorage.setItem(ROLE_STORAGE_KEY, role);
   } else {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(ROLE_STORAGE_KEY);
+    // ロールクリア時はユーザーもクリア
+    localStorage.removeItem(USER_STORAGE_KEY);
+  }
+}
+
+export function getSimulatedUser(): { id: string; name: string } | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(USER_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function setSimulatedUser(user: { id: string; name: string } | null): void {
+  if (typeof window === "undefined") return;
+  if (user) {
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(USER_STORAGE_KEY);
   }
 }
 
@@ -21,4 +54,24 @@ export function setSimulatedRole(role: string | null): void {
 export function getEffectiveRole(actualRole: string): string {
   if (actualRole !== "admin") return actualRole;
   return getSimulatedRole() || actualRole;
+}
+
+/**
+ * シミュレーション中のユーザーIDを返す。
+ * シミュレーション未設定時は実際のIDを返す。
+ */
+export function getEffectiveUserId(actualRole: string, actualId: string): string {
+  if (actualRole !== "admin") return actualId;
+  const simUser = getSimulatedUser();
+  return simUser?.id || actualId;
+}
+
+/**
+ * シミュレーション中のユーザー名を返す。
+ * シミュレーション未設定時は実際の名前を返す。
+ */
+export function getEffectiveUserName(actualRole: string, actualName: string): string {
+  if (actualRole !== "admin") return actualName;
+  const simUser = getSimulatedUser();
+  return simUser?.name || actualName;
 }

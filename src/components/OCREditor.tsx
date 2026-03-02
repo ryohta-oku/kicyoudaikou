@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Check, RotateCcw, Loader2, CircleCheck, Sparkles } from "lucide-react";
+import { Check, RotateCcw, Loader2, CircleCheck, Sparkles, RefreshCw, Pencil, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
+import DateInput, { isValidDateValue } from "@/components/DateInput";
 import Image from "next/image";
 
 interface Page {
@@ -12,6 +13,7 @@ interface Page {
   ocrText: string;
   correctedText: string;
   isConfirmed: boolean;
+  isDoubleChecked?: boolean;
   date: string;
   registrationNumber: string;
   amount: string;
@@ -24,6 +26,7 @@ interface OCREditorProps {
   documentFileType: string;
   documentFilepath: string;
   readOnly?: boolean;
+  mode?: "first_check" | "double_check";
   onPageUpdate: (pageId: string, data: PageUpdateData) => Promise<void>;
   onPageConfirm: (pageId: string) => Promise<void>;
   onAllPagesConfirmed?: () => void;
@@ -45,10 +48,12 @@ export default function OCREditor({
   documentFileType,
   documentFilepath,
   readOnly = false,
+  mode = "first_check",
   onPageUpdate,
   onPageConfirm,
   onAllPagesConfirmed,
 }: OCREditorProps) {
+  const isDoubleCheck = mode === "double_check";
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [editedTexts, setEditedTexts] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
@@ -73,7 +78,8 @@ export default function OCREditor({
   const [checkedFields, setCheckedFields] = useState<Record<string, Record<string, boolean>>>(() => {
     const initial: Record<string, Record<string, boolean>> = {};
     pages.forEach((p) => {
-      const allChecked = p.isConfirmed;
+      // ダブルチェックモード: isDoubleChecked で判定（未チェックならリセット）
+      const allChecked = isDoubleCheck ? !!p.isDoubleChecked : p.isConfirmed;
       initial[p.id] = Object.fromEntries(CHECK_FIELDS.map((f) => [f, allChecked]));
     });
     return initial;
@@ -82,10 +88,12 @@ export default function OCREditor({
   const [savingPages, setSavingPages] = useState<Record<string, boolean>>({});
   const [rereadingFields, setRereadingFields] = useState<Record<string, boolean>>({});
   const [rereadErrors, setRereadErrors] = useState<Record<string, string>>({});
+  const [rereadingAll, setRereadingAll] = useState<Record<string, boolean>>({});
+  const [dateCalendarOpen, setDateCalendarOpen] = useState(false);
   const [confirmedPages, setConfirmedPages] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     pages.forEach((p) => {
-      initial[p.id] = p.isConfirmed;
+      initial[p.id] = isDoubleCheck ? !!p.isDoubleChecked : p.isConfirmed;
     });
     return initial;
   });
@@ -195,6 +203,43 @@ export default function OCREditor({
     }
   }, []);
 
+  const handleRereadAll = useCallback(async (pageId: string) => {
+    setRereadingAll((prev) => ({ ...prev, [pageId]: true }));
+    setRereadErrors((prev) => { const next = { ...prev }; delete next[pageId]; return next; });
+    try {
+      const res = await fetch("/api/ocr/reread-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "再読み取りに失敗しました");
+      }
+      const data = await res.json();
+      setEditedFields((prev) => ({
+        ...prev,
+        [pageId]: {
+          date: data.date || prev[pageId]?.date || "",
+          registrationNumber: data.registrationNumber || prev[pageId]?.registrationNumber || "",
+          amount: data.amount || prev[pageId]?.amount || "",
+          tax: data.tax || prev[pageId]?.tax || "",
+          memo: data.memo || prev[pageId]?.memo || "",
+        },
+      }));
+      if (data.ocrText) {
+        setEditedTexts((prev) => ({ ...prev, [pageId]: data.ocrText }));
+      }
+    } catch (err) {
+      setRereadErrors((prev) => ({
+        ...prev,
+        [pageId]: err instanceof Error ? err.message : "再読み取りに失敗しました",
+      }));
+    } finally {
+      setRereadingAll((prev) => ({ ...prev, [pageId]: false }));
+    }
+  }, []);
+
   const toggleFieldCheck = useCallback((pageId: string, field: string) => {
     setCheckedFields((prev) => ({
       ...prev,
@@ -204,18 +249,46 @@ export default function OCREditor({
 
   const currentPageChecks = checkedFields[currentPage.id] || {};
   const allFieldsChecked = CHECK_FIELDS.every((f) => currentPageChecks[f]);
-  // 次にチェックすべきフィールド（ステップガイド用）
-  const activeCheckField = confirmedPages[currentPage.id]
-    ? null
-    : CHECK_FIELDS.find((f) => !currentPageChecks[f]) ?? null;
   const checkedCount = CHECK_FIELDS.filter((f) => currentPageChecks[f]).length;
 
   const isPdf = documentFileType === "pdf";
   const fields = editedFields[currentPage.id] || { date: "", registrationNumber: "", amount: "", tax: "", memo: "" };
   const isDisabled = readOnly || confirmedPages[currentPage.id];
 
+  // 上から順に最初の未チェックフィールドを特定
+  const activeField = isDisabled
+    ? null
+    : CHECK_FIELDS.find((f) => !currentPageChecks[f]) ?? null;
+
+  // activeField にバリデーションエラーがあるか判定
+  const activeFieldHasAlert = (() => {
+    if (!activeField) return false;
+    switch (activeField) {
+      case "date":
+        return !fields.date || !isValidDateValue(fields.date);
+      case "registrationNumber":
+        return !!fields.registrationNumber && !/^T\d{13}$/.test(fields.registrationNumber);
+      case "amount":
+        return !fields.amount || fields.amount === "0";
+      case "tax":
+        return !fields.tax || fields.tax === "0";
+      default:
+        return false;
+    }
+  })();
+
   return (
     <div className="space-y-4">
+      {/* ダブルチェックモードバナー */}
+      {isDoubleCheck && (
+        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+          <Check className="h-5 w-5 text-amber-600 flex-shrink-0" />
+          <span className="text-sm font-medium text-amber-800">
+            ダブルチェックモード — 各項目を再確認してください
+          </span>
+        </div>
+      )}
+
       {/* ページナビゲーション */}
       {pages.length > 1 && (
         <div className="flex items-center gap-2 mb-4">
@@ -282,65 +355,171 @@ export default function OCREditor({
               <h3 className="text-sm font-medium text-gray-700">
                 読み取り項目
               </h3>
-              {confirmedPages[currentPage.id] && (
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded-full">
-                  <Check className="w-3 h-3" />
-                  確認済
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {!isDisabled && !isDoubleCheck && (
+                  <button
+                    type="button"
+                    onClick={() => handleRereadAll(currentPage.id)}
+                    disabled={rereadingAll[currentPage.id]}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-full transition-colors disabled:opacity-50"
+                  >
+                    {rereadingAll[currentPage.id] ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3 h-3" />
+                    )}
+                    {rereadingAll[currentPage.id] ? "再読み取り中..." : "全項目を再読み取り"}
+                  </button>
+                )}
+                {confirmedPages[currentPage.id] && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded-full">
+                    <Check className="w-3 h-3" />
+                    確認済
+                  </span>
+                )}
+              </div>
             </div>
             <div className="p-4 space-y-3">
               <FieldRow
                 label="日付"
                 value={fields.date}
                 placeholder="YYYY-MM-DD"
-                disabled={isDisabled}
+                disabled={isDisabled || !!currentPageChecks.date}
                 onChange={(v) => handleFieldChange(currentPage.id, "date", v)}
                 checked={!!currentPageChecks.date}
                 onCheck={() => toggleFieldCheck(currentPage.id, "date")}
                 showCheck={!readOnly}
-                isGuideActive={activeCheckField === "date"}
+                isGuideActive={activeField === "date" && !activeFieldHasAlert}
                 guideStep={checkedCount + 1}
+                inputType="date"
+                onDateCalendarOpenChange={setDateCalendarOpen}
+                isConfirmed={isDisabled && !!currentPageChecks.date}
+                isDoubleCheck={isDoubleCheck}
+                onCorrectionRequest={isDoubleCheck ? (v) => {
+                  handleFieldChange(currentPage.id, "date", v);
+                  if (!currentPageChecks.date) toggleFieldCheck(currentPage.id, "date");
+                } : undefined}
+                validationError={
+                  !fields.date
+                    ? "日付を入力してください"
+                    : !isValidDateValue(fields.date)
+                      ? "正しい日付形式（YYYY-MM-DD）で入力してください"
+                      : undefined
+                }
               />
+              {activeField === "date" && activeFieldHasAlert && !dateCalendarOpen && (
+                <div className="flex justify-center -mt-1">
+                  <div className="relative bg-teal-600 text-white text-xs rounded-md px-3 py-1.5 shadow-lg">
+                    日付が空欄です — ↑ クリックして選択
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full border-4 border-transparent border-b-teal-600" />
+                  </div>
+                </div>
+              )}
               <FieldRow
                 label="登録番号"
                 value={fields.registrationNumber}
                 placeholder="T0000000000000"
-                disabled={isDisabled}
+                disabled={isDisabled || !!currentPageChecks.registrationNumber}
                 onChange={(v) => handleFieldChange(currentPage.id, "registrationNumber", v)}
                 checked={!!currentPageChecks.registrationNumber}
                 onCheck={() => toggleFieldCheck(currentPage.id, "registrationNumber")}
                 showCheck={!readOnly}
-                isGuideActive={activeCheckField === "registrationNumber"}
+                isGuideActive={activeField === "registrationNumber" && !activeFieldHasAlert}
                 guideStep={checkedCount + 1}
-                onReread={!readOnly ? () => handleRereadField(currentPage.id, "registrationNumber") : undefined}
+                onReread={!readOnly && !isDoubleCheck ? () => handleRereadField(currentPage.id, "registrationNumber") : undefined}
                 isRereading={!!rereadingFields[`${currentPage.id}:registrationNumber`]}
                 emptyHint="空欄です — AIで再読み取りしてください"
+                isConfirmed={isDisabled && !!currentPageChecks.registrationNumber}
+                isDoubleCheck={isDoubleCheck}
+                onCorrectionRequest={isDoubleCheck ? (v) => {
+                  handleFieldChange(currentPage.id, "registrationNumber", v);
+                  if (!currentPageChecks.registrationNumber) toggleFieldCheck(currentPage.id, "registrationNumber");
+                } : undefined}
+                validationError={
+                  !fields.registrationNumber
+                    ? "登録番号を入力してください"
+                    : !/^T\d{13}$/.test(fields.registrationNumber)
+                      ? "T＋13桁の数字で入力してください"
+                      : undefined
+                }
               />
+              {activeField === "registrationNumber" && activeFieldHasAlert && (() => {
+                const v = fields.registrationNumber;
+                const startsWithT = v.startsWith("T");
+                const digitPart = startsWithT ? v.slice(1) : v;
+                const digitCount = (digitPart.match(/\d/g) || []).length;
+                const hasNonDigit = startsWithT && /[^\d]/.test(digitPart);
+                let message = "";
+                if (!startsWithT) {
+                  message = "先頭に「T」が必要です";
+                } else if (hasNonDigit) {
+                  message = "T以降は数字のみです";
+                } else if (digitCount < 13) {
+                  message = `数字が${digitCount}桁です（あと${13 - digitCount}桁）`;
+                } else if (digitCount > 13) {
+                  message = `数字が${digitCount}桁です（${digitCount - 13}桁多い）`;
+                }
+                return (
+                  <div className="flex justify-center -mt-1">
+                    <div className="relative bg-teal-600 text-white text-xs rounded-md px-3 py-1.5 shadow-lg">
+                      ⚠ T＋数字13桁{message && ` — ${message}`}
+                      <div className="absolute left-1/2 -translate-x-1/2 bottom-full border-4 border-transparent border-b-teal-600" />
+                    </div>
+                  </div>
+                );
+              })()}
               <FieldRow
                 label="金額（税込）"
                 value={fields.amount}
                 placeholder="0"
-                disabled={isDisabled}
+                disabled={isDisabled || !!currentPageChecks.amount}
                 onChange={(v) => handleFieldChange(currentPage.id, "amount", v)}
                 checked={!!currentPageChecks.amount}
                 onCheck={() => toggleFieldCheck(currentPage.id, "amount")}
                 showCheck={!readOnly}
-                isGuideActive={activeCheckField === "amount"}
+                isGuideActive={activeField === "amount" && !activeFieldHasAlert}
                 guideStep={checkedCount + 1}
+                isConfirmed={isDisabled && !!currentPageChecks.amount}
+                isDoubleCheck={isDoubleCheck}
+                onCorrectionRequest={isDoubleCheck ? (v) => {
+                  handleFieldChange(currentPage.id, "amount", v);
+                  if (!currentPageChecks.amount) toggleFieldCheck(currentPage.id, "amount");
+                } : undefined}
               />
+              {activeField === "amount" && activeFieldHasAlert && (
+                <div className="flex justify-center -mt-1">
+                  <div className="relative bg-teal-600 text-white text-xs rounded-md px-3 py-1.5 shadow-lg">
+                    ⚠ 金額が未入力です
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full border-4 border-transparent border-b-teal-600" />
+                  </div>
+                </div>
+              )}
               <FieldRow
                 label="消費税"
                 value={fields.tax}
                 placeholder="0"
-                disabled={isDisabled}
+                disabled={isDisabled || !!currentPageChecks.tax}
                 onChange={(v) => handleFieldChange(currentPage.id, "tax", v)}
                 checked={!!currentPageChecks.tax}
                 onCheck={() => toggleFieldCheck(currentPage.id, "tax")}
                 showCheck={!readOnly}
-                isGuideActive={activeCheckField === "tax"}
+                isGuideActive={activeField === "tax" && !activeFieldHasAlert}
                 guideStep={checkedCount + 1}
+                isConfirmed={isDisabled && !!currentPageChecks.tax}
+                isDoubleCheck={isDoubleCheck}
+                onCorrectionRequest={isDoubleCheck ? (v) => {
+                  handleFieldChange(currentPage.id, "tax", v);
+                  if (!currentPageChecks.tax) toggleFieldCheck(currentPage.id, "tax");
+                } : undefined}
               />
+              {activeField === "tax" && activeFieldHasAlert && (
+                <div className="flex justify-center -mt-1">
+                  <div className="relative bg-teal-600 text-white text-xs rounded-md px-3 py-1.5 shadow-lg">
+                    ⚠ 消費税が未入力です
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full border-4 border-transparent border-b-teal-600" />
+                  </div>
+                </div>
+              )}
               {rereadErrors[currentPage.id] && (
                 <div className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">
                   {rereadErrors[currentPage.id]}
@@ -351,7 +530,7 @@ export default function OCREditor({
                 <textarea
                   value={fields.memo}
                   onChange={(e) => handleFieldChange(currentPage.id, "memo", e.target.value)}
-                  disabled={isDisabled}
+                  disabled={isDisabled || isDoubleCheck}
                   rows={2}
                   className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-50 disabled:text-gray-500 resize-none"
                   placeholder="取引先名・品目など"
@@ -415,11 +594,11 @@ export default function OCREditor({
                 ) : (
                   <Check className="w-4 h-4" />
                 )}
-                確認完了
+                {isDoubleCheck ? "ダブルチェック完了" : "確認完了"}
               </button>
               {allFieldsChecked && !confirmedPages[currentPage.id] && (
                 <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 whitespace-nowrap bg-teal-700 text-white text-xs rounded-md px-3 py-1.5 shadow-lg z-10 animate-bounce">
-                  全項目チェック済み！確認完了を押してください
+                  全項目チェック済み！{isDoubleCheck ? "ダブルチェック完了" : "確認完了"}を押してください
                   <div className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-teal-700" />
                 </div>
               )}
@@ -438,13 +617,17 @@ function CheckButton({
   onClick,
   isGuideActive = false,
   guideStep,
+  validationError,
 }: {
   checked: boolean;
   confirmed: boolean;
   onClick: () => void;
   isGuideActive?: boolean;
   guideStep?: number;
+  validationError?: string;
 }) {
+  const [showError, setShowError] = useState(false);
+
   if (confirmed) {
     return (
       <div className="flex items-center justify-center w-8 h-8 mt-0.5">
@@ -452,26 +635,44 @@ function CheckButton({
       </div>
     );
   }
+
+  const handleClick = () => {
+    if (validationError) {
+      setShowError(true);
+      setTimeout(() => setShowError(false), 2500);
+      return;
+    }
+    onClick();
+  };
+
   return (
     <div className="relative mt-0.5 shrink-0">
       <button
         type="button"
-        onClick={onClick}
+        onClick={handleClick}
         className={cn(
           "flex items-center justify-center w-8 h-8 rounded-full border-2 transition-colors",
           checked
             ? "bg-green-100 border-green-500 text-green-600 hover:bg-green-200"
-            : isGuideActive
-              ? "border-teal-400 text-teal-400 ring-2 ring-teal-200 ring-offset-1 animate-pulse hover:border-teal-500"
-              : "border-gray-300 text-gray-300 hover:border-gray-400 hover:text-gray-400"
+            : validationError
+              ? "border-gray-200 text-gray-200 cursor-not-allowed"
+              : isGuideActive
+                ? "border-teal-400 text-teal-400 ring-2 ring-teal-200 ring-offset-1 animate-pulse hover:border-teal-500"
+                : "border-gray-300 text-gray-300 hover:border-gray-400 hover:text-gray-400"
         )}
       >
         {checked && <Check className="w-4 h-4" />}
       </button>
-      {isGuideActive && !checked && (
-        <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-teal-600 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10">
+      {showError && validationError && (
+        <div className="absolute right-0 bottom-full mb-2 whitespace-nowrap bg-red-500 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10 animate-in fade-in slide-in-from-bottom-1 duration-150">
+          {validationError}
+          <div className="absolute right-2.5 top-full border-4 border-transparent border-t-red-500" />
+        </div>
+      )}
+      {!showError && isGuideActive && !checked && !validationError && (
+        <div className="absolute right-0 bottom-full mb-2 whitespace-nowrap bg-teal-600 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10">
           <span className="font-bold">{guideStep}/{CHECK_FIELDS.length}</span>{" "}内容を確認してチェック →
-          <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-teal-600" />
+          <div className="absolute right-2.5 top-full border-4 border-transparent border-t-teal-600" />
         </div>
       )}
     </div>
@@ -492,6 +693,12 @@ function FieldRow({
   onReread,
   isRereading = false,
   emptyHint,
+  inputType = "text",
+  validationError,
+  onDateCalendarOpenChange,
+  isConfirmed = false,
+  isDoubleCheck = false,
+  onCorrectionRequest,
 }: {
   label: string;
   value: string;
@@ -506,20 +713,49 @@ function FieldRow({
   onReread?: () => void;
   isRereading?: boolean;
   emptyHint?: string;
+  inputType?: "text" | "date";
+  validationError?: string;
+  onDateCalendarOpenChange?: (open: boolean) => void;
+  isConfirmed?: boolean;
+  isDoubleCheck?: boolean;
+  onCorrectionRequest?: (correctedValue: string) => void;
 }) {
+  const [showCorrection, setShowCorrection] = useState(false);
+  const [correctionValue, setCorrectionValue] = useState("");
   const showEmptyHint = emptyHint && !value && onReread && !disabled && !isRereading;
+
+  // ダブルチェックモード: フィールドは常に disabled
+  const fieldDisabled = isDoubleCheck ? true : disabled;
+
+  const handleCorrectionSubmit = () => {
+    if (!correctionValue.trim() || !onCorrectionRequest) return;
+    onCorrectionRequest(correctionValue.trim());
+    setShowCorrection(false);
+    setCorrectionValue("");
+  };
+
   return (
     <div>
       <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
       <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={disabled}
-          className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-50 disabled:text-gray-500"
-          placeholder={placeholder}
-        />
+        {inputType === "date" ? (
+          <DateInput
+            value={value}
+            onChange={onChange}
+            disabled={fieldDisabled}
+            placeholder={placeholder}
+            onOpenChange={onDateCalendarOpenChange}
+          />
+        ) : (
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={fieldDisabled}
+            className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-50 disabled:text-gray-500"
+            placeholder={placeholder}
+          />
+        )}
         {onReread && !disabled && (
           <div className="relative group">
             <button
@@ -547,16 +783,62 @@ function FieldRow({
             )}
           </div>
         )}
+        {/* ダブルチェック: 修正依頼ボタン（常時ラベル表示） */}
+        {isDoubleCheck && !checked && !isConfirmed && onCorrectionRequest && (
+          <button
+            type="button"
+            onClick={() => {
+              setShowCorrection(!showCorrection);
+              setCorrectionValue(value);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors shrink-0",
+              showCorrection
+                ? "bg-amber-200 text-amber-800 ring-1 ring-amber-300"
+                : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+            )}
+          >
+            <Pencil className="w-3 h-3" />
+            修正依頼
+          </button>
+        )}
         {showCheck && (
           <CheckButton
             checked={checked}
-            confirmed={disabled && checked}
+            confirmed={isConfirmed}
             onClick={onCheck}
             isGuideActive={isGuideActive}
             guideStep={guideStep}
+            validationError={isDoubleCheck ? undefined : validationError}
           />
         )}
       </div>
+      {/* ダブルチェック: 修正フォーム */}
+      {showCorrection && isDoubleCheck && onCorrectionRequest && (
+        <div className="mt-2 ml-1 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          <span className="text-xs font-medium text-amber-700 shrink-0">修正値:</span>
+          <input
+            type={inputType === "date" ? "date" : "text"}
+            value={correctionValue}
+            onChange={(e) => setCorrectionValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleCorrectionSubmit();
+            }}
+            className="flex-1 px-2 py-1 border border-amber-300 rounded text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+            placeholder={`正しい${label}を入力`}
+            autoFocus
+          />
+          <button
+            type="button"
+            onClick={handleCorrectionSubmit}
+            disabled={!correctionValue.trim()}
+            className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-md transition-colors disabled:opacity-50"
+          >
+            <Send className="w-3 h-3" />
+            送信
+          </button>
+        </div>
+      )}
     </div>
   );
 }
