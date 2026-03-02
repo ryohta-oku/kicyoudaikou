@@ -19,7 +19,11 @@ export async function GET(
       return NextResponse.json({ error: "ドキュメントが見つかりません", code: "DOC_NOT_FOUND" }, { status: 404 });
     }
 
-    return NextResponse.json({ document });
+    // fileData / imageData はバイナリで巨大なためレスポンスから除外
+    const { fileData: _, ...docWithoutFileData } = document;
+    const sanitizedPages = document.pages.map(({ imageData: __, ...page }) => page);
+
+    return NextResponse.json({ document: { ...docWithoutFileData, pages: sanitizedPages } });
   } catch (error) {
     console.error("Error fetching document:", error);
     const detail = error instanceof Error ? error.message : String(error);
@@ -40,7 +44,9 @@ export async function PATCH(
       data: body,
     });
 
-    return NextResponse.json({ document });
+    // fileData はバイナリで巨大なためレスポンスから除外
+    const { fileData: _, ...docWithout } = document;
+    return NextResponse.json({ document: docWithout });
   } catch (error) {
     console.error("Error updating document:", error);
     const detail = error instanceof Error ? error.message : String(error);
