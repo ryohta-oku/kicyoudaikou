@@ -7,14 +7,15 @@ import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { FileText, Home, Settings, Building2, Shield, LogOut, Menu, User, ShieldCheck, X, Eye, Clock, Users, ExternalLink } from "lucide-react";
 import { getSelectedClientId, setSelectedClientId } from "@/lib/client";
-import { getSimulatedRole, setSimulatedRole } from "@/lib/roleSimulation";
+import { getSimulatedRole, setSimulatedRole, getSimulatedUser, setSimulatedUser, SIMULATION_PERSONAS } from "@/lib/roleSimulation";
 import ClientSelector from "@/components/ClientSelector";
 
 const ROLE_VIEW_OPTIONS = [
-  { value: "", label: "管理者（自分）" },
-  { value: "instructor", label: "指導者として表示" },
-  { value: "user_a", label: "A型利用者として表示" },
-  { value: "user_b", label: "B型利用者として表示" },
+  { value: "", role: "", label: "管理者（自分）", persona: null },
+  { value: "instructor", role: "instructor", label: "指導者として表示", persona: null },
+  { value: "user_a:sim-a-1", role: "user_a", label: "A型さんとして表示", persona: SIMULATION_PERSONAS.user_a[0] },
+  { value: "user_b:sim-b-1", role: "user_b", label: "B型Aさんとして表示", persona: SIMULATION_PERSONAS.user_b[0] },
+  { value: "user_b:sim-b-2", role: "user_b", label: "B型Bさんとして表示", persona: SIMULATION_PERSONAS.user_b[1] },
 ];
 
 export default function Header() {
@@ -24,7 +25,7 @@ export default function Header() {
   const [selectedClientId, setSelectedClientIdState] = useState<string | null>(() => getSelectedClientId());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [simulatedRole, setSimulatedRoleState] = useState<string>("");
+  const [simulatedValue, setSimulatedValue] = useState<string>("");
   const menuRef = useRef<HTMLDivElement>(null);
 
   const navItems = [
@@ -37,13 +38,32 @@ export default function Header() {
   useEffect(() => {
     if (status === "authenticated") {
       // ロールシミュレーション状態を復元
-      setSimulatedRoleState(getSimulatedRole() || "");
+      const role = getSimulatedRole() || "";
+      const user = getSimulatedUser();
+      if (role && user) {
+        setSimulatedValue(`${role}:${user.id}`);
+      } else if (role) {
+        setSimulatedValue(role);
+      } else {
+        setSimulatedValue("");
+      }
     }
   }, [status]);
 
-  const handleRoleSimulation = (role: string) => {
-    setSimulatedRole(role || null);
-    setSimulatedRoleState(role);
+  const handleRoleSimulation = (value: string) => {
+    const option = ROLE_VIEW_OPTIONS.find((o) => o.value === value);
+    if (!option || !value) {
+      setSimulatedRole(null);
+      setSimulatedUser(null);
+      setSimulatedValue("");
+    } else {
+      setSimulatedRole(option.role || null);
+      setSimulatedUser(option.persona ? { id: option.persona.id, name: option.persona.name } : null);
+      setSimulatedValue(value);
+    }
+    // ロール/ペルソナ変更時は作業セッションをクリア
+    localStorage.removeItem("workSessionId");
+    localStorage.removeItem("workSessionRole");
     window.location.reload();
   };
 
@@ -112,11 +132,11 @@ export default function Header() {
                 <div className="flex items-center gap-1.5">
                   <Eye className="h-3.5 w-3.5 text-teal-400" />
                   <select
-                    value={simulatedRole}
+                    value={simulatedValue}
                     onChange={(e) => handleRoleSimulation(e.target.value)}
                     className={cn(
                       "text-xs font-medium px-2 py-1 rounded-lg border appearance-none cursor-pointer pr-6",
-                      simulatedRole
+                      simulatedValue
                         ? "bg-violet-50 text-violet-700 border-violet-200"
                         : "bg-teal-50 text-teal-600 border-teal-200"
                     )}
@@ -237,11 +257,11 @@ export default function Header() {
       </header>
 
       {/* ロールシミュレーション中バナー */}
-      {session.user.role === "admin" && simulatedRole && (
+      {session.user.role === "admin" && simulatedValue && (
         <div className="bg-violet-600 text-white text-center py-1.5 text-sm font-medium sticky top-14 md:top-16 z-40 flex items-center justify-center gap-2">
           <Eye className="h-4 w-4" />
           <span>
-            {ROLE_VIEW_OPTIONS.find((o) => o.value === simulatedRole)?.label || simulatedRole}
+            {ROLE_VIEW_OPTIONS.find((o) => o.value === simulatedValue)?.label || simulatedValue}
           </span>
           <button
             onClick={() => handleRoleSimulation("")}
@@ -320,11 +340,11 @@ export default function Header() {
                     <Eye className="h-3 w-3" />表示切替
                   </p>
                   <select
-                    value={simulatedRole}
+                    value={simulatedValue}
                     onChange={(e) => handleRoleSimulation(e.target.value)}
                     className={cn(
                       "w-full text-sm px-3 py-2 rounded-lg border appearance-none cursor-pointer",
-                      simulatedRole
+                      simulatedValue
                         ? "bg-violet-50 text-violet-700 border-violet-200"
                         : "bg-teal-50 text-teal-600 border-teal-200"
                     )}

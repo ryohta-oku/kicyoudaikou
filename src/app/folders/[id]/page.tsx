@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { getEffectiveRole } from "@/lib/roleSimulation";
+import { getEffectiveRole, getEffectiveUserId, getEffectiveUserName, SIMULATION_PERSONAS } from "@/lib/roleSimulation";
 import {
   FileText,
   ArrowLeft,
@@ -21,12 +21,18 @@ import {
   AlertTriangle,
   CircleAlert,
   Send,
+  Clock,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Hand,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS, formatCurrency } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
 import Image from "next/image";
 import OCREditor, { type PageUpdateData } from "@/components/OCREditor";
 import SubAccountCombobox from "@/components/SubAccountCombobox";
+import MismatchAlert from "@/components/MismatchAlert";
 import { useWorkLogger } from "@/hooks/useWorkLogger";
 
 interface AccountData {
@@ -79,6 +85,7 @@ interface Page {
   ocrText: string;
   correctedText: string;
   isConfirmed: boolean;
+  isDoubleChecked?: boolean;
   date: string;
   registrationNumber: string;
   amount: string;
@@ -105,6 +112,14 @@ interface Folder {
   handoffStatus: string | null;
   handoffBy: string;
   handoffAt: string | null;
+  doubleCheckStatus: string | null;
+  firstCheckById: string;
+  firstCheckByName: string;
+  firstCheckAt: string | null;
+  doubleCheckById: string;
+  doubleCheckByName: string;
+  doubleCheckAt: string | null;
+  needsDoubleCheck: boolean;
   documents: Document[];
 }
 
@@ -117,6 +132,8 @@ export default function FolderDetailPage({
   const router = useRouter();
   const { data: session } = useSession();
   const userRole = getEffectiveRole(session?.user?.role || "");
+  const effectiveUserId = getEffectiveUserId(session?.user?.role || "", session?.user?.id || "");
+  const effectiveUserName = getEffectiveUserName(session?.user?.role || "", session?.user?.name || "");
   // B型利用者は仕訳関連セクションを非表示
   const canViewJournal = userRole !== "user_b";
   const [folder, setFolder] = useState<Folder | null>(null);
@@ -140,9 +157,17 @@ export default function FolderDetailPage({
   } | null>(null);
   const [dismissingDuplicate, setDismissingDuplicate] = useState(false);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
+  const [imageZoom, setImageZoom] = useState<Record<string, { scale: number; x: number; y: number }>>({});
+  const [pendingDeletionEntryIds, setPendingDeletionEntryIds] = useState<Set<string>>(new Set());
+  const [requestingDeleteId, setRequestingDeleteId] = useState<string | null>(null);
+  const [hasUnresolvedAlerts, setHasUnresolvedAlerts] = useState(false);
   const [handingOff, setHandingOff] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showFormatPicker, setShowFormatPicker] = useState(false);
+  const [userBCount, setUserBCount] = useState<number | null>(null);
+  const [firstCheckCompleting, setFirstCheckCompleting] = useState(false);
+  const [doubleCheckCompleting, setDoubleCheckCompleting] = useState(false);
+  const [updatingNeedsDoubleCheck, setUpdatingNeedsDoubleCheck] = useState(false);
 
   // 工数記録: ロールに応じてworkTypeを切り替え
   const workType = userRole === "user_b" ? "ocr_review" : "review";
@@ -200,6 +225,18 @@ export default function FolderDetailPage({
       setLoading(false);
     }
   }, [id]);
+
+  /** 未承認削除依頼のエントリIDを取得 */
+  const fetchPendingDeletions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/entries/delete-request/pending?detail=true");
+      const data = await res.json();
+      const ids = new Set<string>((data.items || []).map((r: { entryId: string }) => r.entryId));
+      setPendingDeletionEntryIds(ids);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   /** 勘定科目マスター取得 */
   const fetchAccounts = useCallback(async () => {
@@ -358,8 +395,21 @@ export default function FolderDetailPage({
     [runOCR]
   );
 
+  // B型ユーザー数を取得（シミュレーション中はペルソナ数を使用）
+  useEffect(() => {
+    if (session?.user?.role === "admin" && userRole === "user_b") {
+      setUserBCount(SIMULATION_PERSONAS.user_b.length);
+      return;
+    }
+    fetch("/api/users/count-by-role?role=user_b")
+      .then((res) => res.json())
+      .then((data) => setUserBCount(data.count ?? 0))
+      .catch(() => setUserBCount(0));
+  }, [session?.user?.role, userRole]);
+
   // 初回ロード時に自動OCR開始 & OCR完了ドキュメントの詳細を一括取得
   useEffect(() => {
+    fetchPendingDeletions();
     fetchFolder().then(async (folderData) => {
       if (!folderData) return;
 
@@ -449,6 +499,83 @@ export default function FolderDetailPage({
     }
   };
 
+  /** ダブルチェック: ページ確認（isDoubleChecked を更新） */
+  const handleDoubleCheckPageConfirm = async (pageId: string) => {
+    const res = await fetch("/api/ocr/pages", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pageId, isDoubleChecked: true }),
+    });
+    if (!res.ok) {
+      throw new Error("ダブルチェック確認に失敗しました");
+    }
+  };
+
+  /** 1stチェック完了（B型2人以上パターン） */
+  const handleFirstCheckComplete = async () => {
+    if (!session?.user) return;
+    setFirstCheckCompleting(true);
+    try {
+      const res = await fetch(`/api/folders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doubleCheckStatus: "pending",
+          firstCheckById: effectiveUserId,
+          firstCheckByName: effectiveUserName,
+        }),
+      });
+      if (res.ok) {
+        router.push("/");
+        return;
+      }
+      await fetchFolder();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "1stチェック完了に失敗しました");
+    } finally {
+      setFirstCheckCompleting(false);
+    }
+  };
+
+  /** ダブルチェック完了（B型2人以上パターン） */
+  const handleDoubleCheckComplete = async () => {
+    if (!session?.user) return;
+    setDoubleCheckCompleting(true);
+    try {
+      await fetch(`/api/folders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doubleCheckStatus: "completed",
+          doubleCheckById: effectiveUserId,
+          doubleCheckByName: effectiveUserName,
+        }),
+      });
+      await fetchFolder();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "ダブルチェック完了に失敗しました");
+    } finally {
+      setDoubleCheckCompleting(false);
+    }
+  };
+
+  /** A型: needsDoubleCheck 完了 */
+  const handleATypeDoubleCheckDone = async () => {
+    setUpdatingNeedsDoubleCheck(true);
+    try {
+      await fetch(`/api/folders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ needsDoubleCheck: false }),
+      });
+      router.push(`/folders/${id}/classify`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "更新に失敗しました");
+    } finally {
+      setUpdatingNeedsDoubleCheck(false);
+    }
+  };
+
   /** 全ページ確認完了時: ステータスを ocr_confirmed に更新 */
   const handleAllPagesConfirmed = useCallback(async (docId: string) => {
     setFullyConfirmedDocIds((prev) => new Set(prev).add(docId));
@@ -476,10 +603,12 @@ export default function FolderDetailPage({
   }, []);
 
   // A型: 引き継ぎフォルダは自動的に仕訳分類ページへ遷移
+  // ただし needsDoubleCheck の場合はリダイレクトしない
   const autoClassifyRedirected = useRef(false);
   useEffect(() => {
     if (!folder || !canViewJournal) return;
     if (folder.handoffStatus !== "handed_off") return;
+    if (folder.needsDoubleCheck) return; // ダブルチェック必要時はブロック
     // ocr_confirmed（未分類）or classified（確認待ち）がある場合にリダイレクト
     const hasWorkToDo = folder.documents.some(
       d => d.status === "ocr_confirmed" || d.status === "classified"
@@ -630,15 +759,40 @@ export default function FolderDetailPage({
               <ArrowLeft className="w-4 h-4" />
               ダッシュボードに戻る
             </Link>
-            <span className="bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce">
+            <span className="bg-teal-600 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce">
               ← こちらからトップに戻りましょう
             </span>
           </div>
         </div>
       )}
-      {/* B型: 引き継ぎ可能バナー（インライン通知のみ） */}
+      {/* B型: ダブルチェック待ち（自分が1stチェック者の場合） */}
+      {userRole === "user_b" &&
+        folder.doubleCheckStatus === "pending" &&
+        effectiveUserId === folder.firstCheckById && (
+          <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+            <Clock className="h-5 w-5 text-amber-600 flex-shrink-0" />
+            <span className="text-sm text-amber-800">
+              別の利用者がダブルチェックを行います。完了までお待ちください。
+            </span>
+          </div>
+        )}
+
+      {/* B型: ダブルチェック完了 → 引き継ぎ可能 */}
       {userRole === "user_b" &&
         !folder.handoffStatus &&
+        folder.doubleCheckStatus === "completed" && (
+          <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+            <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
+            <span className="text-sm text-green-800">
+              ダブルチェックが完了しました。引き継ぎを行ってください。
+            </span>
+          </div>
+        )}
+
+      {/* B型: 引き継ぎ可能バナー（ダブルチェック不要 or 完了） */}
+      {userRole === "user_b" &&
+        !folder.handoffStatus &&
+        !folder.doubleCheckStatus &&
         folder.documents.length > 0 &&
         folder.documents.every(
           (d) =>
@@ -653,6 +807,25 @@ export default function FolderDetailPage({
               全ドキュメントのOCR確認が完了しました。
             </span>
           </div>
+        )}
+
+      {/* A型: needsDoubleCheck バナー */}
+      {canViewJournal &&
+        folder.handoffStatus === "handed_off" &&
+        folder.needsDoubleCheck && (
+          <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+            <span className="text-sm text-amber-800">
+              B型利用者が1人のため、ダブルチェックが必要です。各ドキュメントの内容を再確認してください。
+            </span>
+          </div>
+        )}
+
+      {/* 不一致アラート（A型表示時: ダブルチェック完了後） */}
+      {canViewJournal &&
+        folder.handoffStatus === "handed_off" &&
+        folder.doubleCheckStatus === "completed" && (
+          <MismatchAlert folderId={id} onResolve={() => fetchFolder()} />
         )}
 
       {/* フォルダ詳細情報カード */}
@@ -919,7 +1092,7 @@ export default function FolderDetailPage({
       {/* ステップガイド: OCR確認が必要 */}
       {folder.documents.some(d => d.status === "ocr_complete") && (
         <div className="flex justify-center">
-          <span className="inline-flex items-center gap-1.5 bg-amber-500 text-white text-sm rounded-full px-4 py-2 shadow-lg animate-bounce">
+          <span className="inline-flex items-center gap-1.5 bg-teal-600 text-white text-sm rounded-full px-4 py-2 shadow-lg animate-bounce">
             ↓ 下にスクロールしてOCR内容を確認してください
           </span>
         </div>
@@ -954,7 +1127,7 @@ export default function FolderDetailPage({
 
         // 重複検知: 金額 + 勘定科目が一致 & 別ファイル由来
         // 日付は両方存在して異なる場合のみ除外（片方が空なら重複の可能性あり）
-        // duplicateDismissed のエントリは重複検知から除外
+        // duplicateDismissed のエントリおよび削除依頼済みのエントリは重複検知から除外
         const duplicateIds = new Set<string>();
         const duplicatePairs = new Map<string, string[]>();
         for (let i = 0; i < allEntries.length; i++) {
@@ -962,6 +1135,7 @@ export default function FolderDetailPage({
             const a = allEntries[i];
             const b = allEntries[j];
             if (a.duplicateDismissed || b.duplicateDismissed) continue;
+            if (pendingDeletionEntryIds.has(a.id) || pendingDeletionEntryIds.has(b.id)) continue;
             const datesContradict = a.date && b.date && a.date !== b.date;
             if (
               a.documentId !== b.documentId &&
@@ -979,6 +1153,9 @@ export default function FolderDetailPage({
           }
         }
 
+        // 削除依頼済みのエントリ数
+        const pendingDeletionCount = allEntries.filter((e) => pendingDeletionEntryIds.has(e.id)).length;
+
         // アラート判定
         const getAlerts = (entry: typeof allEntries[0]): string[] => {
           const alerts: string[] = [];
@@ -988,14 +1165,22 @@ export default function FolderDetailPage({
           if (!entry.accountCode && !entry.accountName) alerts.push("勘定科目");
           if (!entry.taxRate) alerts.push("税区分");
           if (duplicateIds.has(entry.id)) alerts.push("重複の可能性");
+          if (pendingDeletionEntryIds.has(entry.id)) alerts.push("削除依頼中");
           return alerts;
         };
         const alertCount = allEntries.filter((e) => getAlerts(e).length > 0).length;
         const missingFieldCount = allEntries.filter((e) => {
           const a = getAlerts(e);
-          return a.some((msg) => msg !== "重複の可能性");
+          return a.some((msg) => msg !== "重複の可能性" && msg !== "削除依頼中");
         }).length;
         const duplicateCount = duplicateIds.size;
+
+        // アラート状態を更新（エクスポートボタン制御用）
+        const currentHasAlerts = alertCount > 0;
+        if (currentHasAlerts !== hasUnresolvedAlerts) {
+          // 次のレンダーサイクルで更新（レンダー中のsetState回避）
+          setTimeout(() => setHasUnresolvedAlerts(currentHasAlerts), 0);
+        }
 
         return (
           <section className="space-y-3">
@@ -1022,7 +1207,7 @@ export default function FolderDetailPage({
 
 
             {/* アラートバナー */}
-            {(missingFieldCount > 0 || duplicateCount > 0) && (
+            {(missingFieldCount > 0 || duplicateCount > 0 || pendingDeletionCount > 0) && (
               <div className="space-y-2">
                 {missingFieldCount > 0 && (
                   <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
@@ -1038,6 +1223,15 @@ export default function FolderDetailPage({
                     <span className="text-sm text-orange-800">
                       <strong>{duplicateCount} 件</strong>の仕訳に重複の可能性があります（日付・金額・勘定科目が一致、別ファイル由来）。不要な場合は詳細から削除してください。
                     </span>
+                  </div>
+                )}
+                {pendingDeletionCount > 0 && (
+                  <div className="flex items-center gap-3 bg-purple-50 border border-purple-200 rounded-lg px-4 py-3">
+                    <Clock className="h-5 w-5 text-purple-500 flex-shrink-0" />
+                    <div className="text-sm">
+                      <span className="text-purple-800 font-medium">指導員の承認待ちです</span>
+                      <span className="text-purple-700 ml-1">— {pendingDeletionCount} 件の削除依頼が承認されると、次のステップ（エクスポート）に進めます。</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1076,29 +1270,32 @@ export default function FolderDetailPage({
                       return allEntries.map((entry) => {
                       const alerts = getAlerts(entry);
                       const isDuplicate = duplicateIds.has(entry.id);
-                      const missingAlerts = alerts.filter((a) => a !== "重複の可能性");
+                      const isPendingDeletion = pendingDeletionEntryIds.has(entry.id);
+                      const missingAlerts = alerts.filter((a) => a !== "重複の可能性" && a !== "削除依頼中");
                       const hasIssue = alerts.length > 0 || !entry.isConfirmed;
                       const isFirstAction = entry.id === firstActionEntryId;
                       if (hasIssue) actionIndex++;
 
                       // アラート種別の判定（1つのバッジにまとめる）
                       const alertDetails: { label: string; color: string }[] = [];
+                      if (isPendingDeletion) alertDetails.push({ label: "削除依頼の承認待ちです", color: "teal" });
                       if (isDuplicate) alertDetails.push({ label: "重複の可能性があります", color: "orange" });
                       if (missingAlerts.length > 0) alertDetails.push(...missingAlerts.map((a) => ({ label: `${a}が未入力`, color: "amber" })));
-                      if (!entry.isConfirmed && alerts.length === 0) alertDetails.push({ label: "仕訳が未確認です", color: "blue" });
+                      if (!entry.isConfirmed && alerts.length === 0 && !isPendingDeletion) alertDetails.push({ label: "仕訳が未確認です", color: "blue" });
 
                       // バッジの色（最も重要なアラートの色）
-                      const badgeColor = isDuplicate ? "orange" : missingAlerts.length > 0 ? "amber" : !entry.isConfirmed ? "blue" : "";
+                      const badgeColor = isPendingDeletion ? "teal" : isDuplicate ? "orange" : missingAlerts.length > 0 ? "amber" : !entry.isConfirmed ? "blue" : "";
 
                       return (
                       <tr
                         key={entry.id}
                         className={cn(
                           "border-b hover:bg-teal-50/50 transition-colors",
-                          isDuplicate ? "bg-orange-50/40" : "",
-                          !isDuplicate && missingAlerts.length > 0 ? "bg-amber-50/40" : "",
-                          !isDuplicate && alerts.length === 0 && entry.isConfirmed ? "bg-green-50/30" : "",
-                          !isDuplicate && alerts.length === 0 && entry.aiSuggested && !entry.isConfirmed ? "bg-yellow-50/30" : ""
+                          isPendingDeletion ? "bg-teal-50/40 opacity-60" : "",
+                          !isPendingDeletion && isDuplicate ? "bg-orange-50/40" : "",
+                          !isPendingDeletion && !isDuplicate && missingAlerts.length > 0 ? "bg-amber-50/40" : "",
+                          !isPendingDeletion && !isDuplicate && alerts.length === 0 && entry.isConfirmed ? "bg-green-50/30" : "",
+                          !isPendingDeletion && !isDuplicate && alerts.length === 0 && entry.aiSuggested && !entry.isConfirmed ? "bg-yellow-50/30" : ""
                         )}
                       >
                         <td className="px-4 py-3 whitespace-nowrap text-gray-700">{entry.date || <span className="text-red-400">-</span>}</td>
@@ -1108,28 +1305,34 @@ export default function FolderDetailPage({
                               <button
                                 type="button"
                                 className={cn(
-                                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer",
-                                  badgeColor === "orange" ? "bg-orange-100 hover:bg-orange-200 text-orange-700" :
-                                  badgeColor === "amber" ? "bg-amber-100 hover:bg-amber-200 text-amber-700" :
-                                  "bg-teal-50 hover:bg-teal-100 text-teal-600"
+                                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors",
+                                  isPendingDeletion ? "bg-teal-100 text-teal-700 cursor-default" :
+                                  badgeColor === "orange" ? "bg-orange-100 hover:bg-orange-200 text-orange-700 cursor-pointer" :
+                                  badgeColor === "amber" ? "bg-amber-100 hover:bg-amber-200 text-amber-700 cursor-pointer" :
+                                  "bg-teal-50 hover:bg-teal-100 text-teal-600 cursor-pointer"
                                 )}
                                 onClick={() => {
+                                  if (isPendingDeletion) return;
                                   if (isDuplicate) {
                                     const pairedIds = duplicatePairs.get(entry.id) || [];
                                     const paired = allEntries.find(e => pairedIds.includes(e.id));
-                                    if (paired) setDuplicateCompare({ entry, paired });
+                                    if (paired) { setImageZoom({}); setDuplicateCompare({ entry, paired }); }
                                   } else {
                                     openDetail(entry);
                                   }
                                 }}
                               >
+                                {isPendingDeletion ? (
+                                  <Clock className="w-4 h-4 text-teal-600" />
+                                ) : (
                                 <CircleAlert className={cn(
                                   "w-4 h-4",
                                   badgeColor === "orange" ? "text-orange-600" :
                                   badgeColor === "amber" ? "text-amber-600 animate-alert-bounce" :
                                   "text-teal-500"
                                 )} />
-                                <span>{isDuplicate ? "重複？" : missingAlerts.length > 0 ? "要確認" : "未確認"}</span>
+                                )}
+                                <span>{isPendingDeletion ? "削除待ち" : isDuplicate ? "重複？" : missingAlerts.length > 0 ? "要確認" : "未確認"}</span>
                               </button>
                               {/* ホバー詳細 */}
                               <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-50 pointer-events-none">
@@ -1144,7 +1347,7 @@ export default function FolderDetailPage({
                                       {d.label}
                                     </p>
                                   ))}
-                                  <p className="text-gray-400 text-[10px] mt-1 border-t border-gray-700 pt-1">クリックして確認</p>
+                                  {!isPendingDeletion && <p className="text-gray-400 text-[10px] mt-1 border-t border-gray-700 pt-1">クリックして確認</p>}
                                 </div>
                                 <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-800" />
                               </div>
@@ -1209,26 +1412,34 @@ export default function FolderDetailPage({
               {allEntries.map((entry) => {
                 const alerts = getAlerts(entry);
                 const isDuplicate = duplicateIds.has(entry.id);
-                const missingAlerts = alerts.filter((a) => a !== "重複の可能性");
+                const isPendingDeletion = pendingDeletionEntryIds.has(entry.id);
+                const missingAlerts = alerts.filter((a) => a !== "重複の可能性" && a !== "削除依頼中");
                 return (
                 <div
                   key={entry.id}
                   className={cn(
                     "card-glass rounded-xl p-4 space-y-2",
-                    isDuplicate ? "border-orange-300 bg-orange-50/40" : "",
-                    !isDuplicate && missingAlerts.length > 0 ? "border-amber-300 bg-amber-50/40" : "",
-                    alerts.length === 0 && entry.isConfirmed ? "border-green-200 bg-green-50/30" : "",
-                    alerts.length === 0 && entry.aiSuggested && !entry.isConfirmed ? "border-yellow-200 bg-yellow-50/30" : ""
+                    isPendingDeletion ? "border-teal-300 bg-teal-50/40 opacity-60" : "",
+                    !isPendingDeletion && isDuplicate ? "border-orange-300 bg-orange-50/40" : "",
+                    !isPendingDeletion && !isDuplicate && missingAlerts.length > 0 ? "border-amber-300 bg-amber-50/40" : "",
+                    !isPendingDeletion && alerts.length === 0 && entry.isConfirmed ? "border-green-200 bg-green-50/30" : "",
+                    !isPendingDeletion && alerts.length === 0 && entry.aiSuggested && !entry.isConfirmed ? "border-yellow-200 bg-yellow-50/30" : ""
                   )}
                 >
-                  {isDuplicate && (
+                  {isPendingDeletion && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-teal-100 rounded-lg text-teal-700 text-xs font-medium w-full">
+                      <Clock className="w-4 h-4 text-teal-600 flex-shrink-0" />
+                      <span>削除依頼中（承認待ち）</span>
+                    </div>
+                  )}
+                  {!isPendingDeletion && isDuplicate && (
                     <button
                       type="button"
                       className="flex items-center gap-1.5 px-2 py-1 bg-orange-100 hover:bg-orange-200 rounded-lg text-orange-700 text-xs font-medium w-full transition-colors"
                       onClick={() => {
                         const pairedIds = duplicatePairs.get(entry.id) || [];
                         const paired = allEntries.find(e => pairedIds.includes(e.id));
-                        if (paired) setDuplicateCompare({ entry, paired });
+                        if (paired) { setImageZoom({}); setDuplicateCompare({ entry, paired }); }
                       }}
                     >
                       <CircleAlert className="w-4 h-4 animate-alert-bounce text-orange-600 flex-shrink-0" />
@@ -1294,6 +1505,22 @@ export default function FolderDetailPage({
 
       {/* OCR内容確認セクション */}
       {(() => {
+        // ダブルチェックモード判定
+        const isBTypeDoubleChecker =
+          userRole === "user_b" &&
+          folder.doubleCheckStatus === "pending" &&
+          effectiveUserId !== folder.firstCheckById;
+        const isATypeDoubleChecker =
+          canViewJournal &&
+          folder.handoffStatus === "handed_off" &&
+          folder.needsDoubleCheck;
+        const isDoubleCheckMode = isBTypeDoubleChecker || isATypeDoubleChecker;
+        // 同一人物ブロック（B型で1stチェック者が自分の場合はreadOnly）
+        const isSamePersonBlock =
+          userRole === "user_b" &&
+          folder.doubleCheckStatus === "pending" &&
+          effectiveUserId === folder.firstCheckById;
+
         // OCRデータがあるドキュメント（ocr_complete + ocr_confirmed）
         const ocrVisibleDocs = folder.documents.filter((d) => ocrDocsData[d.id]);
         if (ocrVisibleDocs.length === 0) return null;
@@ -1305,28 +1532,35 @@ export default function FolderDetailPage({
           (d) => d.status === "ocr_confirmed"
         );
 
+        // ダブルチェックモード: 全ページの isDoubleChecked を確認
+        const allPagesDoubleChecked = isDoubleCheckMode && ocrVisibleDocs.every((doc) => {
+          const fullDoc = ocrDocsData[doc.id];
+          return fullDoc && fullDoc.pages.length > 0 && fullDoc.pages.every((p) => p.isDoubleChecked);
+        });
+
         return (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-foreground">
-                OCR内容確認
-                {unconfirmedCount > 0 && (
+                {isDoubleCheckMode ? "ダブルチェック" : "OCR内容確認"}
+                {!isDoubleCheckMode && unconfirmedCount > 0 && (
                   <span className="ml-2 text-sm font-normal text-teal-700">
                     ({unconfirmedCount} 件未確認)
                   </span>
                 )}
               </h2>
-              {canViewJournal && allOcrConfirmed && hasClassifyTarget && (
+              {/* 通常モード: 一括仕訳分類ボタン */}
+              {!isDoubleCheckMode && canViewJournal && allOcrConfirmed && hasClassifyTarget && (
                 <div className="relative">
                   <button
                     onClick={() => router.push(`/folders/${id}/classify`)}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors"
                   >
                     <Sparkles className="w-4 h-4" />
                     一括仕訳分類
                   </button>
                   <div className="absolute top-full mt-1 right-0">
-                    <span className="bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap inline-block">
+                    <span className="bg-teal-600 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap inline-block">
                       ↑ 次はこちら
                     </span>
                   </div>
@@ -1334,7 +1568,7 @@ export default function FolderDetailPage({
               )}
             </div>
 
-            {canViewJournal && !allOcrConfirmed && (
+            {!isDoubleCheckMode && canViewJournal && !allOcrConfirmed && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                 <p className="text-sm text-yellow-800">
                   すべてのドキュメントのOCR確認が完了すると「一括仕訳分類」ボタンが表示されます。
@@ -1351,7 +1585,7 @@ export default function FolderDetailPage({
                   <div className="bg-teal-50/80 px-4 py-3 border-b flex items-center gap-2">
                     <FileText className="w-4 h-4 text-red-500" />
                     <h3 className="text-sm font-medium text-teal-800">{doc.filename}</h3>
-                    {isConfirmed && (
+                    {isConfirmed && !isDoubleCheckMode && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
                         確認完了
                       </span>
@@ -1363,25 +1597,44 @@ export default function FolderDetailPage({
                         pages={fullDoc.pages}
                         documentFileType={fullDoc.fileType}
                         documentFilepath={fullDoc.filepath}
-                        readOnly={isConfirmed}
+                        readOnly={isSamePersonBlock || (!isDoubleCheckMode && isConfirmed)}
+                        mode={isDoubleCheckMode ? "double_check" : "first_check"}
                         onPageUpdate={handlePageUpdate}
-                        onPageConfirm={async (pageId) => {
-                          await handlePageConfirm(pageId);
-                          setOcrDocsData((prev) => {
-                            const docData = prev[doc.id];
-                            if (!docData) return prev;
-                            return {
-                              ...prev,
-                              [doc.id]: {
-                                ...docData,
-                                pages: docData.pages.map((p) =>
-                                  p.id === pageId ? { ...p, isConfirmed: true } : p
-                                ),
-                              },
-                            };
-                          });
-                        }}
-                        onAllPagesConfirmed={() => handleAllPagesConfirmed(doc.id)}
+                        onPageConfirm={isDoubleCheckMode
+                          ? async (pageId) => {
+                              await handleDoubleCheckPageConfirm(pageId);
+                              setOcrDocsData((prev) => {
+                                const docData = prev[doc.id];
+                                if (!docData) return prev;
+                                return {
+                                  ...prev,
+                                  [doc.id]: {
+                                    ...docData,
+                                    pages: docData.pages.map((p) =>
+                                      p.id === pageId ? { ...p, isDoubleChecked: true } : p
+                                    ),
+                                  },
+                                };
+                              });
+                            }
+                          : async (pageId) => {
+                              await handlePageConfirm(pageId);
+                              setOcrDocsData((prev) => {
+                                const docData = prev[doc.id];
+                                if (!docData) return prev;
+                                return {
+                                  ...prev,
+                                  [doc.id]: {
+                                    ...docData,
+                                    pages: docData.pages.map((p) =>
+                                      p.id === pageId ? { ...p, isConfirmed: true } : p
+                                    ),
+                                  },
+                                };
+                              });
+                            }
+                        }
+                        onAllPagesConfirmed={isDoubleCheckMode ? undefined : () => handleAllPagesConfirmed(doc.id)}
                       />
                     ) : (
                       <div className="text-center py-8 text-gray-500">
@@ -1392,6 +1645,171 @@ export default function FolderDetailPage({
                 </div>
               );
             })}
+
+            {/* B型2人以上: 1stチェック完了ボタン */}
+            {userRole === "user_b" &&
+              !folder.handoffStatus &&
+              !folder.doubleCheckStatus &&
+              userBCount !== null && userBCount >= 2 &&
+              allOcrConfirmed && (
+                <div className="flex justify-center">
+                  <div className="relative">
+                    <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-teal-600 text-white text-sm rounded-full px-4 py-1.5 shadow-lg animate-bounce whitespace-nowrap z-10">
+                      確認が終わったらここをクリック ↓
+                      <span className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-teal-600" />
+                    </span>
+                    <button
+                      onClick={handleFirstCheckComplete}
+                      disabled={firstCheckCompleting}
+                      className="inline-flex items-center gap-2 px-6 py-3 text-base font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors shadow-lg disabled:opacity-50"
+                    >
+                      {firstCheckCompleting ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Check className="w-5 h-5" />
+                      )}
+                      1stチェック完了
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            {/* B型: ダブルチェック完了 → 引き継ぎボタン */}
+            {isBTypeDoubleChecker && allPagesDoubleChecked && !folder.handoffStatus && (
+              <div className="flex flex-col items-center gap-3">
+                {folder.doubleCheckStatus !== "completed" && (
+                  <div className="relative">
+                    <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-teal-600 text-white text-sm rounded-full px-4 py-1.5 shadow-lg animate-bounce whitespace-nowrap z-10">
+                      全項目チェック済み！ここをクリック ↓
+                      <span className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-teal-600" />
+                    </span>
+                    <button
+                      onClick={handleDoubleCheckComplete}
+                      disabled={doubleCheckCompleting}
+                      className="inline-flex items-center gap-2 px-6 py-3 text-base font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors shadow-lg disabled:opacity-50"
+                    >
+                      {doubleCheckCompleting ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Check className="w-5 h-5" />
+                      )}
+                      ダブルチェック完了
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* B型: ダブルチェック完了後の引き継ぎボタン */}
+            {userRole === "user_b" &&
+              !folder.handoffStatus &&
+              folder.doubleCheckStatus === "completed" && (
+                <div className="flex justify-center">
+                  <div className="relative">
+                    <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-teal-600 text-white text-sm rounded-full px-4 py-1.5 shadow-lg animate-bounce whitespace-nowrap z-10">
+                      A型さんに引き継ぎましょう ↓
+                      <span className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-teal-600" />
+                    </span>
+                    <button
+                      onClick={async () => {
+                        setHandingOff(true);
+                        try {
+                          await fetch(`/api/folders/${id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              handoffStatus: "handed_off",
+                              handoffBy: effectiveUserName,
+                            }),
+                          });
+                          router.push("/");
+                        } finally {
+                          setHandingOff(false);
+                        }
+                      }}
+                      disabled={handingOff}
+                      className="inline-flex items-center gap-2 px-6 py-3 text-base font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors shadow-lg disabled:opacity-50"
+                    >
+                      {handingOff ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Send className="w-5 h-5" />
+                      )}
+                      引き継ぎ完了
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            {/* B型1人: 従来の引き継ぎボタン（needsDoubleCheck を付与） */}
+            {userRole === "user_b" &&
+              !folder.handoffStatus &&
+              !folder.doubleCheckStatus &&
+              userBCount !== null && userBCount < 2 &&
+              allOcrConfirmed && (
+                <div className="flex justify-center">
+                  <div className="relative">
+                    <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-teal-600 text-white text-sm rounded-full px-4 py-1.5 shadow-lg animate-bounce whitespace-nowrap z-10">
+                      A型さんに引き継ぎましょう ↓
+                      <span className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-teal-600" />
+                    </span>
+                    <button
+                      onClick={async () => {
+                        setHandingOff(true);
+                        try {
+                          await fetch(`/api/folders/${id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              handoffStatus: "handed_off",
+                              handoffBy: effectiveUserName,
+                              needsDoubleCheck: true,
+                              firstCheckById: effectiveUserId,
+                              firstCheckByName: effectiveUserName,
+                            }),
+                          });
+                          router.push("/");
+                        } finally {
+                          setHandingOff(false);
+                        }
+                      }}
+                      disabled={handingOff}
+                      className="inline-flex items-center gap-2 px-6 py-3 text-base font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors shadow-lg disabled:opacity-50"
+                    >
+                      {handingOff ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Send className="w-5 h-5" />
+                      )}
+                      引き継ぎ完了
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            {/* A型: needsDoubleCheck → ダブルチェック完了ボタン */}
+            {isATypeDoubleChecker && allPagesDoubleChecked && (
+              <div className="flex justify-center">
+                <div className="relative">
+                  <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-teal-600 text-white text-sm rounded-full px-4 py-1.5 shadow-lg animate-bounce whitespace-nowrap z-10">
+                    全項目チェック済み！ここをクリック ↓
+                    <span className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-teal-600" />
+                  </span>
+                  <button
+                    onClick={handleATypeDoubleCheckDone}
+                    disabled={updatingNeedsDoubleCheck}
+                    className="inline-flex items-center gap-2 px-6 py-3 text-base font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors shadow-lg disabled:opacity-50"
+                  >
+                    {updatingNeedsDoubleCheck ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Check className="w-5 h-5" />
+                    )}
+                    ダブルチェック完了 → 仕訳分類へ
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
         );
       })()}
@@ -1411,7 +1829,7 @@ export default function FolderDetailPage({
           onClick={() => !dismissingDuplicate && !deletingEntryId && setDuplicateCompare(null)}
         >
           <div
-            className="bg-white md:rounded-xl shadow-2xl w-full md:max-w-4xl h-full md:h-auto md:max-h-[90vh] overflow-hidden flex flex-col"
+            className="bg-white md:rounded-xl shadow-2xl w-full md:max-w-4xl h-full md:h-[95vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* モーダルヘッダー */}
@@ -1430,43 +1848,216 @@ export default function FolderDetailPage({
             </div>
 
             {/* 比較コンテンツ */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-200">
+            <div className="flex-1 overflow-y-auto min-h-0">
+              <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-200 h-full">
                 {[duplicateCompare.entry, duplicateCompare.paired].map((item, idx) => (
-                  <div key={item.id} className="p-4 md:p-6 space-y-3">
-                    <h4 className="text-sm font-bold text-gray-700">仕訳 {idx === 0 ? "A" : "B"}</h4>
-                    {/* 元ファイル画像プレビュー */}
-                    <div className="border rounded-lg overflow-hidden bg-gray-50">
-                      <div className="px-3 py-1.5 bg-teal-50/80 border-b">
-                        <p className="text-[11px] text-teal-700 truncate">{item.filename}</p>
-                      </div>
-                      {item.fileType === "pdf" ? (
-                        <iframe
-                          src={`/api/files?path=${encodeURIComponent(item.filepath)}`}
-                          className="w-full border-0"
-                          style={{ height: "200px" }}
-                          title={`PDF - ${item.filename}`}
-                        />
-                      ) : (() => {
-                        const matchedPage = item.pageId
-                          ? item.pages.find((p) => p.id === item.pageId)
-                          : item.pages[0];
-                        return matchedPage ? (
-                          <div className="overflow-auto max-h-[200px]">
+                  <div key={item.id} className="p-4 md:p-6 flex flex-col gap-3">
+                    <h4 className="text-sm font-bold text-gray-700 flex-shrink-0">仕訳 {idx === 0 ? "A" : "B"}</h4>
+                    {/* 元ファイル画像プレビュー（+/-ボタンで拡大縮小、ドラッグで移動） */}
+                    {(() => {
+                      // PDFでもページ画像があればそちらを使う、なければiframeフォールバック
+                      const matchedPage = item.pageId
+                        ? item.pages.find((p) => p.id === item.pageId)
+                        : item.pages[0];
+                      const imgSrc = matchedPage ? `/api/files?path=${encodeURIComponent(matchedPage.imagePath)}` : "";
+                      // PDFファイル自体がimagePathに入っているケースもiframeで表示
+                      const pageIsPdf = matchedPage?.imagePath?.toLowerCase().endsWith(".pdf");
+                      const hasPdfFallback = item.fileType === "pdf" && (!matchedPage || pageIsPdf);
+                      const pdfSrc = pageIsPdf
+                        ? `/api/files?path=${encodeURIComponent(matchedPage!.imagePath)}`
+                        : `/api/files?path=${encodeURIComponent(item.filepath)}`;
+                      const zoom = imageZoom[item.id] || { scale: 1, x: 0, y: 0 };
+                      const isZoomed = zoom.scale > 1;
+
+                      const handleZoomIn = () => {
+                        setImageZoom(prev => {
+                          const old = prev[item.id] || { scale: 1, x: 0, y: 0 };
+                          return { ...prev, [item.id]: { ...old, scale: Math.min(5, old.scale + 0.5) } };
+                        });
+                      };
+                      const handleZoomOut = () => {
+                        setImageZoom(prev => {
+                          const old = prev[item.id] || { scale: 1, x: 0, y: 0 };
+                          const newScale = Math.max(1, old.scale - 0.5);
+                          return { ...prev, [item.id]: { scale: newScale, x: newScale <= 1 ? 0 : old.x, y: newScale <= 1 ? 0 : old.y } };
+                        });
+                      };
+                      const handleReset = () => {
+                        setImageZoom(prev => ({ ...prev, [item.id]: { scale: 1, x: 0, y: 0 } }));
+                      };
+
+                      return (
+                      <div className="border rounded-lg overflow-hidden bg-gray-50 flex flex-col flex-1 min-h-0">
+                        {/* ファイル名 + ズームコントロール */}
+                        <div className="px-2 py-1.5 bg-teal-50/80 border-b flex-shrink-0">
+                          <p className="text-[11px] text-teal-700 truncate mb-1">{item.filename}</p>
+                          {(matchedPage || hasPdfFallback) && (
+                            <div className="flex items-center gap-1 bg-white/80 rounded-lg px-1.5 py-1 border border-teal-100 justify-end">
+                              {/* リセット（常に左端に固定） */}
+                              <button
+                                type="button"
+                                onClick={handleReset}
+                                disabled={!isZoomed}
+                                className="p-1.5 rounded-md hover:bg-teal-100 text-teal-600 disabled:text-gray-300 disabled:hover:bg-transparent transition-colors"
+                                title="リセット"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                              <div className="w-px h-5 bg-teal-200 mx-0.5" />
+                              {/* - ボタン */}
+                              <button
+                                type="button"
+                                onClick={handleZoomOut}
+                                disabled={zoom.scale <= 1}
+                                className="p-1.5 rounded-md hover:bg-teal-100 text-teal-600 disabled:text-gray-300 disabled:hover:bg-transparent transition-colors"
+                                title="縮小"
+                              >
+                                <ZoomOut className="w-4 h-4" />
+                              </button>
+                              {/* 倍率 */}
+                              <span className="text-xs text-teal-700 font-bold w-10 text-center tabular-nums">
+                                {Math.round(zoom.scale * 100)}%
+                              </span>
+                              {/* + ボタン */}
+                              <button
+                                type="button"
+                                onClick={handleZoomIn}
+                                disabled={zoom.scale >= 5}
+                                className="p-1.5 rounded-md hover:bg-teal-100 text-teal-600 disabled:text-gray-300 disabled:hover:bg-transparent transition-colors"
+                                title="拡大"
+                              >
+                                <ZoomIn className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {/* 画像ビューア / PDFフォールバック */}
+                        {hasPdfFallback ? (
+                          <div
+                            className="overflow-hidden flex-1 min-h-[200px] relative"
+                          >
+                            {/* 拡大時: 透明オーバーレイでドラッグ操作をキャプチャ */}
+                            {isZoomed && (
+                              <div
+                                className="absolute inset-0 z-10 cursor-grab active:cursor-grabbing"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  const startX = e.clientX;
+                                  const startY = e.clientY;
+                                  const startPanX = zoom.x;
+                                  const startPanY = zoom.y;
+                                  const onMove = (ev: MouseEvent) => {
+                                    setImageZoom(prev => ({
+                                      ...prev,
+                                      [item.id]: { ...prev[item.id], x: startPanX + (ev.clientX - startX), y: startPanY + (ev.clientY - startY) },
+                                    }));
+                                  };
+                                  const onUp = () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+                                  window.addEventListener("mousemove", onMove);
+                                  window.addEventListener("mouseup", onUp);
+                                }}
+                              >
+                                <div className="absolute top-2 left-2 flex items-center gap-1 bg-black/50 text-white text-[10px] rounded-full px-2 py-0.5 pointer-events-none">
+                                  <Hand className="w-3 h-3" />
+                                  ドラッグで移動
+                                </div>
+                              </div>
+                            )}
+                            <iframe
+                              src={`${pdfSrc}#toolbar=0&view=FitH`}
+                              className="w-full h-full border-0 select-none"
+                              style={{
+                                transform: `scale(${zoom.scale}) translate(${zoom.x / zoom.scale}px, ${zoom.y / zoom.scale}px)`,
+                                transformOrigin: "center center",
+                                transition: "transform 0.15s ease-out",
+                              }}
+                              title={`PDF - ${item.filename}`}
+                            />
+                          </div>
+                        ) : matchedPage ? (
+                          <div
+                            className={cn(
+                              "overflow-hidden flex-1 min-h-[200px] relative",
+                              isZoomed ? "cursor-grab active:cursor-grabbing" : ""
+                            )}
+                            onMouseDown={(e) => {
+                              if (!isZoomed) return;
+                              e.preventDefault();
+                              const startX = e.clientX;
+                              const startY = e.clientY;
+                              const startPanX = zoom.x;
+                              const startPanY = zoom.y;
+                              const onMove = (ev: MouseEvent) => {
+                                setImageZoom(prev => ({
+                                  ...prev,
+                                  [item.id]: {
+                                    ...prev[item.id],
+                                    x: startPanX + (ev.clientX - startX),
+                                    y: startPanY + (ev.clientY - startY),
+                                  },
+                                }));
+                              };
+                              const onUp = () => {
+                                window.removeEventListener("mousemove", onMove);
+                                window.removeEventListener("mouseup", onUp);
+                              };
+                              window.addEventListener("mousemove", onMove);
+                              window.addEventListener("mouseup", onUp);
+                            }}
+                            onTouchStart={(e) => {
+                              if (!isZoomed || e.touches.length !== 1) return;
+                              const touch = e.touches[0];
+                              const startX = touch.clientX;
+                              const startY = touch.clientY;
+                              const startPanX = zoom.x;
+                              const startPanY = zoom.y;
+                              const onMove = (ev: TouchEvent) => {
+                                if (ev.touches.length !== 1) return;
+                                const t = ev.touches[0];
+                                setImageZoom(prev => ({
+                                  ...prev,
+                                  [item.id]: {
+                                    ...prev[item.id],
+                                    x: startPanX + (t.clientX - startX),
+                                    y: startPanY + (t.clientY - startY),
+                                  },
+                                }));
+                              };
+                              const onEnd = () => {
+                                window.removeEventListener("touchmove", onMove);
+                                window.removeEventListener("touchend", onEnd);
+                              };
+                              window.addEventListener("touchmove", onMove, { passive: true });
+                              window.addEventListener("touchend", onEnd);
+                            }}
+                          >
+                            {isZoomed && (
+                              <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-black/50 text-white text-[10px] rounded-full px-2 py-0.5 pointer-events-none">
+                                <Hand className="w-3 h-3" />
+                                ドラッグで移動
+                              </div>
+                            )}
                             <Image
-                              src={`/api/files?path=${encodeURIComponent(matchedPage.imagePath)}`}
+                              src={imgSrc}
                               alt={`${item.filename}`}
                               width={400}
                               height={300}
-                              className="w-full h-auto"
+                              className="w-full h-auto select-none"
+                              style={{
+                                transform: `scale(${zoom.scale}) translate(${zoom.x / zoom.scale}px, ${zoom.y / zoom.scale}px)`,
+                                transformOrigin: "center center",
+                                transition: "transform 0.15s ease-out",
+                              }}
+                              draggable={false}
                               unoptimized
                             />
                           </div>
                         ) : (
                           <div className="text-center py-6 text-gray-400 text-xs">画像なし</div>
-                        );
-                      })()}
-                    </div>
+                        )}
+                      </div>
+                      );
+                    })()}
                     <dl className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <dt className="text-teal-700">日付</dt>
@@ -1491,41 +2082,79 @@ export default function FolderDetailPage({
                         <dd className="text-foreground">{item.taxRate || "-"}</dd>
                       </div>
                     </dl>
-                    {/* 削除ボタン */}
-                    <button
-                      onClick={async () => {
-                        if (!confirm(`「${item.description || "この仕訳"}」を削除してもよろしいですか？\n※ このファイルの仕訳が他になければファイルも削除されます`)) return;
-                        setDeletingEntryId(item.id);
-                        try {
-                          const res = await fetch("/api/entries", {
-                            method: "DELETE",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ id: item.id }),
-                          });
-                          if (!res.ok) throw new Error("削除に失敗しました");
-                          // このドキュメントの他の仕訳が無ければドキュメントも削除
-                          const doc = folder?.documents.find(d => d.id === item.documentId);
-                          if (doc && doc.journalEntries.filter(e => e.id !== item.id).length === 0) {
-                            await fetch(`/api/documents/${item.documentId}`, { method: "DELETE" });
+                    {/* 削除ボタン（ロール別分岐） */}
+                    {pendingDeletionEntryIds.has(item.id) ? (
+                      <div className="w-full mt-2 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
+                        <Clock className="w-3.5 h-3.5" />
+                        削除依頼済（承認待ち）
+                      </div>
+                    ) : (userRole === "admin" || userRole === "instructor") ? (
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`「${item.description || "この仕訳"}」を削除してもよろしいですか？\n※ このファイルの仕訳が他になければファイルも削除されます`)) return;
+                          setDeletingEntryId(item.id);
+                          try {
+                            const res = await fetch("/api/entries", {
+                              method: "DELETE",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ id: item.id }),
+                            });
+                            if (!res.ok) throw new Error("削除に失敗しました");
+                            const doc = folder?.documents.find(d => d.id === item.documentId);
+                            if (doc && doc.journalEntries.filter(e => e.id !== item.id).length === 0) {
+                              await fetch(`/api/documents/${item.documentId}`, { method: "DELETE" });
+                            }
+                            await fetchFolder();
+                            setDuplicateCompare(null);
+                          } catch (err) {
+                            alert(err instanceof Error ? err.message : "削除に失敗しました");
+                          } finally {
+                            setDeletingEntryId(null);
                           }
-                          await fetchFolder();
-                          setDuplicateCompare(null);
-                        } catch (err) {
-                          alert(err instanceof Error ? err.message : "削除に失敗しました");
-                        } finally {
-                          setDeletingEntryId(null);
-                        }
-                      }}
-                      disabled={dismissingDuplicate || !!deletingEntryId}
-                      className="w-full mt-2 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      {deletingEntryId === item.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-3.5 h-3.5" />
-                      )}
-                      こちらを削除
-                    </button>
+                        }}
+                        disabled={dismissingDuplicate || !!deletingEntryId}
+                        className="w-full mt-2 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {deletingEntryId === item.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                        こちらを削除
+                      </button>
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          setRequestingDeleteId(item.id);
+                          try {
+                            const res = await fetch("/api/entries/delete-request", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ entryId: item.id, documentId: item.documentId, reason: "duplicate" }),
+                            });
+                            if (!res.ok) {
+                              const data = await res.json();
+                              throw new Error(data.error || "削除依頼に失敗しました");
+                            }
+                            setPendingDeletionEntryIds(prev => new Set([...prev, item.id]));
+                            alert("削除依頼しました。指導者の承認をお待ちください。");
+                          } catch (err) {
+                            alert(err instanceof Error ? err.message : "削除依頼に失敗しました");
+                          } finally {
+                            setRequestingDeleteId(null);
+                          }
+                        }}
+                        disabled={dismissingDuplicate || !!deletingEntryId || requestingDeleteId === item.id}
+                        className="w-full mt-2 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {requestingDeleteId === item.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Send className="w-3.5 h-3.5" />
+                        )}
+                        削除を依頼
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1821,9 +2450,11 @@ export default function FolderDetailPage({
         </div>
       )}
 
-      {/* B型: フローティング引き継ぎ完了ボタン */}
+      {/* B型: フローティング引き継ぎ完了ボタン（2人パターンでは非表示） */}
       {userRole === "user_b" &&
         !folder.handoffStatus &&
+        !folder.doubleCheckStatus &&
+        !(userBCount !== null && userBCount >= 2) &&
         folder.documents.length > 0 &&
         folder.documents.every(
           (d) =>
@@ -1834,7 +2465,7 @@ export default function FolderDetailPage({
         ) && (
         <div className="fixed bottom-6 right-6 z-40">
           <div className="relative">
-            <span className="absolute -top-10 right-0 bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">
+            <span className="absolute -top-10 right-0 bg-teal-600 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">
               全て確認済み！引き継ぎしましょう ↓
             </span>
             <button
@@ -1842,13 +2473,12 @@ export default function FolderDetailPage({
                 if (!confirm("このフォルダをA型利用者に引き継ぎますか？")) return;
                 setHandingOff(true);
                 try {
-                  const userName = session?.user?.name || session?.user?.email || "";
                   const res = await fetch(`/api/folders/${id}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       handoffStatus: "handed_off",
-                      handoffBy: userName,
+                      handoffBy: effectiveUserName,
                     }),
                   });
                   if (!res.ok) throw new Error("引き継ぎに失敗しました");
@@ -1882,8 +2512,9 @@ export default function FolderDetailPage({
         </div>
       )}
 
-      {/* A型: フローティングCSVエクスポートボタン */}
+      {/* A型: フローティングCSVエクスポートボタン（アラート未解消時は非表示） */}
       {canViewJournal &&
+        !hasUnresolvedAlerts &&
         folder.documents.length > 0 &&
         folder.documents.every(
           (d) => d.status === "reviewed" || d.status === "exported"
@@ -1891,7 +2522,7 @@ export default function FolderDetailPage({
         <div className="fixed bottom-6 right-6 z-40">
           <div className="relative">
             {!showFormatPicker && (
-              <span className="absolute -top-10 right-0 bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">
+              <span className="absolute -top-10 right-0 bg-teal-600 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">
                 全て確認済み！エクスポートしましょう ↓
               </span>
             )}
@@ -1919,7 +2550,7 @@ export default function FolderDetailPage({
             <button
               onClick={() => setShowFormatPicker(!showFormatPicker)}
               disabled={exporting}
-              className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-full shadow-xl transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-white bg-amber-500 hover:bg-amber-600 rounded-full shadow-xl transition-colors disabled:opacity-50"
             >
               {exporting ? (
                 <Loader2 className="w-5 h-5 animate-spin" />

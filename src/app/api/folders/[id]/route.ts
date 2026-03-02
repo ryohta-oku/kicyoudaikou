@@ -25,7 +25,7 @@ export async function GET(
             status: true,
             createdAt: true,
             updatedAt: true,
-            pages: { select: { id: true, imagePath: true, pageNumber: true }, orderBy: { pageNumber: "asc" } },
+            pages: { select: { id: true, imagePath: true, pageNumber: true, isDoubleChecked: true }, orderBy: { pageNumber: "asc" } },
             _count: { select: { journalEntries: true } },
             journalEntries: {
               orderBy: { date: "asc" },
@@ -61,17 +61,73 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { handoffStatus, handoffBy } = body;
+    const {
+      handoffStatus, handoffBy,
+      doubleCheckStatus, firstCheckById, firstCheckByName,
+      doubleCheckById, doubleCheckByName, needsDoubleCheck,
+    } = body;
 
     const data: Record<string, unknown> = {};
     if (handoffStatus !== undefined) data.handoffStatus = handoffStatus;
     if (handoffBy !== undefined) data.handoffBy = handoffBy;
     if (handoffStatus === "handed_off") data.handoffAt = new Date();
+    if (doubleCheckStatus !== undefined) data.doubleCheckStatus = doubleCheckStatus;
+    if (firstCheckById !== undefined) data.firstCheckById = firstCheckById;
+    if (firstCheckByName !== undefined) data.firstCheckByName = firstCheckByName;
+    if (firstCheckById !== undefined) data.firstCheckAt = new Date();
+    if (doubleCheckById !== undefined) data.doubleCheckById = doubleCheckById;
+    if (doubleCheckByName !== undefined) data.doubleCheckByName = doubleCheckByName;
+    if (doubleCheckById !== undefined) data.doubleCheckAt = new Date();
+    if (needsDoubleCheck !== undefined) data.needsDoubleCheck = needsDoubleCheck;
 
     const folder = await prisma.folder.update({
       where: { id },
       data,
     });
+
+    // WorkLog: 1stチェック完了を記録
+    if (doubleCheckStatus === "pending") {
+      try {
+        const userSession = await auth();
+        if (userSession?.user) {
+          const effectiveRole = getEffectiveRole(userSession.user.role || "");
+          await prisma.workLog.create({
+            data: {
+              userId: userSession.user.id!,
+              userName: userSession.user.name || "",
+              userRole: effectiveRole,
+              folderId: id,
+              action: "first_check_complete",
+              workType: "ocr_review",
+            },
+          });
+        }
+      } catch (logError) {
+        console.error("WorkLog create error (first_check_complete):", logError);
+      }
+    }
+
+    // WorkLog: ダブルチェック完了を記録
+    if (doubleCheckStatus === "completed") {
+      try {
+        const userSession = await auth();
+        if (userSession?.user) {
+          const effectiveRole = getEffectiveRole(userSession.user.role || "");
+          await prisma.workLog.create({
+            data: {
+              userId: userSession.user.id!,
+              userName: userSession.user.name || "",
+              userRole: effectiveRole,
+              folderId: id,
+              action: "double_check_complete",
+              workType: "double_check",
+            },
+          });
+        }
+      } catch (logError) {
+        console.error("WorkLog create error (double_check_complete):", logError);
+      }
+    }
 
     // WorkLog: 引き継ぎ完了を記録 + セッション自動完了
     if (handoffStatus === "handed_off") {

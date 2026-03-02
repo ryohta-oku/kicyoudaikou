@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeCompanyName } from "@/lib/companyName";
 import { auth } from "@/lib/auth";
+import { getEffectiveRole } from "@/lib/roleSimulation";
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,8 +62,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ロールに応じて承認状態を決定
+    const session = await auth();
+    const role = getEffectiveRole(session?.user?.role || "");
+    const isPrivileged = role === "admin" || role === "instructor";
+
     const client = await prisma.company.create({
-      data: { name: trimmedName },
+      data: {
+        name: trimmedName,
+        isApproved: isPrivileged,
+        createdBy: session?.user?.name || "",
+      },
     });
 
     return NextResponse.json({ client });

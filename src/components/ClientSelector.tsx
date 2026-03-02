@@ -8,6 +8,7 @@ import { getSelectedClientId, setSelectedClientId } from "@/lib/client";
 interface Client {
   id: string;
   name: string;
+  isApproved?: boolean;
 }
 
 export interface ClientSelectorProps {
@@ -197,6 +198,11 @@ export default function ClientSelector({
           <span className="truncate">
             {selectedClient?.name || "得意先を選択"}
           </span>
+          {selectedClient?.isApproved === false && (
+            <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 flex-shrink-0">
+              承認待ち
+            </span>
+          )}
         </div>
         <ChevronDown
           className={cn(
@@ -247,13 +253,18 @@ export default function ClientSelector({
                 type="button"
                 onClick={() => handleSelect(client.id)}
                 className={cn(
-                  "w-full text-left px-4 py-2 text-sm hover:bg-teal-50/50 transition-colors",
+                  "w-full text-left px-4 py-2 text-sm hover:bg-teal-50/50 transition-colors flex items-center gap-2",
                   client.id === selectedId
                     ? "bg-teal-50 text-teal-700 font-medium"
                     : "text-teal-800"
                 )}
               >
-                {client.name}
+                <span className="truncate">{client.name}</span>
+                {client.isApproved === false && (
+                  <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 flex-shrink-0">
+                    承認待ち
+                  </span>
+                )}
               </button>
             ))
           ) : query ? (

@@ -10,7 +10,6 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
-  FolderPlus,
   Send,
   Building2,
   ShieldCheck,
@@ -70,7 +69,6 @@ export default function FileUpload({
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [folderName, setFolderName] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
   const [clientName, setClientName] = useState<string>("");
   const [clientConfirmed, setClientConfirmed] = useState(false);
@@ -173,8 +171,9 @@ export default function FileUpload({
     if (files.length === 0) return;
     if (!clientId || !clientConfirmed) return;
 
-    // フォルダ名が未入力の場合、日時ベースのデフォルト名を使用
-    const name = folderName.trim() || `アップロード ${new Date().toLocaleString("ja-JP")}`;
+    // 会社名＋日付でフォルダ名を自動生成
+    const today = new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "-");
+    const name = clientName ? `${clientName} ${today}` : `アップロード ${today}`;
 
     setIsProcessing(true);
     setError(null);
@@ -253,19 +252,6 @@ export default function FileUpload({
 
   return (
     <div className="space-y-4">
-      {/* フォルダ名入力 */}
-      <div className="flex items-center gap-3">
-        <FolderPlus className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-        <input
-          type="text"
-          value={folderName}
-          onChange={(e) => setFolderName(e.target.value)}
-          placeholder="フォルダ名を入力（空欄の場合は日時で自動生成）"
-          disabled={isProcessing}
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100"
-        />
-      </div>
-
       {/* 得意先セレクター */}
       <div className="relative flex items-center gap-3">
         <Building2 className="w-5 h-5 text-teal-500 flex-shrink-0" />
@@ -288,9 +274,9 @@ export default function FileUpload({
         {/* Step 1: 得意先未選択 → 吹き出しナビ */}
         {!clientId && (
           <div className="absolute top-full left-8 mt-2 z-10">
-            <div className="relative bg-amber-500 text-white text-sm font-medium rounded-full px-4 py-2 shadow-lg animate-bounce whitespace-nowrap">
+            <div className="relative bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-2 shadow-lg animate-bounce whitespace-nowrap">
               ↑ まず得意先を選んでください
-              <div className="absolute bottom-full left-6 border-8 border-transparent border-b-amber-500" />
+              <div className="absolute bottom-full left-6 border-8 border-transparent border-b-teal-600" />
             </div>
           </div>
         )}
@@ -333,9 +319,9 @@ export default function FileUpload({
           {/* Step 2: 得意先選択済み・未確認 → 吹き出しナビ */}
           {!clientConfirmed && (
             <div className="absolute top-full left-8 mt-2 z-10">
-              <div className="relative bg-amber-500 text-white text-sm font-medium rounded-full px-4 py-2 shadow-lg animate-bounce whitespace-nowrap">
+              <div className="relative bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-2 shadow-lg animate-bounce whitespace-nowrap">
                 ↑ チェックを入れて確認してください
-                <div className="absolute bottom-full left-6 border-8 border-transparent border-b-amber-500" />
+                <div className="absolute bottom-full left-6 border-8 border-transparent border-b-teal-600" />
               </div>
             </div>
           )}
@@ -383,9 +369,9 @@ export default function FileUpload({
         {/* Step 3: 確認済み・ファイル未追加 → 吹き出しナビ */}
         {clientConfirmed && files.length === 0 && !isProcessing && (
           <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-            <div className="relative bg-amber-500 text-white text-sm font-medium rounded-full px-4 py-2 shadow-lg animate-bounce whitespace-nowrap">
+            <div className="relative bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-2 shadow-lg animate-bounce whitespace-nowrap">
               ↓ ファイルをドラッグ&ドロップ！
-              <div className="absolute left-1/2 -translate-x-1/2 top-full border-8 border-transparent border-t-amber-500" />
+              <div className="absolute left-1/2 -translate-x-1/2 top-full border-8 border-transparent border-t-teal-600" />
             </div>
           </div>
         )}
@@ -489,7 +475,7 @@ export default function FileUpload({
                     "flex items-center gap-2 px-6 py-2.5 rounded-lg transition-colors text-sm font-medium",
                     !clientId || !clientConfirmed
                       ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      : "bg-teal-600 text-white hover:bg-teal-700"
+                      : "bg-amber-500 text-white hover:bg-amber-600"
                   )}
                 >
                   <Send className="w-4 h-4" />
@@ -497,7 +483,7 @@ export default function FileUpload({
                 </button>
                 {clientId && clientConfirmed && (
                   <div className="absolute -top-9 right-0">
-                    <span className="bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap inline-block">
+                    <span className="bg-teal-600 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap inline-block">
                       ↓ ここを押して送信！
                     </span>
                   </div>
