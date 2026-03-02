@@ -75,6 +75,7 @@ export default function FileUpload({
   const [clientName, setClientName] = useState<string>("");
   const [clientConfirmed, setClientConfirmed] = useState(false);
   const addFiles = useCallback((newFiles: FileList | File[]) => {
+    if (!clientConfirmed) return;
     setError(null);
     const validFiles: FileItem[] = [];
     const invalid: string[] = [];
@@ -93,7 +94,7 @@ export default function FileUpload({
     if (validFiles.length > 0) {
       setFiles((prev) => [...prev, ...validFiles]);
     }
-  }, []);
+  }, [clientConfirmed]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -275,7 +276,10 @@ export default function FileUpload({
             setClientId(id);
             setClientName(name || "");
             setSelectedClientId(id);
-            if (changed) setClientConfirmed(false);
+            if (changed) {
+              setClientConfirmed(false);
+              setFiles([]);
+            }
           }}
           variant="form"
           autoSelect={false}
@@ -363,6 +367,7 @@ export default function FileUpload({
             className="sr-only"
             tabIndex={-1}
             onChange={handleFileSelect}
+            disabled={!clientConfirmed || isProcessing}
           />
           <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
           <p className="text-lg font-medium text-gray-700 mb-1">
@@ -479,16 +484,24 @@ export default function FileUpload({
               <div className="relative">
                 <button
                   onClick={handleBulkProcess}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium"
+                  disabled={!clientId || !clientConfirmed}
+                  className={cn(
+                    "flex items-center gap-2 px-6 py-2.5 rounded-lg transition-colors text-sm font-medium",
+                    !clientId || !clientConfirmed
+                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      : "bg-teal-600 text-white hover:bg-teal-700"
+                  )}
                 >
                   <Send className="w-4 h-4" />
                   送信してOCR処理を開始
                 </button>
-                <div className="absolute -top-9 right-0">
-                  <span className="bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap inline-block">
-                    ↓ ここを押して送信！
-                  </span>
-                </div>
+                {clientId && clientConfirmed && (
+                  <div className="absolute -top-9 right-0">
+                    <span className="bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap inline-block">
+                      ↓ ここを押して送信！
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>

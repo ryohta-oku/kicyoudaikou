@@ -55,6 +55,11 @@ export async function POST(request: NextRequest) {
       useAI = false;
     }
 
+    // 1ドキュメント1仕訳ルール: 先頭1件のみ使用
+    if (aiEntries.length > 1) {
+      aiEntries = [aiEntries[0]];
+    }
+
     if (useAI && aiEntries.length > 0) {
       // AI分類の結果をDB保存
       // ページのOCR日付をフォールバック用に収集
@@ -85,53 +90,54 @@ export async function POST(request: NextRequest) {
         entries.push(entry);
       }
     } else {
-      // フォールバック: キーワードベースの分類
-      for (const page of document.pages) {
-        const text = page.correctedText || page.ocrText;
-        const parsedItems = parseOCRText(text);
+      // フォールバック: キーワードベースの分類（1ドキュメント1仕訳ルール適用）
+      const allPageText = document.pages
+        .map((p) => p.correctedText || p.ocrText)
+        .filter((t) => t.trim())
+        .join("\n");
+      const parsedItems = parseOCRText(allPageText);
 
-        for (const item of parsedItems) {
-          const classification = await classifyText(item.description);
-          const entry = await prisma.journalEntry.create({
-            data: {
-              documentId,
-              pageId: page.id,
-              date: item.date,
-              description: item.description,
-              accountCode: classification.accountCode,
-              accountName: classification.accountName,
-              subAccountCode: classification.subAccountCode,
-              subAccountName: classification.subAccountName,
-              debitAmount: item.amount,
-              creditAmount: 0,
-              aiSuggested: classification.confidence > 0,
-              isConfirmed: false,
-            },
-          });
-          entries.push(entry);
-        }
-
-        if (parsedItems.length === 0 && text.trim()) {
-          const classification = await classifyText(text);
-          const today = new Date().toISOString().split("T")[0];
-          const entry = await prisma.journalEntry.create({
-            data: {
-              documentId,
-              pageId: page.id,
-              date: today,
-              description: text.substring(0, 100),
-              accountCode: classification.accountCode,
-              accountName: classification.accountName,
-              subAccountCode: classification.subAccountCode,
-              subAccountName: classification.subAccountName,
-              debitAmount: 0,
-              creditAmount: 0,
-              aiSuggested: classification.confidence > 0,
-              isConfirmed: false,
-            },
-          });
-          entries.push(entry);
-        }
+      if (parsedItems.length > 0) {
+        // 先頭1件のみ使用
+        const item = parsedItems[0];
+        const classification = await classifyText(item.description);
+        const entry = await prisma.journalEntry.create({
+          data: {
+            documentId,
+            pageId: document.pages[0]?.id || null,
+            date: item.date,
+            description: item.description,
+            accountCode: classification.accountCode,
+            accountName: classification.accountName,
+            subAccountCode: classification.subAccountCode,
+            subAccountName: classification.subAccountName,
+            debitAmount: item.amount,
+            creditAmount: 0,
+            aiSuggested: classification.confidence > 0,
+            isConfirmed: false,
+          },
+        });
+        entries.push(entry);
+      } else if (allPageText.trim()) {
+        const classification = await classifyText(allPageText);
+        const today = new Date().toISOString().split("T")[0];
+        const entry = await prisma.journalEntry.create({
+          data: {
+            documentId,
+            pageId: document.pages[0]?.id || null,
+            date: today,
+            description: allPageText.substring(0, 100),
+            accountCode: classification.accountCode,
+            accountName: classification.accountName,
+            subAccountCode: classification.subAccountCode,
+            subAccountName: classification.subAccountName,
+            debitAmount: 0,
+            creditAmount: 0,
+            aiSuggested: classification.confidence > 0,
+            isConfirmed: false,
+          },
+        });
+        entries.push(entry);
       }
     }
 
