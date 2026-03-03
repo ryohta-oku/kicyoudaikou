@@ -1233,6 +1233,17 @@ export default function FolderDetailPage({
                   </div>
                 )}
                 {pendingDeletionCount > 0 && (
+                  (userRole === "admin" || userRole === "instructor") ? (
+                  <div className="flex items-center justify-between gap-3 bg-red-50 border-2 border-red-300 rounded-lg px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 animate-alert-bounce" />
+                      <div className="text-sm">
+                        <span className="text-red-800 font-bold">{pendingDeletionCount} 件の削除依頼があなたの承認を待っています</span>
+                        <span className="text-red-700 ml-1">— 下の表で「要承認」をクリックして承認・却下してください。</span>
+                      </div>
+                    </div>
+                  </div>
+                  ) : (
                   <div className="flex items-center gap-3 bg-purple-50 border border-purple-200 rounded-lg px-4 py-3">
                     <Clock className="h-5 w-5 text-purple-500 flex-shrink-0" />
                     <div className="text-sm">
@@ -1240,6 +1251,7 @@ export default function FolderDetailPage({
                       <span className="text-purple-700 ml-1">— {pendingDeletionCount} 件の削除依頼が承認されると、次のステップ（エクスポート）に進めます。</span>
                     </div>
                   </div>
+                  )
                 )}
               </div>
             )}
@@ -1298,6 +1310,7 @@ export default function FolderDetailPage({
                         key={entry.id}
                         className={cn(
                           "border-b hover:bg-teal-50/50 transition-colors",
+                          isPendingDeletion && (userRole === "admin" || userRole === "instructor") ? "bg-red-50/60" :
                           isPendingDeletion ? "bg-teal-50/40 opacity-60" : "",
                           !isPendingDeletion && isDuplicate ? "bg-orange-50/40" : "",
                           !isPendingDeletion && !isDuplicate && missingAlerts.length > 0 ? "bg-amber-50/40" : "",
@@ -1313,7 +1326,7 @@ export default function FolderDetailPage({
                                 type="button"
                                 className={cn(
                                   "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors",
-                                  isPendingDeletion && (userRole === "admin" || userRole === "instructor") ? "bg-purple-100 hover:bg-purple-200 text-purple-700 cursor-pointer" :
+                                  isPendingDeletion && (userRole === "admin" || userRole === "instructor") ? "bg-red-100 hover:bg-red-200 text-red-700 cursor-pointer ring-2 ring-red-300 animate-pulse" :
                                   isPendingDeletion ? "bg-teal-100 text-teal-700 cursor-default" :
                                   badgeColor === "orange" ? "bg-orange-100 hover:bg-orange-200 text-orange-700 cursor-pointer" :
                                   badgeColor === "amber" ? "bg-amber-100 hover:bg-amber-200 text-amber-700 cursor-pointer" :
@@ -1332,7 +1345,11 @@ export default function FolderDetailPage({
                                 }}
                               >
                                 {isPendingDeletion ? (
-                                  <Clock className="w-4 h-4 text-teal-600" />
+                                  (userRole === "admin" || userRole === "instructor") ? (
+                                    <AlertTriangle className="w-4 h-4 text-red-600" />
+                                  ) : (
+                                    <Clock className="w-4 h-4 text-teal-600" />
+                                  )
                                 ) : (
                                 <CircleAlert className={cn(
                                   "w-4 h-4",
