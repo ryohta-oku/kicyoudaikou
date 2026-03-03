@@ -1142,7 +1142,10 @@ export default function FolderDetailPage({
             const a = allEntries[i];
             const b = allEntries[j];
             if (a.duplicateDismissed || b.duplicateDismissed) continue;
-            if (pendingDeletionEntryIds.has(a.id) || pendingDeletionEntryIds.has(b.id)) continue;
+            // 指導員/管理者は削除依頼の承認判断のためペア情報が必要なので除外しない
+            if (userRole !== "admin" && userRole !== "instructor") {
+              if (pendingDeletionEntryIds.has(a.id) || pendingDeletionEntryIds.has(b.id)) continue;
+            }
             const datesContradict = a.date && b.date && a.date !== b.date;
             if (
               a.documentId !== b.documentId &&
@@ -1334,7 +1337,14 @@ export default function FolderDetailPage({
                                 )}
                                 onClick={() => {
                                   if (isPendingDeletion && userRole !== "admin" && userRole !== "instructor") return;
-                                  if (isPendingDeletion) { openDetail(entry); return; }
+                                  if (isPendingDeletion) {
+                                    // 重複ペアがあれば比較モーダルで表示
+                                    const pairedIds = duplicatePairs.get(entry.id) || [];
+                                    const paired = allEntries.find(e => pairedIds.includes(e.id));
+                                    if (paired) { setImageZoom({}); setDuplicateCompare({ entry, paired }); }
+                                    else { openDetail(entry); }
+                                    return;
+                                  }
                                   if (isDuplicate) {
                                     const pairedIds = duplicatePairs.get(entry.id) || [];
                                     const paired = allEntries.find(e => pairedIds.includes(e.id));
