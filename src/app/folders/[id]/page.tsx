@@ -1142,10 +1142,7 @@ export default function FolderDetailPage({
             const a = allEntries[i];
             const b = allEntries[j];
             if (a.duplicateDismissed || b.duplicateDismissed) continue;
-            // 指導員/管理者は削除依頼の承認判断のためペア情報が必要なので除外しない
-            if (userRole !== "admin" && userRole !== "instructor") {
-              if (pendingDeletionEntryIds.has(a.id) || pendingDeletionEntryIds.has(b.id)) continue;
-            }
+            if (pendingDeletionEntryIds.has(a.id) || pendingDeletionEntryIds.has(b.id)) continue;
             const datesContradict = a.date && b.date && a.date !== b.date;
             if (
               a.documentId !== b.documentId &&
@@ -1163,8 +1160,32 @@ export default function FolderDetailPage({
           }
         }
 
+        // 削除依頼エントリの重複ペアを別途検索（指導員の比較モーダル用）
+        const pendingDeletionPairs = new Map<string, string>();
+        for (const entry of allEntries) {
+          if (!pendingDeletionEntryIds.has(entry.id)) continue;
+          for (const other of allEntries) {
+            if (other.id === entry.id) continue;
+            if (other.documentId === entry.documentId) continue;
+            const datesContradict = entry.date && other.date && entry.date !== other.date;
+            if (
+              !datesContradict &&
+              entry.accountCode && other.accountCode && entry.accountCode === other.accountCode &&
+              (entry.debitAmount > 0 || entry.creditAmount > 0) &&
+              entry.debitAmount === other.debitAmount &&
+              entry.creditAmount === other.creditAmount
+            ) {
+              pendingDeletionPairs.set(entry.id, other.id);
+              break;
+            }
+          }
+        }
+
         // 削除依頼済みのエントリ数
         const pendingDeletionCount = allEntries.filter((e) => pendingDeletionEntryIds.has(e.id)).length;
+
+        // 指導員/管理者かどうか
+        const isAdminOrInstructor = userRole === "admin" || userRole === "instructor";
 
         // アラート判定
         const getAlerts = (entry: typeof allEntries[0]): string[] => {
@@ -1174,7 +1195,8 @@ export default function FolderDetailPage({
           if (entry.debitAmount <= 0 && entry.creditAmount <= 0) alerts.push("金額");
           if (!entry.accountCode && !entry.accountName) alerts.push("勘定科目");
           if (!entry.taxRate) alerts.push("税区分");
-          if (duplicateIds.has(entry.id)) alerts.push("重複の可能性");
+          // 指導員には重複アラートを表示しない（削除依頼で対応するため）
+          if (!isAdminOrInstructor && duplicateIds.has(entry.id)) alerts.push("重複の可能性");
           if (pendingDeletionEntryIds.has(entry.id)) alerts.push("削除依頼中");
           return alerts;
         };
@@ -1227,7 +1249,7 @@ export default function FolderDetailPage({
                     </span>
                   </div>
                 )}
-                {duplicateCount > 0 && (
+                {!isAdminOrInstructor && duplicateCount > 0 && (
                   <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-lg px-4 py-3">
                     <CircleAlert className="h-5 w-5 text-orange-600 flex-shrink-0 animate-alert-bounce" />
                     <span className="text-sm text-orange-800">
@@ -1291,7 +1313,7 @@ export default function FolderDetailPage({
 
                       return allEntries.map((entry) => {
                       const alerts = getAlerts(entry);
-                      const isDuplicate = duplicateIds.has(entry.id);
+                      const isDuplicate = !isAdminOrInstructor && duplicateIds.has(entry.id);
                       const isPendingDeletion = pendingDeletionEntryIds.has(entry.id);
                       const missingAlerts = alerts.filter((a) => a !== "重複の可能性" && a !== "削除依頼中");
                       const hasIssue = alerts.length > 0 || !entry.isConfirmed;
@@ -1339,8 +1361,8 @@ export default function FolderDetailPage({
                                   if (isPendingDeletion && userRole !== "admin" && userRole !== "instructor") return;
                                   if (isPendingDeletion) {
                                     // 重複ペアがあれば比較モーダルで表示
-                                    const pairedIds = duplicatePairs.get(entry.id) || [];
-                                    const paired = allEntries.find(e => pairedIds.includes(e.id));
+                                    const pairedId = pendingDeletionPairs.get(entry.id);
+                                    const paired = pairedId ? allEntries.find(e => e.id === pairedId) : null;
                                     if (paired) { setImageZoom({}); setDuplicateCompare({ entry, paired }); }
                                     else { openDetail(entry); }
                                     return;
@@ -1447,7 +1469,7 @@ export default function FolderDetailPage({
             <div className="md:hidden space-y-3">
               {allEntries.map((entry) => {
                 const alerts = getAlerts(entry);
-                const isDuplicate = duplicateIds.has(entry.id);
+                const isDuplicate = !isAdminOrInstructor && duplicateIds.has(entry.id);
                 const isPendingDeletion = pendingDeletionEntryIds.has(entry.id);
                 const missingAlerts = alerts.filter((a) => a !== "重複の可能性" && a !== "削除依頼中");
                 return (
