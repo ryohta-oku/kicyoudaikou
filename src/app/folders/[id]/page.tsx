@@ -159,7 +159,9 @@ export default function FolderDetailPage({
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const [imageZoom, setImageZoom] = useState<Record<string, { scale: number; x: number; y: number }>>({});
   const [pendingDeletionEntryIds, setPendingDeletionEntryIds] = useState<Set<string>>(new Set());
+  const [pendingDeletionMap, setPendingDeletionMap] = useState<Map<string, string>>(new Map()); // entryId → deletionRequestId
   const [requestingDeleteId, setRequestingDeleteId] = useState<string | null>(null);
+  const [approvingDeleteId, setApprovingDeleteId] = useState<string | null>(null);
   const [hasUnresolvedAlerts, setHasUnresolvedAlerts] = useState(false);
   const [handingOff, setHandingOff] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -231,8 +233,11 @@ export default function FolderDetailPage({
     try {
       const res = await fetch("/api/entries/delete-request/pending?detail=true");
       const data = await res.json();
-      const ids = new Set<string>((data.items || []).map((r: { entryId: string }) => r.entryId));
+      const items = data.items || [];
+      const ids = new Set<string>(items.map((r: { entryId: string }) => r.entryId));
+      const map = new Map<string, string>(items.map((r: { id: string; entryId: string }) => [r.entryId, r.id]));
       setPendingDeletionEntryIds(ids);
+      setPendingDeletionMap(map);
     } catch {
       // ignore
     }
@@ -1308,13 +1313,15 @@ export default function FolderDetailPage({
                                 type="button"
                                 className={cn(
                                   "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors",
+                                  isPendingDeletion && (userRole === "admin" || userRole === "instructor") ? "bg-purple-100 hover:bg-purple-200 text-purple-700 cursor-pointer" :
                                   isPendingDeletion ? "bg-teal-100 text-teal-700 cursor-default" :
                                   badgeColor === "orange" ? "bg-orange-100 hover:bg-orange-200 text-orange-700 cursor-pointer" :
                                   badgeColor === "amber" ? "bg-amber-100 hover:bg-amber-200 text-amber-700 cursor-pointer" :
                                   "bg-teal-50 hover:bg-teal-100 text-teal-600 cursor-pointer"
                                 )}
                                 onClick={() => {
-                                  if (isPendingDeletion) return;
+                                  if (isPendingDeletion && userRole !== "admin" && userRole !== "instructor") return;
+                                  if (isPendingDeletion) { openDetail(entry); return; }
                                   if (isDuplicate) {
                                     const pairedIds = duplicatePairs.get(entry.id) || [];
                                     const paired = allEntries.find(e => pairedIds.includes(e.id));
@@ -1334,7 +1341,7 @@ export default function FolderDetailPage({
                                   "text-teal-500"
                                 )} />
                                 )}
-                                <span>{isPendingDeletion ? "削除待ち" : isDuplicate ? "重複？" : missingAlerts.length > 0 ? "要確認" : "未確認"}</span>
+                                <span>{isPendingDeletion && (userRole === "admin" || userRole === "instructor") ? "要承認" : isPendingDeletion ? "削除待ち" : isDuplicate ? "重複？" : missingAlerts.length > 0 ? "要確認" : "未確認"}</span>
                               </button>
                               {/* ホバー詳細 */}
                               <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-50 pointer-events-none">
@@ -1429,10 +1436,77 @@ export default function FolderDetailPage({
                   )}
                 >
                   {isPendingDeletion && (
+                    (userRole === "admin" || userRole === "instructor") ? (
+                    <div className="space-y-1.5 w-full">
+                      <div className="flex items-center gap-1.5 px-2 py-1 bg-purple-100 rounded-lg text-purple-700 text-xs font-medium w-full">
+                        <Clock className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                        <span>削除依頼あり</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            const reqId = pendingDeletionMap.get(entry.id);
+                            if (!reqId) return;
+                            setApprovingDeleteId(entry.id);
+                            try {
+                              const res = await fetch("/api/entries/delete-request/approve", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: reqId }),
+                              });
+                              if (!res.ok) throw new Error("承認に失敗しました");
+                              await fetchFolder();
+                              await fetchPendingDeletions();
+                            } catch (err) {
+                              alert(err instanceof Error ? err.message : "承認に失敗しました");
+                            } finally {
+                              setApprovingDeleteId(null);
+                            }
+                          }}
+                          disabled={approvingDeleteId === entry.id}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {approvingDeleteId === entry.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                          承認（削除）
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const reqId = pendingDeletionMap.get(entry.id);
+                            if (!reqId) return;
+                            setApprovingDeleteId(entry.id);
+                            try {
+                              const res = await fetch("/api/entries/delete-request/approve", {
+                                method: "DELETE",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: reqId }),
+                              });
+                              if (!res.ok) throw new Error("却下に失敗しました");
+                              await fetchPendingDeletions();
+                              await fetchFolder();
+                            } catch (err) {
+                              alert(err instanceof Error ? err.message : "却下に失敗しました");
+                            } finally {
+                              setApprovingDeleteId(null);
+                            }
+                          }}
+                          disabled={approvingDeleteId === entry.id}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          却下
+                        </button>
+                      </div>
+                    </div>
+                    ) : (
                     <div className="flex items-center gap-1.5 px-2 py-1 bg-teal-100 rounded-lg text-teal-700 text-xs font-medium w-full">
                       <Clock className="w-4 h-4 text-teal-600 flex-shrink-0" />
                       <span>削除依頼中（承認待ち）</span>
                     </div>
+                    )
                   )}
                   {!isPendingDeletion && isDuplicate && (
                     <button
@@ -2044,10 +2118,77 @@ export default function FolderDetailPage({
                     </dl>
                     {/* 削除ボタン（ロール別分岐） */}
                     {pendingDeletionEntryIds.has(item.id) ? (
+                      (userRole === "admin" || userRole === "instructor") ? (
+                      <div className="w-full mt-2 space-y-1.5">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg">
+                          <Clock className="w-3.5 h-3.5" />
+                          削除依頼あり
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={async () => {
+                              const reqId = pendingDeletionMap.get(item.id);
+                              if (!reqId) return;
+                              setApprovingDeleteId(item.id);
+                              try {
+                                const res = await fetch("/api/entries/delete-request/approve", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ id: reqId }),
+                                });
+                                if (!res.ok) throw new Error("承認に失敗しました");
+                                await fetchFolder();
+                                await fetchPendingDeletions();
+                              } catch (err) {
+                                alert(err instanceof Error ? err.message : "承認に失敗しました");
+                              } finally {
+                                setApprovingDeleteId(null);
+                              }
+                            }}
+                            disabled={approvingDeleteId === item.id}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            {approvingDeleteId === item.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5" />
+                            )}
+                            承認（削除）
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const reqId = pendingDeletionMap.get(item.id);
+                              if (!reqId) return;
+                              setApprovingDeleteId(item.id);
+                              try {
+                                const res = await fetch("/api/entries/delete-request/approve", {
+                                  method: "DELETE",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ id: reqId }),
+                                });
+                                if (!res.ok) throw new Error("却下に失敗しました");
+                                await fetchPendingDeletions();
+                                await fetchFolder();
+                              } catch (err) {
+                                alert(err instanceof Error ? err.message : "却下に失敗しました");
+                              } finally {
+                                setApprovingDeleteId(null);
+                              }
+                            }}
+                            disabled={approvingDeleteId === item.id}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            却下
+                          </button>
+                        </div>
+                      </div>
+                      ) : (
                       <div className="w-full mt-2 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
                         <Clock className="w-3.5 h-3.5" />
                         削除依頼済（承認待ち）
                       </div>
+                      )
                     ) : (userRole === "admin" || userRole === "instructor") ? (
                       <button
                         onClick={async () => {
@@ -2377,6 +2518,76 @@ export default function FolderDetailPage({
                       <h4 className="text-xs font-medium text-teal-700 mb-1">AI分類理由</h4>
                       <div className="text-xs text-gray-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 whitespace-pre-wrap">
                         {detailEntry.aiReasoning}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 削除依頼の承認（admin/instructor のみ） */}
+                  {pendingDeletionEntryIds.has(detailEntry.id) && (userRole === "admin" || userRole === "instructor") && (
+                    <div className="pt-2 border-t">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock className="w-4 h-4 text-purple-500" />
+                        <span className="text-sm font-medium text-purple-700">この仕訳に削除依頼があります</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            const reqId = pendingDeletionMap.get(detailEntry.id);
+                            if (!reqId) return;
+                            setApprovingDeleteId(detailEntry.id);
+                            try {
+                              const res = await fetch("/api/entries/delete-request/approve", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: reqId }),
+                              });
+                              if (!res.ok) throw new Error("承認に失敗しました");
+                              setDetailEntry(null);
+                              await fetchFolder();
+                              await fetchPendingDeletions();
+                            } catch (err) {
+                              alert(err instanceof Error ? err.message : "承認に失敗しました");
+                            } finally {
+                              setApprovingDeleteId(null);
+                            }
+                          }}
+                          disabled={approvingDeleteId === detailEntry.id}
+                          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors"
+                        >
+                          {approvingDeleteId === detailEntry.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Check className="w-4 h-4" />
+                          )}
+                          承認（削除する）
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const reqId = pendingDeletionMap.get(detailEntry.id);
+                            if (!reqId) return;
+                            setApprovingDeleteId(detailEntry.id);
+                            try {
+                              const res = await fetch("/api/entries/delete-request/approve", {
+                                method: "DELETE",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: reqId }),
+                              });
+                              if (!res.ok) throw new Error("却下に失敗しました");
+                              setDetailEntry(null);
+                              await fetchPendingDeletions();
+                              await fetchFolder();
+                            } catch (err) {
+                              alert(err instanceof Error ? err.message : "却下に失敗しました");
+                            } finally {
+                              setApprovingDeleteId(null);
+                            }
+                          }}
+                          disabled={approvingDeleteId === detailEntry.id}
+                          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                          却下
+                        </button>
                       </div>
                     </div>
                   )}

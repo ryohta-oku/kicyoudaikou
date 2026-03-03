@@ -48,6 +48,7 @@ interface Folder {
   firstCheckByName: string;
   needsDoubleCheck: boolean;
   documents: FolderDocument[];
+  alertCount: number;
 }
 
 function getFolderStatus(folder: Folder): string {
@@ -301,7 +302,7 @@ export default function DashboardPage() {
     }
     if (userRole === "user_a") {
       return folders.some(
-        (f) => !(f.documents.length > 0 && f.documents.every((d) => d.status === "exported" || d.status === "reviewed"))
+        (f) => !(f.documents.length > 0 && f.alertCount === 0 && f.documents.every((d) => d.status === "exported" || d.status === "reviewed"))
       );
     }
     return false;
@@ -698,6 +699,7 @@ export default function DashboardPage() {
         (() => {
           const isFolderCompleted = (f: Folder) =>
             f.documents.length > 0 &&
+            f.alertCount === 0 &&
             f.documents.every((d) => d.status === "exported" || d.status === "reviewed");
 
           // 引き継ぎフォルダ（未処理のみ）
@@ -714,6 +716,10 @@ export default function DashboardPage() {
           const getATypeBadge = (f: Folder): { label: string; color: string } => {
             if (f.documents.length === 0) return { label: "ファイルなし", color: "bg-gray-100 text-gray-600" };
             if (f.handoffStatus === "handed_off" && f.needsDoubleCheck) return { label: "要ダブルチェック", color: "bg-orange-100 text-orange-800" };
+            // ドキュメントは全て確認済みだがアラートが残っている場合
+            if (f.alertCount > 0 && f.documents.every((d) => d.status === "reviewed" || d.status === "exported")) {
+              return { label: `要確認（${f.alertCount}件）`, color: "bg-amber-100 text-amber-800" };
+            }
             const status = getFolderStatus(f);
             if (f.handoffStatus === "handed_off") return { label: "引き継ぎ", color: "bg-cyan-100 text-cyan-800" };
             return { label: STATUS_LABELS[status] || status, color: STATUS_COLORS[status] || "bg-gray-100 text-gray-800" };
@@ -800,9 +806,11 @@ export default function DashboardPage() {
                         {renderFolderCard(f, getATypeBadge(f), f.handoffStatus === "handed_off")}
                         {idx === 0 && (
                           <div className="absolute left-4 -bottom-2 translate-y-full bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
-                            {f.handoffStatus === "handed_off"
-                              ? "引き継ぎフォルダを確認しましょう →"
-                              : "このフォルダを開いて作業しましょう →"
+                            {f.alertCount > 0 && f.documents.every((d) => d.status === "reviewed" || d.status === "exported")
+                              ? "アラートを確認してください →"
+                              : f.handoffStatus === "handed_off"
+                                ? "引き継ぎフォルダを確認しましょう →"
+                                : "このフォルダを開いて作業しましょう →"
                             }
                             <div className="absolute bottom-full left-6 border-8 border-transparent border-b-teal-600" />
                           </div>
