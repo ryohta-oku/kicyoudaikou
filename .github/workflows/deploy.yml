@@ -30,12 +30,12 @@ jobs:
         fi
 
         if ! grep -q "^AUTH_URL" /var/www/kicyoudaikou/.env; then
-          echo 'AUTH_URL="http://162.43.7.199"' >> /var/www/kicyoudaikou/.env
+          echo 'AUTH_URL="https://kichou.coco-star.jp"' >> /var/www/kicyoudaikou/.env
           echo ">>> AUTH_URL を追加しました"
         fi
 
         if ! grep -q "^APP_URL" /var/www/kicyoudaikou/.env; then
-          echo 'APP_URL="http://162.43.7.199"' >> /var/www/kicyoudaikou/.env
+          echo 'APP_URL="https://kichou.coco-star.jp"' >> /var/www/kicyoudaikou/.env
           echo ">>> APP_URL を追加しました"
         fi
 
