@@ -39,8 +39,10 @@ jobs:
           echo ">>> APP_URL を追加しました"
         fi
 
+        # 送信元は Resend で認証済みのドメインでなければ送信が拒否される。
+        # 現在 Resend に登録されているのは thank-smile.jp のみ（無料プランは1ドメイン）。
         if ! grep -q "^RESEND_FROM" /var/www/kicyoudaikou/.env; then
-          echo 'RESEND_FROM="記帳代行ツール <noreply@coco-star.jp>"' >> /var/www/kicyoudaikou/.env
+          echo 'RESEND_FROM="記帳代行ツール <noreply@thank-smile.jp>"' >> /var/www/kicyoudaikou/.env
           echo ">>> RESEND_FROM を追加しました"
         fi
 
