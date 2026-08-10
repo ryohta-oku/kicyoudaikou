@@ -1273,7 +1273,7 @@ export default function FolderDetailPage({
                     <Clock className="h-5 w-5 text-purple-500 flex-shrink-0" />
                     <div className="text-sm">
                       <span className="text-purple-800 font-medium">指導員の承認待ちです</span>
-                      <span className="text-purple-700 ml-1">— {pendingDeletionCount} 件の削除依頼が承認されると、次のステップ（エクスポート）に進めます。</span>
+                      <span className="text-purple-700 ml-1">— {pendingDeletionCount} 件の削除依頼が承認されると、エクスポートに進めます。</span>
                     </div>
                   </div>
                   )
@@ -2741,9 +2741,9 @@ export default function FolderDetailPage({
         ) && (
         <div className="fixed bottom-6 right-6 z-40">
           <div className="relative">
-            {!showFormatPicker && (
+            {!showFormatPicker && !folder.documents.every((d) => d.status === "exported") && (
               <span className="absolute -top-10 right-0 bg-teal-600 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">
-                全て確認済み！エクスポートしましょう ↓
+                最終確認OK！エクスポートしましょう ↓
               </span>
             )}
             {showFormatPicker && (

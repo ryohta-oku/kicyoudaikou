@@ -503,14 +503,14 @@ export default function ClassifyPage({
         <div className="fixed bottom-6 right-6 z-40">
           <div className="relative">
             <span className="absolute -top-10 right-0 bg-teal-600 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">
-              全て確認済み！次へ進みましょう ↓
+              全て確認済み！最終確認へ進みましょう ↓
             </span>
             <Link
               href={`/folders/${id}`}
               className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-white bg-green-600 hover:bg-green-700 rounded-full shadow-xl transition-colors"
             >
               <CheckCircle2 className="w-5 h-5" />
-              仕訳完了
+              最終確認へ
             </Link>
           </div>
         </div>
