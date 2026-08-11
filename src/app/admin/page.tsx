@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Loader2, Trash2, Shield, Users, Eye, EyeOff, Pencil, UserPlus, Cpu, AlertTriangle } from "lucide-react";
+import { Loader2, Trash2, Shield, Users, Eye, EyeOff, Pencil, UserPlus, Cpu, AlertTriangle, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UserInfo {
@@ -31,6 +31,13 @@ interface AiModelSettings {
   classifyModel: string;
   sources: { ocr: string; classify: string };
   providerKeys: { gemini: boolean; openai: boolean };
+}
+
+interface ModelTestResult {
+  modelId: string;
+  ok: boolean;
+  latencyMs: number;
+  error?: string;
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -94,6 +101,11 @@ export default function AdminPage() {
   const [ocrModel, setOcrModel] = useState("");
   const [classifyModel, setClassifyModel] = useState("");
   const [savingAi, setSavingAi] = useState(false);
+  const [testingAi, setTestingAi] = useState(false);
+  const [aiTest, setAiTest] = useState<{
+    ocr: ModelTestResult;
+    classify: ModelTestResult;
+  } | null>(null);
 
   useEffect(() => {
     if (status === "authenticated" && !isAdminOrInstructor) {
@@ -133,11 +145,38 @@ export default function AdminPage() {
       });
   }, [status, isAdmin]);
 
+  // 選択中のモデルに実際に問い合わせて疎通確認する（保存前でも試せる）
+  const handleTestAiModels = async () => {
+    setTestingAi(true);
+    setAiTest(null);
+    setMessage(null);
+    setSetupUrl(null);
+
+    try {
+      const res = await fetch("/api/admin/ai-models/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ocrModel, classifyModel }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage({ type: "error", text: data.error || "接続テストに失敗しました" });
+        return;
+      }
+      setAiTest(data);
+    } catch {
+      setMessage({ type: "error", text: "接続テストに失敗しました" });
+    } finally {
+      setTestingAi(false);
+    }
+  };
+
   const handleSaveAiModels = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingAi(true);
     setMessage(null);
     setSetupUrl(null);
+    setAiTest(null);
 
     try {
       const res = await fetch("/api/admin/ai-models", {
@@ -653,14 +692,57 @@ export default function AdminPage() {
               })}
             </div>
 
-            <button
-              type="submit"
-              disabled={savingAi}
-              className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 disabled:opacity-50 flex items-center gap-1"
-            >
-              {savingAi && <Loader2 className="h-4 w-4 animate-spin" />}
-              保存
-            </button>
+            {/* 接続テスト結果 */}
+            {aiTest && (
+              <div className="space-y-1.5">
+                {([
+                  { label: "OCR", result: aiTest.ocr },
+                  { label: "仕訳分類", result: aiTest.classify },
+                ]).map(({ label, result }) => (
+                  <div
+                    key={label}
+                    className={cn(
+                      "text-xs rounded px-2.5 py-1.5 border flex items-start gap-1.5",
+                      result.ok
+                        ? "bg-green-50 border-green-200 text-green-800"
+                        : "bg-red-50 border-red-200 text-red-700"
+                    )}
+                  >
+                    {result.ok ? (
+                      <Check className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    )}
+                    <span className="min-w-0">
+                      <span className="font-medium">{label}</span>: {result.modelId}
+                      {result.ok
+                        ? ` — 接続OK（${result.latencyMs}ms）`
+                        : ` — 接続失敗: ${result.error}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                disabled={savingAi || testingAi}
+                className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 disabled:opacity-50 flex items-center gap-1"
+              >
+                {savingAi && <Loader2 className="h-4 w-4 animate-spin" />}
+                保存
+              </button>
+              <button
+                type="button"
+                onClick={handleTestAiModels}
+                disabled={savingAi || testingAi}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1"
+              >
+                {testingAi && <Loader2 className="h-4 w-4 animate-spin" />}
+                接続テスト
+              </button>
+            </div>
           </form>
         </div>
       )}

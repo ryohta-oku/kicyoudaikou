@@ -68,6 +68,49 @@ export interface OcrRunResult {
   meta: AiResult;
 }
 
+export interface ModelTestResult {
+  modelId: string;
+  ok: boolean;
+  latencyMs: number;
+  error?: string;
+}
+
+/** 接続テスト用の最小スキーマ（トークンをほとんど消費しない） */
+const PING_SCHEMA = {
+  type: "object",
+  properties: { ok: { type: "string", description: '文字列 "ok" を返す' } },
+  required: ["ok"],
+} as const;
+
+/**
+ * 指定モデルに実際に1回だけ問い合わせて疎通を確認する。
+ * APIキーの有無・モデルIDの正しさ・ネットワーク・JSONモードをまとめて検証できる。
+ * 管理画面でモデルを切り替えた直後の確認に使う。
+ */
+export async function testModel(modelId: string): Promise<ModelTestResult> {
+  const startedAt = Date.now();
+  try {
+    if (!findModel(modelId)) throw new Error(`カタログにないモデルです: ${modelId}`);
+    const result = await adapterFor(modelId).runStructuredText({
+      model: modelId,
+      instructions: 'あなたは接続テストに応答します。必ず {"ok":"ok"} だけを返してください。',
+      input: "ping",
+      schema: PING_SCHEMA,
+      schemaName: "ping",
+      maxOutputTokens: 512,
+    });
+    assertNotEmpty(result);
+    return { modelId, ok: true, latencyMs: Date.now() - startedAt };
+  } catch (error) {
+    return {
+      modelId,
+      ok: false,
+      latencyMs: Date.now() - startedAt,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 /**
  * 画像／PDFからOCR＋構造化フィールド抽出を1回の呼び出しで行う。
  * maxOutputTokens は呼び出し側の指定に従う（PDFと画像で必要量が違うため統一しない）。
