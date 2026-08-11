@@ -54,12 +54,69 @@ export const EMPTY_OCR_FIELDS: OcrFields = {
 };
 
 /**
+ * 1書類の読み取り結果。
+ *
+ * 複数ページのPDF（領収書を束ねてスキャンした場合など）では pages が複数になる。
+ * 1ページの書類では要素数1。
+ */
+export interface OcrDocumentResult {
+  pages: OcrFields[];
+}
+
+/** 安全側の上限。これを超えるページは切り捨てる（AIの暴走・コスト暴発の防止） */
+export const MAX_OCR_PAGES = 30;
+
+/**
  * OCR出力のJSONスキーマ。
  * OpenAI の structured outputs にそのまま渡す（アダプタ側で additionalProperties: false を付与）。
  * Gemini 側は responseMimeType: "application/json" ＋ プロンプト記述で同じ形を出させる
  * （SDKごとのスキーマ方言差を避けるため responseSchema は使わない）。
  */
 export const OCR_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    pages: {
+      type: "array",
+      description:
+        "書類のページごとの読み取り結果。1ページの書類なら要素数1、複数ページのPDFならページ数と同じ要素数",
+      items: {
+        type: "object",
+        properties: {
+          ocrText: {
+            type: "string",
+            description: "そのページのテキスト全文。レイアウトを維持すること",
+          },
+          date: {
+            type: "string",
+            description: "日付をYYYY-MM-DD形式で。見つからない場合は空文字",
+          },
+          registrationNumber: {
+            type: "string",
+            description:
+              "適格請求書発行事業者の登録番号。T + 数字13桁（例: T1234567890123）。一致しない場合は空文字",
+          },
+          amount: {
+            type: "string",
+            description: "税込合計金額、数字のみ。見つからない場合は空文字",
+          },
+          tax: {
+            type: "string",
+            description: "消費税額、数字のみ。見つからない場合は空文字",
+          },
+          memo: {
+            type: "string",
+            description: "取引先名・品目・摘要の簡潔な要約",
+          },
+        },
+        required: ["ocrText", "date", "registrationNumber", "amount", "tax", "memo"],
+      },
+    },
+  },
+  required: ["pages"],
+} as const;
+
+/** 旧形式（単一オブジェクト）のスキーマ。フォールバック解釈の参照用に残す */
+export const OCR_SINGLE_PAGE_SCHEMA = {
   type: "object",
   properties: {
     ocrText: {

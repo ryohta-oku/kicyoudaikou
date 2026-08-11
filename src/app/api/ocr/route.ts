@@ -9,6 +9,7 @@ import {
   ensureFileOnDisk,
   loadMediaFromPath,
   mediaFromBuffer,
+  splitPdfPages,
   type LoadedMedia,
 } from "@/lib/ocr/media";
 import { normalizeRegistrationNumber, type OcrFields } from "@/lib/ocr/schema";
@@ -81,7 +82,8 @@ export async function POST(request: NextRequest) {
       fileData: document.fileData,
     });
 
-    let result!: OcrFields;
+    // ページごとの読み取り結果。1ページの書類なら要素数1。
+    let ocrPages!: OcrFields[];
     let imagePath!: string;
     let imageData: Uint8Array<ArrayBuffer> | null = null;
 
@@ -98,9 +100,19 @@ export async function POST(request: NextRequest) {
         document = { ...document, fileType: isFtyp ? "heic" : "jpeg" };
       } else {
         const media = mediaFromBuffer(pdfBuffer, "application/pdf");
-        result = (await runOcr(media, PDF_MAX_OUTPUT_TOKENS)).fields;
-        if (!result.registrationNumber) {
-          result.registrationNumber = await retryRegistrationNumber(media);
+        // 複数ページPDFはサーバー側で1ページずつに分割してからOCRする。
+        // AIにページ分割を任せると空要素を返したり全ページ分を1要素に詰めたりして安定しない。
+        const pageMedias = await splitPdfPages(media);
+
+        ocrPages = [];
+        for (const pageMedia of pageMedias) {
+          const fields = (await runOcr(pageMedia, PDF_MAX_OUTPUT_TOKENS)).pages[0];
+          // 登録番号の再読み取りは単一ページのときだけ。
+          // 複数ページではページ数×最大2回の追加呼び出しになりコストが見合わない。
+          if (pageMedias.length === 1 && !fields.registrationNumber) {
+            fields.registrationNumber = await retryRegistrationNumber(pageMedia);
+          }
+          ocrPages.push(fields);
         }
         imagePath = document.filepath;
       }
@@ -139,9 +151,10 @@ export async function POST(request: NextRequest) {
       }
 
       const media = await loadMediaFromPath(fullImagePath);
-      result = (await runOcr(media, IMAGE_MAX_OUTPUT_TOKENS)).fields;
-      if (!result.registrationNumber) {
-        result.registrationNumber = await retryRegistrationNumber(media);
+      // 画像は常に1ページ。複数返ってきても先頭のみ採用する。
+      ocrPages = [(await runOcr(media, IMAGE_MAX_OUTPUT_TOKENS)).pages[0]];
+      if (!ocrPages[0].registrationNumber) {
+        ocrPages[0].registrationNumber = await retryRegistrationNumber(media);
       }
 
       try {
@@ -150,28 +163,37 @@ export async function POST(request: NextRequest) {
       } catch { /* ignore */ }
     }
 
-    const page = await prisma.documentPage.create({
-      data: {
-        documentId,
-        pageNumber: 1,
-        imagePath,
-        imageData,
-        ocrText: result.ocrText,
-        correctedText: result.ocrText,
-        date: result.date,
-        registrationNumber: result.registrationNumber,
-        amount: result.amount,
-        tax: result.tax,
-        memo: result.memo,
-      },
-    });
+    // ページごとにDocumentPageを作る。
+    // 複数ページPDFを1件にまとめると、別々の領収書の金額が合算されて
+    // 誤った仕訳になるため、物理ページ単位で分ける。
+    const createdPages = [];
+    for (let i = 0; i < ocrPages.length; i++) {
+      const fields = ocrPages[i];
+      const created = await prisma.documentPage.create({
+        data: {
+          documentId,
+          pageNumber: i + 1,
+          imagePath,
+          // 画像データは1ページ目にのみ保持する（同じ画像の重複保存を避ける）
+          imageData: i === 0 ? imageData : null,
+          ocrText: fields.ocrText,
+          correctedText: fields.ocrText,
+          date: fields.date,
+          registrationNumber: fields.registrationNumber,
+          amount: fields.amount,
+          tax: fields.tax,
+          memo: fields.memo,
+        },
+      });
+      createdPages.push(created);
+    }
 
     await prisma.document.update({
       where: { id: documentId },
       data: { status: "ocr_complete" },
     });
 
-    return NextResponse.json({ pages: [page] });
+    return NextResponse.json({ pages: createdPages });
   } catch (error) {
     console.error("OCR error:", error);
 

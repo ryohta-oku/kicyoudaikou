@@ -30,7 +30,10 @@ export async function POST(request: NextRequest) {
       documentId: page.documentId,
     });
 
-    const { fields } = await runOcr(media, MAX_OUTPUT_TOKENS);
+    // 複数ページPDFの場合、メディアは書類全体なので該当ページを選ぶ必要がある。
+    // 画像ページや単一ページPDFでは pages[0] が対象。
+    const { pages } = await runOcr(media, MAX_OUTPUT_TOKENS);
+    const fields = pages[page.pageNumber - 1] ?? pages[0];
 
     return NextResponse.json({
       ocrText: fields.ocrText,

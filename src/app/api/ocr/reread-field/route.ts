@@ -42,7 +42,10 @@ export async function POST(request: NextRequest) {
       documentId: page.documentId,
     });
 
-    const result = await runFieldReread(media, fieldName);
+    // 複数ページPDFでは対象ページを明示しないと1ページ目の値が返ってしまう
+    const result = await runFieldReread(media, fieldName, {
+      pageNumber: page.pageNumber,
+    });
     const raw = result.text.trim();
 
     // 登録番号は T + 13桁の数字パターンのみ許容（それ以外は空）

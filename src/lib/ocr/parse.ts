@@ -3,21 +3,27 @@
  *
  * 以前は ocr/route.ts と reread-all/route.ts に別々の実装があり、
  * ```json フェンス対応が reread-all にしか無いというドリフトが起きていた。
- * ここでは両者の上位互換として、次の順に解釈を試みる:
- *   1. 素のJSON
- *   2. ```json フェンスで囲まれたJSON
- *   3. レガシーの「=== FIELDS ===」テキスト形式
- *   4. どれでもなければ全文を ocrText として扱う
+ * ここでは上位互換として、次の順に解釈を試みる:
+ *   1. { pages: [...] }（現行形式・複数ページ対応）
+ *   2. 単一オブジェクト形式（旧形式。1ページとして扱う）
+ *   3. ```json フェンスで囲まれたJSON
+ *   4. レガシーの「=== FIELDS ===」テキスト形式
+ *   5. どれでもなければ全文を ocrText として扱う
  *
- * 3 はプロンプトをJSON化した後も残す。スキーマを無視するモデルに当たったとき、
+ * 4 はプロンプトをJSON化した後も残す。スキーマを無視するモデルに当たったとき、
  * 何も取れないより旧形式で拾えたほうが安全なため。
  */
 
-import { normalizeOcrFields, type OcrFields } from "./schema";
+import {
+  MAX_OCR_PAGES,
+  normalizeOcrFields,
+  type OcrDocumentResult,
+  type OcrFields,
+} from "./schema";
 
-function fromJsonObject(parsed: unknown, fallbackText: string): OcrFields | null {
-  if (!parsed || typeof parsed !== "object") return null;
-  const obj = parsed as Record<string, unknown>;
+function fieldsFromObject(raw: unknown, fallbackText: string): OcrFields | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
   // { fields: {...}, ocr_text: "..." } のような入れ子にも対応
   const nested =
     obj.fields && typeof obj.fields === "object"
@@ -29,7 +35,27 @@ function fromJsonObject(parsed: unknown, fallbackText: string): OcrFields | null
   return fields;
 }
 
-function tryParseJson(content: string): OcrFields | null {
+function fromJsonObject(parsed: unknown, fallbackText: string): OcrDocumentResult | null {
+  if (!parsed || typeof parsed !== "object") return null;
+  const obj = parsed as Record<string, unknown>;
+
+  // 現行形式: { pages: [...] }
+  if (Array.isArray(obj.pages)) {
+    const pages = obj.pages
+      .slice(0, MAX_OCR_PAGES)
+      .map((p) => fieldsFromObject(p, ""))
+      .filter((p): p is OcrFields => p !== null);
+    // 空配列で返ってきた場合は解釈失敗とみなし、後続のフォールバックに委ねる
+    if (pages.length > 0) return { pages };
+    return null;
+  }
+
+  // 旧形式: 単一オブジェクト
+  const single = fieldsFromObject(obj, fallbackText);
+  return single ? { pages: [single] } : null;
+}
+
+function tryParseJson(content: string): OcrDocumentResult | null {
   const trimmed = content.trim();
   if (trimmed.startsWith("{")) {
     try {
@@ -49,7 +75,7 @@ function tryParseJson(content: string): OcrFields | null {
   return null;
 }
 
-function tryParseLegacyFields(content: string): OcrFields | null {
+function tryParseLegacyFields(content: string): OcrDocumentResult | null {
   if (!content.includes("=== FIELDS ===")) return null;
 
   const textMatch = content.match(/===\s*OCR_TEXT\s*===([\s\S]*?)===\s*FIELDS\s*===/);
@@ -60,20 +86,34 @@ function tryParseLegacyFields(content: string): OcrFields | null {
   const get = (name: string) =>
     fieldsSection.match(new RegExp(`${name}:\\s*(.+)`))?.[1]?.trim() || "";
 
-  return normalizeOcrFields({
-    ocrText,
-    date: get("date"),
-    registrationNumber: get("registrationNumber"),
-    amount: get("amount"),
-    tax: get("tax"),
-    memo: get("memo"),
-  });
+  return {
+    pages: [
+      normalizeOcrFields({
+        ocrText,
+        date: get("date"),
+        registrationNumber: get("registrationNumber"),
+        amount: get("amount"),
+        tax: get("tax"),
+        memo: get("memo"),
+      }),
+    ],
+  };
 }
 
-export function parseOcrResponse(content: string): OcrFields {
+/** 書類全体の読み取り結果を返す（必ず1件以上の pages を含む） */
+export function parseOcrDocument(content: string): OcrDocumentResult {
   return (
     tryParseJson(content) ??
-    tryParseLegacyFields(content) ??
-    normalizeOcrFields({ ocrText: content })
+    tryParseLegacyFields(content) ?? {
+      pages: [normalizeOcrFields({ ocrText: content })],
+    }
   );
+}
+
+/**
+ * 1ページ分だけ欲しい場合のヘルパー（既存ページの再読み取りなど）。
+ * 複数ページが返っても先頭のみを使う。
+ */
+export function parseOcrResponse(content: string): OcrFields {
+  return parseOcrDocument(content).pages[0];
 }

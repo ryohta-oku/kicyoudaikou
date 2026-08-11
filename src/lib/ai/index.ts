@@ -8,7 +8,7 @@
 
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { CLASSIFY_JSON_SCHEMA } from "@/lib/classify/schema";
-import { parseOcrResponse } from "@/lib/ocr/parse";
+import { parseOcrDocument } from "@/lib/ocr/parse";
 import { OCR_JSON_SCHEMA, type OcrFields } from "@/lib/ocr/schema";
 import { FIELD_PROMPTS, OCR_SYSTEM_PROMPT, OCR_USER_PROMPT } from "@/lib/ocr/prompts";
 import type { LoadedMedia } from "@/lib/ocr/media";
@@ -64,7 +64,8 @@ function assertNotEmpty(result: AiResult): void {
 }
 
 export interface OcrRunResult {
-  fields: OcrFields;
+  /** ページごとの読み取り結果。1ページの書類なら要素数1 */
+  pages: OcrFields[];
   meta: AiResult;
 }
 
@@ -130,17 +131,26 @@ export async function runOcr(
     maxOutputTokens,
   });
   assertNotEmpty(result);
-  return { fields: parseOcrResponse(result.text), meta: result };
+  return { pages: parseOcrDocument(result.text).pages, meta: result };
 }
 
-/** 単一項目のピンポイント再読み取り。生のテキストを返す */
+/**
+ * 単一項目のピンポイント再読み取り。生のテキストを返す。
+ * pageNumber を渡すと、複数ページPDFのうち該当ページを対象に読み取らせる。
+ */
 export async function runFieldReread(
   media: LoadedMedia,
   fieldName: string,
-  maxOutputTokens = 256
+  options: { pageNumber?: number; maxOutputTokens?: number } = {}
 ): Promise<AiResult> {
-  const prompt = FIELD_PROMPTS[fieldName];
-  if (!prompt) throw new Error(`未対応のフィールド: ${fieldName}`);
+  const basePrompt = FIELD_PROMPTS[fieldName];
+  if (!basePrompt) throw new Error(`未対応のフィールド: ${fieldName}`);
+
+  const { pageNumber, maxOutputTokens = 256 } = options;
+  const prompt =
+    pageNumber && pageNumber > 1
+      ? `この書類の${pageNumber}ページ目だけを対象にしてください。他のページは無視してください。\n\n${basePrompt}`
+      : basePrompt;
 
   const { modelId } = await resolveModel("ocr");
   return adapterFor(modelId).runShortText({

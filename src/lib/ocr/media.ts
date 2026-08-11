@@ -28,6 +28,15 @@ export interface LoadedMedia {
  */
 export const MAX_MEDIA_BYTES = 18 * 1024 * 1024;
 
+/**
+ * 1つのPDFから処理する最大ページ数。
+ *
+ * ページごとにAI呼び出しが発生し、1ページあたり数秒かかる。
+ * OCRルートの maxDuration が60秒のため、その範囲に収まる値にしている。
+ * 超過分を黙って切り捨てると仕訳が欠落するので、上限を超えたらエラーにする。
+ */
+export const MAX_PDF_PAGES = 10;
+
 export const MIME_MAP: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -109,6 +118,43 @@ export async function convertHeicWithTimeout(
     ),
   ]);
   return Buffer.from(result as ArrayBuffer);
+}
+
+/**
+ * PDFを1ページずつの単一ページPDFに分割する。
+ *
+ * 領収書を束ねてスキャンした複数ページPDFについて、AIに「ページごとに分けて返して」と
+ * 指示するだけでは分割が安定しない（空要素を返したり、全ページ分のテキストを
+ * 1要素に詰め込んだりする）。ページ分割は決定的にサーバー側で行う。
+ *
+ * 単一ページPDFや画像の場合は分割せず、元のメディアをそのまま1件返す。
+ */
+export async function splitPdfPages(media: LoadedMedia): Promise<LoadedMedia[]> {
+  if (media.kind !== "pdf") return [media];
+
+  const { PDFDocument } = await import("pdf-lib");
+  const source = await PDFDocument.load(Buffer.from(media.base64, "base64"), {
+    ignoreEncryption: true,
+  });
+  const pageCount = source.getPageCount();
+  if (pageCount <= 1) return [media];
+
+  // 切り捨てると仕訳が欠落するため、上限超過は処理せずエラーにする
+  if (pageCount > MAX_PDF_PAGES) {
+    throw new Error(
+      `PDFのページ数が多すぎます（${pageCount}ページ / 上限${MAX_PDF_PAGES}ページ）。ファイルを分けてアップロードしてください`
+    );
+  }
+
+  const result: LoadedMedia[] = [];
+  for (let i = 0; i < pageCount; i++) {
+    const single = await PDFDocument.create();
+    const [copied] = await single.copyPages(source, [i]);
+    single.addPage(copied);
+    const bytes = await single.save();
+    result.push(mediaFromBuffer(Buffer.from(bytes), "application/pdf"));
+  }
+  return result;
 }
 
 /**
