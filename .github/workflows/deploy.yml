@@ -39,9 +39,11 @@ jobs:
           echo ">>> APP_URL を追加しました"
         fi
 
+        # RESEND_API_KEY はここに書かない（平文コミットになるため）。
+        # GEMINI_API_KEY / OPENAI_API_KEY と同様に VPS の .env で直接管理する。
+        # env_setup_script は with: 入力のため secrets コンテキストを参照できない。
         if ! grep -q "^RESEND_API_KEY" /var/www/kicyoudaikou/.env; then
-          echo 'RESEND_API_KEY="re_8XQPe29r_4nnm7BiVDa3UvFjHV8u9CQdj"' >> /var/www/kicyoudaikou/.env
-          echo ">>> RESEND_API_KEY を追加しました"
+          echo ">>> 警告: RESEND_API_KEY が未設定です。VPSの .env に手動で追加してください（招待メールが送信できません）"
         fi
 
         if ! grep -q "^RESEND_FROM" /var/www/kicyoudaikou/.env; then
