@@ -15,5 +15,5 @@ export function getGeminiClient(): GoogleGenAI {
   return _client;
 }
 
-export const OCR_MODEL = "gemini-2.5-flash-lite";
-export const CLASSIFY_MODEL = "gemini-2.5-flash-lite";
+// モデル名の定数はここには置かない。
+// 管理画面から切り替えられるようにするため、@/lib/ai/registry と @/lib/ai/index で解決する。

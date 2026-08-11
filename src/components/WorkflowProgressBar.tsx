@@ -19,6 +19,7 @@ const STEPS_A_FULL: Step[] = [
   { id: "ocr_confirm", label: "OCR確認" },
   { id: "classify", label: "仕訳分類" },
   { id: "review", label: "仕訳確認" },
+  { id: "final_review", label: "最終確認" },
   { id: "done", label: "完了" },
 ];
 
@@ -26,6 +27,7 @@ const STEPS_A_FULL: Step[] = [
 const STEPS_A_HANDOFF: Step[] = [
   { id: "classify", label: "仕訳分類" },
   { id: "review", label: "仕訳確認" },
+  { id: "final_review", label: "最終確認" },
   { id: "done", label: "完了" },
 ];
 
@@ -43,6 +45,7 @@ const STEPS_A_HANDOFF_DC: Step[] = [
   { id: "double_check", label: "ダブルチェック" },
   { id: "classify", label: "仕訳分類" },
   { id: "review", label: "仕訳確認" },
+  { id: "final_review", label: "最終確認" },
   { id: "done", label: "完了" },
 ];
 
@@ -61,7 +64,8 @@ const STEP_ORDER: Record<string, number> = {
   double_check: 3,
   classify: 4,
   review: 5,
-  done: 6,
+  final_review: 6,
+  done: 7,
   handoff: 4, // B型の引き継ぎはダブルチェックの次
 };
 
@@ -90,8 +94,10 @@ function computeCurrentStep(folder: FolderInfo, isTypeB: boolean, pathname: stri
     statusStep = "ocr_confirm";
   } else if (statuses.every((s) => s === "ocr_confirmed")) {
     statusStep = isTypeB ? "double_check" : "classify";
-  } else if (statuses.every((s) => s === "reviewed" || s === "exported")) {
+  } else if (statuses.every((s) => s === "exported")) {
     statusStep = "done";
+  } else if (statuses.every((s) => s === "reviewed" || s === "exported")) {
+    statusStep = "final_review";
   } else if (statuses.some((s) => s === "classified" || s === "reviewed")) {
     statusStep = "review";
   } else {

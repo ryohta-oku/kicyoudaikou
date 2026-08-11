@@ -301,8 +301,9 @@ export default function DashboardPage() {
       );
     }
     if (userRole === "user_a") {
+      // エクスポート済みで初めて完了扱い（reviewed は最終確認待ち）
       return folders.some(
-        (f) => !(f.documents.length > 0 && f.alertCount === 0 && f.documents.every((d) => d.status === "exported" || d.status === "reviewed"))
+        (f) => !(f.documents.length > 0 && f.alertCount === 0 && f.documents.every((d) => d.status === "exported"))
       );
     }
     return false;
@@ -697,10 +698,18 @@ export default function DashboardPage() {
       ) : userRole === "user_a" ? (
         /* ===== A型専用: タスク状況別ビュー ===== */
         (() => {
+          // 完了＝エクスポート済み。reviewed のみのフォルダは「最終確認」待ちとして未完了に残す
           const isFolderCompleted = (f: Folder) =>
             f.documents.length > 0 &&
             f.alertCount === 0 &&
-            f.documents.every((d) => d.status === "exported" || d.status === "reviewed");
+            f.documents.every((d) => d.status === "exported");
+
+          // 全ドキュメント確認済み＆アラートなし → 最終確認（エクスポート）待ち
+          const isFinalReviewPending = (f: Folder) =>
+            f.documents.length > 0 &&
+            f.alertCount === 0 &&
+            f.documents.every((d) => d.status === "reviewed" || d.status === "exported") &&
+            !isFolderCompleted(f);
 
           // 引き継ぎフォルダ（未処理のみ）
           const handoffPending = folders.filter(
@@ -719,6 +728,10 @@ export default function DashboardPage() {
             // ドキュメントは全て確認済みだがアラートが残っている場合
             if (f.alertCount > 0 && f.documents.every((d) => d.status === "reviewed" || d.status === "exported")) {
               return { label: `要確認（${f.alertCount}件）`, color: "bg-amber-100 text-amber-800" };
+            }
+            // 全確認済み・アラートなし → 最終確認（エクスポート）待ち
+            if (isFinalReviewPending(f)) {
+              return { label: "最終確認", color: "bg-green-100 text-green-800" };
             }
             const status = getFolderStatus(f);
             if (f.handoffStatus === "handed_off") return { label: "引き継ぎ", color: "bg-cyan-100 text-cyan-800" };
@@ -808,9 +821,11 @@ export default function DashboardPage() {
                           <div className="absolute left-4 -bottom-2 translate-y-full bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
                             {f.alertCount > 0 && f.documents.every((d) => d.status === "reviewed" || d.status === "exported")
                               ? "アラートを確認してください →"
-                              : f.handoffStatus === "handed_off"
-                                ? "引き継ぎフォルダを確認しましょう →"
-                                : "このフォルダを開いて作業しましょう →"
+                              : isFinalReviewPending(f)
+                                ? "最終確認をしてエクスポートしましょう →"
+                                : f.handoffStatus === "handed_off"
+                                  ? "引き継ぎフォルダを確認しましょう →"
+                                  : "このフォルダを開いて作業しましょう →"
                             }
                             <div className="absolute bottom-full left-6 border-8 border-transparent border-b-teal-600" />
                           </div>
@@ -833,8 +848,8 @@ export default function DashboardPage() {
                   </div>
                   <div className="space-y-2">
                     {completedFolders.map((f) => renderFolderCard(f, {
-                      label: f.handoffStatus === "handed_off" ? "引き継ぎ完了" : "エクスポート済",
-                      color: f.handoffStatus === "handed_off" ? "bg-cyan-100 text-cyan-800" : "bg-emerald-100 text-emerald-800",
+                      label: "エクスポート済",
+                      color: "bg-emerald-100 text-emerald-800",
                     }))}
                   </div>
                 </div>

@@ -225,3 +225,13 @@ model DeletionRequest {
   entry    JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
   document Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
 }
+
+// アプリ設定（キー・バリュー）
+// 現在のキー: "ai.ocrModel", "ai.classifyModel"
+model AppSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

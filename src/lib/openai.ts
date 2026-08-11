@@ -13,5 +13,5 @@ export function getOpenAIClient(): OpenAI {
   return _client;
 }
 
-export const OCR_MODEL = "gpt-4o-mini";
-export const CLASSIFY_MODEL = "gpt-4o-mini";
+// モデル名の定数はここには置かない。
+// 管理画面から切り替えられるようにするため、@/lib/ai/registry と @/lib/ai/index で解決する。
