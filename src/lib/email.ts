@@ -9,7 +9,10 @@ function getResend() {
 export async function sendVerificationEmail(to: string, name: string, token: string) {
   const appUrl = process.env.APP_URL || "http://localhost:3000";
   const verifyUrl = `${appUrl}/setup-password?token=${token}`;
-  const from = process.env.RESEND_FROM || "記帳代行ツール <onboarding@resend.dev>";
+  // Resend で認証済みのドメインからしか送信できない。現在の認証済みドメインは
+  // thank-smile.jp のみなので、フォールバックもそこに合わせる。
+  // （旧値の onboarding@resend.dev は Resend の共有テスト用で、自分のアカウント宛にしか届かない）
+  const from = process.env.RESEND_FROM || "記帳代行ツール <noreply@thank-smile.jp>";
 
   const resend = getResend();
 

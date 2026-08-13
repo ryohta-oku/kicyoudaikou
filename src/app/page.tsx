@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { getEffectiveRole } from "@/lib/roleSimulation";
+import { getEffectiveRole, getEffectiveUserId } from "@/lib/roleSimulation";
 import {
   FolderOpen,
   Upload,
@@ -43,7 +43,12 @@ interface Folder {
   handoffStatus: string | null;
   handoffBy: string;
   handoffAt: string | null;
+  doubleCheckStatus: string | null;
+  firstCheckById: string;
+  firstCheckByName: string;
+  needsDoubleCheck: boolean;
   documents: FolderDocument[];
+  alertCount: number;
 }
 
 function getFolderStatus(folder: Folder): string {
@@ -71,6 +76,8 @@ export default function DashboardPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [duplicateCount, setDuplicateCount] = useState(0);
   const [pendingSubAccountCount, setPendingSubAccountCount] = useState(0);
+  const [pendingDeletionCount, setPendingDeletionCount] = useState(0);
+  const [pendingClientCount, setPendingClientCount] = useState(0);
   const [scanFiles, setScanFiles] = useState<{ name: string; size: number; modifiedAt: string }[]>([]);
   const [scanConfigured, setScanConfigured] = useState(false);
   const [scanImporting, setScanImporting] = useState(false);
@@ -135,6 +142,28 @@ export default function DashboardPage() {
       const res = await fetch("/api/accounts/sub/pending");
       const data = await res.json();
       setPendingSubAccountCount(data.count || 0);
+    } catch {
+      // ignore
+    }
+  }, [userRole]);
+
+  const fetchPendingDeletions = useCallback(async () => {
+    if (userRole !== "admin" && userRole !== "instructor") return;
+    try {
+      const res = await fetch("/api/entries/delete-request/pending");
+      const data = await res.json();
+      setPendingDeletionCount(data.count || 0);
+    } catch {
+      // ignore
+    }
+  }, [userRole]);
+
+  const fetchPendingClients = useCallback(async () => {
+    if (userRole !== "admin" && userRole !== "instructor") return;
+    try {
+      const res = await fetch("/api/clients/pending");
+      const data = await res.json();
+      setPendingClientCount(data.count || 0);
     } catch {
       // ignore
     }
@@ -229,12 +258,14 @@ export default function DashboardPage() {
     fetchFolders();
     fetchDuplicates();
     fetchPendingSubAccounts();
+    fetchPendingDeletions();
+    fetchPendingClients();
     checkScanFolder();
 
     // スキャンフォルダを5秒ごとにポーリング
     const interval = setInterval(checkScanFolder, 5000);
     return () => clearInterval(interval);
-  }, [fetchFolders, fetchDuplicates, fetchPendingSubAccounts, checkScanFolder]);
+  }, [fetchFolders, fetchDuplicates, fetchPendingSubAccounts, fetchPendingDeletions, fetchPendingClients, checkScanFolder]);
 
   const handleBulkUploadComplete = (folderId: string) => {
     // アップロード完了後、フォルダ詳細ページへ遷移（OCRはそこで自動開始）
@@ -252,6 +283,32 @@ export default function DashboardPage() {
     }
   };
 
+  // B型: ダブルチェック待ちタスクの有無（ヘッダー表示制御用）
+  const hasDoubleCheckTasks = useMemo(() => {
+    if (userRole !== "user_b") return false;
+    const effectiveId = getEffectiveUserId(session?.user?.role || "", session?.user?.id || "");
+    return folders.some(
+      (f) => f.doubleCheckStatus === "pending" && f.firstCheckById !== effectiveId
+    );
+  }, [userRole, folders, session?.user?.role, session?.user?.id]);
+
+  // 未完了タスクがある場合は作業開始ボタンを非表示にする
+  const hasIncompleteTasks = useMemo(() => {
+    if (folders.length === 0) return false;
+    if (userRole === "user_b") {
+      return folders.some(
+        (f) => f.handoffStatus !== "handed_off" && f.doubleCheckStatus !== "pending"
+      );
+    }
+    if (userRole === "user_a") {
+      // エクスポート済みで初めて完了扱い（reviewed は最終確認待ち）
+      return folders.some(
+        (f) => !(f.documents.length > 0 && f.alertCount === 0 && f.documents.every((d) => d.status === "exported"))
+      );
+    }
+    return false;
+  }, [userRole, folders]);
+
   return (
     <div className="space-y-6 md:space-y-8">
       {/* ヘッダー */}
@@ -262,37 +319,40 @@ export default function DashboardPage() {
             アップロードされたフォルダの管理
           </p>
         </div>
-        <div className="relative flex-shrink-0">
-          {isWorkStarted ? (
-            <button
-              onClick={() => setShowUpload(!showUpload)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium"
-            >
-              <Upload className="w-4 h-4" />
-              <span className="hidden sm:inline">ファイルを</span>アップロード
-            </button>
-          ) : (
-            <button
-              onClick={handleWorkStart}
-              disabled={workStarting}
-              className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl hover:from-amber-600 hover:to-amber-700 transition-colors text-base font-bold shadow-lg disabled:opacity-50"
-            >
-              {workStarting ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Timer className="w-5 h-5" />
-              )}
-              作業開始
-            </button>
-          )}
-          {/* ステップガイド: 作業未開始時に表示 */}
-          {!isWorkStarted && !loading && (
-            <div className="absolute top-full right-2 mt-3 whitespace-nowrap bg-amber-500 text-white text-sm font-medium rounded-full px-5 py-2 shadow-lg animate-bounce z-10">
-              ↑ まずここから始めましょう！
-              <div className="absolute bottom-full right-8 border-8 border-transparent border-b-amber-500" />
-            </div>
-          )}
-        </div>
+        {/* 未完了タスクまたはダブルチェック待ちがある場合はボタンを非表示 */}
+        {!hasDoubleCheckTasks && !hasIncompleteTasks && (
+          <div className="relative flex-shrink-0">
+            {isWorkStarted ? (
+              <button
+                onClick={() => setShowUpload(!showUpload)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium"
+              >
+                <Upload className="w-4 h-4" />
+                <span className="hidden sm:inline">ファイルを</span>アップロード
+              </button>
+            ) : (
+              <button
+                onClick={handleWorkStart}
+                disabled={workStarting}
+                className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl hover:from-amber-600 hover:to-amber-700 transition-colors text-base font-bold shadow-lg disabled:opacity-50"
+              >
+                {workStarting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Timer className="w-5 h-5" />
+                )}
+                作業開始
+              </button>
+            )}
+            {/* ステップガイド: 作業未開始時に表示 */}
+            {!isWorkStarted && !loading && (
+              <div className="absolute top-full right-2 mt-3 whitespace-nowrap bg-teal-600 text-white text-sm font-medium rounded-full px-5 py-2 shadow-lg animate-bounce z-10">
+                ↑ まずここから始めましょう！
+                <div className="absolute bottom-full right-8 border-8 border-transparent border-b-teal-600" />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 重複アラート */}
@@ -317,6 +377,32 @@ export default function DashboardPage() {
           <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
           <span className="text-sm text-amber-800">
             未承認の補助科目が <strong>{pendingSubAccountCount} 件</strong>あります。
+          </span>
+        </Link>
+      )}
+
+      {/* 未承認得意先アラート */}
+      {pendingClientCount > 0 && (userRole === "admin" || userRole === "instructor") && (
+        <Link
+          href="/clients/pending"
+          className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-3 md:px-4 py-3 hover:bg-amber-100 transition-colors"
+        >
+          <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+          <span className="text-sm text-amber-800">
+            未承認の得意先が <strong>{pendingClientCount} 件</strong>あります。
+          </span>
+        </Link>
+      )}
+
+      {/* 未承認削除依頼アラート */}
+      {pendingDeletionCount > 0 && (userRole === "admin" || userRole === "instructor") && (
+        <Link
+          href="/entries/pending-delete"
+          className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-3 md:px-4 py-3 hover:bg-amber-100 transition-colors"
+        >
+          <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+          <span className="text-sm text-amber-800">
+            未承認の削除依頼が <strong>{pendingDeletionCount} 件</strong>あります。
           </span>
         </Link>
       )}
@@ -434,13 +520,23 @@ export default function DashboardPage() {
       ) : userRole === "user_b" ? (
         /* ===== B型専用: タスク状況別ビュー ===== */
         (() => {
-          // B型のフォルダを2カテゴリに分類: 未完了（引き継ぎ前）と完了（引き継ぎ済）
-          const incompleteFolders = folders.filter((f) => f.handoffStatus !== "handed_off");
+          const effectiveId = getEffectiveUserId(session?.user?.role || "", session?.user?.id || "");
+          // B型のフォルダを4カテゴリに分類
+          const incompleteFolders = folders.filter(
+            (f) => f.handoffStatus !== "handed_off" && f.doubleCheckStatus !== "pending"
+          );
+          const doubleCheckWaiting = folders.filter(
+            (f) => f.doubleCheckStatus === "pending" && f.firstCheckById !== effectiveId
+          );
+          const waitingForOthers = folders.filter(
+            (f) => f.doubleCheckStatus === "pending" && f.firstCheckById === effectiveId
+          );
           const completedFolders = folders.filter((f) => f.handoffStatus === "handed_off");
 
           // 未完了フォルダのサブ分類（バッジ用）
           const getBTypeBadge = (f: Folder): { label: string; color: string } => {
             if (f.documents.length === 0) return { label: "ファイルなし", color: "bg-gray-100 text-gray-600" };
+            if (f.doubleCheckStatus === "completed") return { label: "引き継ぎ可能", color: "bg-green-100 text-green-800" };
             const hasIncomplete = f.documents.some(
               (d) => d.status === "uploaded" || d.status === "ocr_processing" || d.status === "ocr_complete"
             );
@@ -451,7 +547,7 @@ export default function DashboardPage() {
             return { label: "引き継ぎ可能", color: "bg-green-100 text-green-800" };
           };
 
-          const renderFolderCard = (folder: Folder, badge?: { label: string; color: string }) => (
+          const renderFolderCard = (folder: Folder, badge?: { label: string; color: string }, subText?: string) => (
             <Link
               key={folder.id}
               href={`/folders/${folder.id}`}
@@ -469,6 +565,7 @@ export default function DashboardPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
+                    {subText && <span className="text-orange-700">{subText}</span>}
                     <span>{new Date(folder.createdAt).toLocaleDateString("ja-JP")}</span>
                     <span className="inline-flex items-center gap-1">
                       <FileText className="w-3.5 h-3.5" />
@@ -517,9 +614,9 @@ export default function DashboardPage() {
                       <div key={f.id} className="relative">
                         {renderFolderCard(f, getBTypeBadge(f))}
                         {idx === 0 && (
-                          <div className="absolute left-4 -bottom-2 translate-y-full bg-amber-500 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
+                          <div className="absolute left-4 -bottom-2 translate-y-full bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
                             このフォルダを開いて確認しましょう →
-                            <div className="absolute bottom-full left-6 border-8 border-transparent border-b-amber-500" />
+                            <div className="absolute bottom-full left-6 border-8 border-transparent border-b-teal-600" />
                           </div>
                         )}
                       </div>
@@ -527,6 +624,55 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
+
+              {/* ダブルチェック待ち */}
+              {doubleCheckWaiting.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-orange-500" />
+                    <h2 className="text-base md:text-lg font-bold text-foreground">ダブルチェック待ち</h2>
+                    <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-orange-500 rounded-full">
+                      {doubleCheckWaiting.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {doubleCheckWaiting.map((f, idx) => (
+                      <div key={f.id} className="relative">
+                        {renderFolderCard(
+                          f,
+                          { label: "ダブルチェック", color: "bg-orange-100 text-orange-800" },
+                          `1stチェック: ${f.firstCheckByName}`
+                        )}
+                        {idx === 0 && (
+                          <div className="absolute left-4 -bottom-2 translate-y-full bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
+                            ダブルチェックを行いましょう →
+                            <div className="absolute bottom-full left-6 border-8 border-transparent border-b-teal-600" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 待機中（自分が1stチェック者） */}
+              {waitingForOthers.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-gray-400" />
+                    <h2 className="text-base md:text-lg font-bold text-foreground">待機中</h2>
+                    <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-gray-400 rounded-full">
+                      {waitingForOthers.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {waitingForOthers.map((f) => renderFolderCard(
+                      f,
+                      { label: "2ndチェック待ち", color: "bg-gray-100 text-gray-600" }
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* 完了済みタスク */}
               {completedFolders.length > 0 && (
@@ -552,9 +698,18 @@ export default function DashboardPage() {
       ) : userRole === "user_a" ? (
         /* ===== A型専用: タスク状況別ビュー ===== */
         (() => {
+          // 完了＝エクスポート済み。reviewed のみのフォルダは「最終確認」待ちとして未完了に残す
           const isFolderCompleted = (f: Folder) =>
             f.documents.length > 0 &&
-            f.documents.every((d) => d.status === "exported" || d.status === "reviewed");
+            f.alertCount === 0 &&
+            f.documents.every((d) => d.status === "exported");
+
+          // 全ドキュメント確認済み＆アラートなし → 最終確認（エクスポート）待ち
+          const isFinalReviewPending = (f: Folder) =>
+            f.documents.length > 0 &&
+            f.alertCount === 0 &&
+            f.documents.every((d) => d.status === "reviewed" || d.status === "exported") &&
+            !isFolderCompleted(f);
 
           // 引き継ぎフォルダ（未処理のみ）
           const handoffPending = folders.filter(
@@ -569,6 +724,15 @@ export default function DashboardPage() {
 
           const getATypeBadge = (f: Folder): { label: string; color: string } => {
             if (f.documents.length === 0) return { label: "ファイルなし", color: "bg-gray-100 text-gray-600" };
+            if (f.handoffStatus === "handed_off" && f.needsDoubleCheck) return { label: "要ダブルチェック", color: "bg-orange-100 text-orange-800" };
+            // ドキュメントは全て確認済みだがアラートが残っている場合
+            if (f.alertCount > 0 && f.documents.every((d) => d.status === "reviewed" || d.status === "exported")) {
+              return { label: `要確認（${f.alertCount}件）`, color: "bg-amber-100 text-amber-800" };
+            }
+            // 全確認済み・アラートなし → 最終確認（エクスポート）待ち
+            if (isFinalReviewPending(f)) {
+              return { label: "最終確認", color: "bg-green-100 text-green-800" };
+            }
             const status = getFolderStatus(f);
             if (f.handoffStatus === "handed_off") return { label: "引き継ぎ", color: "bg-cyan-100 text-cyan-800" };
             return { label: STATUS_LABELS[status] || status, color: STATUS_COLORS[status] || "bg-gray-100 text-gray-800" };
@@ -654,12 +818,16 @@ export default function DashboardPage() {
                       <div key={f.id} className="relative">
                         {renderFolderCard(f, getATypeBadge(f), f.handoffStatus === "handed_off")}
                         {idx === 0 && (
-                          <div className="absolute left-4 -bottom-2 translate-y-full bg-amber-500 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
-                            {f.handoffStatus === "handed_off"
-                              ? "引き継ぎフォルダを確認しましょう →"
-                              : "このフォルダを開いて作業しましょう →"
+                          <div className="absolute left-4 -bottom-2 translate-y-full bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
+                            {f.alertCount > 0 && f.documents.every((d) => d.status === "reviewed" || d.status === "exported")
+                              ? "アラートを確認してください →"
+                              : isFinalReviewPending(f)
+                                ? "最終確認をしてエクスポートしましょう →"
+                                : f.handoffStatus === "handed_off"
+                                  ? "引き継ぎフォルダを確認しましょう →"
+                                  : "このフォルダを開いて作業しましょう →"
                             }
-                            <div className="absolute bottom-full left-6 border-8 border-transparent border-b-amber-500" />
+                            <div className="absolute bottom-full left-6 border-8 border-transparent border-b-teal-600" />
                           </div>
                         )}
                       </div>
@@ -680,8 +848,8 @@ export default function DashboardPage() {
                   </div>
                   <div className="space-y-2">
                     {completedFolders.map((f) => renderFolderCard(f, {
-                      label: f.handoffStatus === "handed_off" ? "引き継ぎ完了" : "エクスポート済",
-                      color: f.handoffStatus === "handed_off" ? "bg-cyan-100 text-cyan-800" : "bg-emerald-100 text-emerald-800",
+                      label: "エクスポート済",
+                      color: "bg-emerald-100 text-emerald-800",
                     }))}
                   </div>
                 </div>

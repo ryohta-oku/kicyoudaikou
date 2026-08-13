@@ -25,6 +25,8 @@ export const STATUS_LABELS: Record<string, string> = {
   reviewed: "確認済",
   exported: "エクスポート済",
   handed_off: "引き継ぎ済",
+  double_check_pending: "ダブルチェック待ち",
+  double_check_completed: "ダブルチェック完了",
 };
 
 export const STATUS_COLORS: Record<string, string> = {
@@ -36,4 +38,6 @@ export const STATUS_COLORS: Record<string, string> = {
   reviewed: "bg-green-100 text-green-800",
   exported: "bg-emerald-100 text-emerald-800",
   handed_off: "bg-cyan-100 text-cyan-800",
+  double_check_pending: "bg-orange-100 text-orange-800",
+  double_check_completed: "bg-green-100 text-green-800",
 };

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ClassifyEditor, { type ClassifyEntry } from "@/components/ClassifyEditor";
+import MismatchAlert from "@/components/MismatchAlert";
 import { useWorkLogger } from "@/hooks/useWorkLogger";
 
 interface Document {
@@ -384,6 +385,9 @@ export default function ClassifyPage({
         </h1>
       </div>
 
+      {/* 不一致アラート */}
+      <MismatchAlert folderId={id} />
+
       {/* 分類中バナー */}
       {isClassifying && (
         <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 flex items-center gap-3">
@@ -498,15 +502,15 @@ export default function ClassifyPage({
       {allDone && (
         <div className="fixed bottom-6 right-6 z-40">
           <div className="relative">
-            <span className="absolute -top-10 right-0 bg-amber-500 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">
-              全て確認済み！次へ進みましょう ↓
+            <span className="absolute -top-10 right-0 bg-teal-600 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">
+              全て確認済み！最終確認へ進みましょう ↓
             </span>
             <Link
               href={`/folders/${id}`}
               className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-white bg-green-600 hover:bg-green-700 rounded-full shadow-xl transition-colors"
             >
               <CheckCircle2 className="w-5 h-5" />
-              仕訳完了
+              最終確認へ
             </Link>
           </div>
         </div>

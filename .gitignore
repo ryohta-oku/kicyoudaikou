@@ -55,3 +55,6 @@ next-env.d.ts
 
 # test data (generated, not committed)
 /prisma/test-data/large-*
+.claude/
+test-screenshots/
+public/test-images/

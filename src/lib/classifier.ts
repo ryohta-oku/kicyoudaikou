@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { getGeminiClient, CLASSIFY_MODEL } from "./gemini";
+import { runClassify } from "./ai";
 
 export interface ClassificationResult {
   accountCode: string;
@@ -41,11 +41,11 @@ async function getAccountMasterText(): Promise<string> {
 }
 
 /**
- * Gemini 2.5 Flash-Lite で OCRテキストから仕訳データを抽出・分類する
+ * OCRテキストから仕訳データを抽出・分類する
  * 1回のAPI呼び出しで、日付・摘要・金額の抽出と勘定科目の分類を同時に行う
+ * 使用モデルは管理画面の設定に従う（@/lib/ai を参照）
  */
 export async function classifyWithAI(ocrText: string): Promise<ParsedJournalEntry[]> {
-  const ai = getGeminiClient();
   const accountMaster = await getAccountMasterText();
 
   const systemPrompt =
@@ -90,22 +90,10 @@ export async function classifyWithAI(ocrText: string): Promise<ParsedJournalEntr
   例: 領収書の宛先が「タクシー代」で店名が「日本交通」→ subAccountName: "日本交通"
   マスターに該当する補助科目がある場合はそのコードと名前を使用し、なければsubAccountCodeは空文字でsubAccountNameだけ入力する。${accountMaster}`;
 
-  const response = await ai.models.generateContent({
-    model: CLASSIFY_MODEL,
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { text: `以下のOCRテキストから仕訳データを抽出してください:\n\n${ocrText}` },
-        ],
-      },
-    ],
-    config: {
-      systemInstruction: systemPrompt,
-      responseMimeType: "application/json",
-      maxOutputTokens: 4096,
-    },
-  });
+  const response = await runClassify(
+    systemPrompt,
+    `以下のOCRテキストから仕訳データを抽出してください:\n\n${ocrText}`
+  );
 
   const content = response.text;
   if (!content) {

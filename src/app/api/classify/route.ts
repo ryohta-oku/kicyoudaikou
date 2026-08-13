@@ -30,13 +30,12 @@ export async function POST(request: NextRequest) {
 
     const entries = [];
 
-    // 全ページのOCRテキストを結合
-    const allText = document.pages
-      .map((p) => p.correctedText || p.ocrText)
-      .filter((t) => t.trim())
-      .join("\n---\n");
+    // 分類対象のページ（テキストが空のページは除外）
+    const targetPages = document.pages.filter(
+      (p) => (p.correctedText || p.ocrText).trim() !== ""
+    );
 
-    if (!allText.trim()) {
+    if (targetPages.length === 0) {
       await prisma.document.update({
         where: { id: documentId },
         data: { status: "classified" },
@@ -44,36 +43,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ entries: [] });
     }
 
-    // AI分類を試行、失敗したらキーワードベースにフォールバック
+    // ページごとに分類する（1ページ＝1仕訳）。
+    // 束ねてスキャンした複数枚の領収書が1件に合算されるのを防ぐため、
+    // ページを結合せず個別にAIへ渡す。
     let useAI = true;
-    let aiEntries: Awaited<ReturnType<typeof classifyWithAI>> = [];
+    const perPageEntries: {
+      pageId: string;
+      pageDate: string;
+      item: Awaited<ReturnType<typeof classifyWithAI>>[number] | null;
+    }[] = [];
 
-    try {
-      aiEntries = await classifyWithAI(allText);
-    } catch (error) {
-      console.warn("AI classification failed, falling back to keyword-based:", error);
-      useAI = false;
+    for (const page of targetPages) {
+      const pageText = page.correctedText || page.ocrText;
+      try {
+        const result = await classifyWithAI(pageText);
+        // 1ページにつき仕訳は1件。複数返っても先頭のみ採用する。
+        perPageEntries.push({
+          pageId: page.id,
+          pageDate: page.date,
+          item: result[0] || null,
+        });
+      } catch (error) {
+        console.warn("AI classification failed, falling back to keyword-based:", error);
+        useAI = false;
+        break;
+      }
     }
 
-    // 1ドキュメント1仕訳ルール: 先頭1件のみ使用
-    if (aiEntries.length > 1) {
-      aiEntries = [aiEntries[0]];
-    }
+    if (useAI && perPageEntries.some((p) => p.item)) {
+      const today = new Date().toISOString().split("T")[0];
 
-    if (useAI && aiEntries.length > 0) {
-      // AI分類の結果をDB保存
-      // ページのOCR日付をフォールバック用に収集
-      const pageDates = document.pages
-        .map((p) => p.date)
-        .filter((d) => d && d.trim() !== "");
-      const fallbackDate = pageDates[0] || new Date().toISOString().split("T")[0];
-
-      for (const item of aiEntries) {
+      for (const { pageId, pageDate, item } of perPageEntries) {
+        if (!item) continue;
         const entry = await prisma.journalEntry.create({
           data: {
             documentId,
-            pageId: document.pages[0]?.id || null,
-            date: item.date || fallbackDate,
+            pageId,
+            // 日付はAI→そのページのOCR日付→今日 の順でフォールバック
+            date: item.date || pageDate || today,
             description: item.description,
             accountCode: item.accountCode,
             accountName: item.accountName,

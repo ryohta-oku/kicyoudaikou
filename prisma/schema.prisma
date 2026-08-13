@@ -24,10 +24,12 @@ model User {
 // 得意先（クライアント）
 // ※ Prisma内部の "client" プロパティとの衝突を避けるため Company をモデル名として使用
 model Company {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  name       String
+  isApproved Boolean  @default(false)
+  createdBy  String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   folders     Folder[]
   subAccounts SubAccount[]
@@ -44,6 +46,17 @@ model Folder {
   handoffStatus  String?            // null=未引継, "handed_off"=引継済
   handoffBy      String   @default("") // 引き継いだB型ユーザー名
   handoffAt      DateTime?          // 引き継ぎ日時
+
+  // ダブルチェック関連
+  doubleCheckStatus  String?              // null | "pending" | "completed"
+  firstCheckById     String   @default("") // 1stチェック者のユーザーID
+  firstCheckByName   String   @default("") // 1stチェック者の表示名
+  firstCheckAt       DateTime?
+  doubleCheckById    String   @default("") // 2ndチェック者のユーザーID
+  doubleCheckByName  String   @default("") // 2ndチェック者の表示名
+  doubleCheckAt      DateTime?
+  needsDoubleCheck   Boolean  @default(false) // A型がダブルチェック必要（B型1人パターン）
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -65,9 +78,10 @@ model Document {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  folder         Folder?        @relation(fields: [folderId], references: [id], onDelete: Cascade)
-  pages          DocumentPage[]
-  journalEntries JournalEntry[]
+  folder           Folder?            @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  pages            DocumentPage[]
+  journalEntries   JournalEntry[]
+  deletionRequests DeletionRequest[]
 }
 
 // ドキュメントの各ページ
@@ -88,10 +102,30 @@ model DocumentPage {
   tax                String @default("") // 消費税
   memo               String @default("") // メモ
 
+  // ダブルチェック
+  isDoubleChecked    Boolean @default(false)
+
   document       Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
   journalEntries JournalEntry[]
+  snapshot       PageSnapshot?
 
   @@unique([documentId, pageNumber])
+}
+
+// 1stチェック時の値スナップショット（ダブルチェック用）
+model PageSnapshot {
+  id                 String   @id @default(uuid())
+  pageId             String   @unique
+  userId             String
+  userName           String   @default("")
+  date               String   @default("")
+  registrationNumber String   @default("")
+  amount             String   @default("")
+  tax                String   @default("")
+  memo               String   @default("")
+  createdAt          DateTime @default(now())
+
+  page               DocumentPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
 }
 
 // 仕訳データ
@@ -115,8 +149,9 @@ model JournalEntry {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  document Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  page     DocumentPage? @relation(fields: [pageId], references: [id])
+  document         Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  page             DocumentPage?      @relation(fields: [pageId], references: [id])
+  deletionRequests DeletionRequest[]
 }
 
 // 作業セッション（全体時間を管理）
@@ -174,4 +209,29 @@ model SubAccount {
   client  Company? @relation(fields: [clientId], references: [id])
 
   @@unique([accountId, code, clientId])
+}
+
+// 削除依頼（仮削除→承認フロー）
+model DeletionRequest {
+  id          String   @id @default(uuid())
+  entryId     String
+  documentId  String
+  reason      String   @default("duplicate")
+  requestedBy String   @default("")
+  status      String   @default("pending") // "pending", "approved", "rejected"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entry    JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  document Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+// アプリ設定（キー・バリュー）
+// 現在のキー: "ai.ocrModel", "ai.classifyModel"
+model AppSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

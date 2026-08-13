@@ -19,6 +19,7 @@ const STEPS_A_FULL: Step[] = [
   { id: "ocr_confirm", label: "OCR確認" },
   { id: "classify", label: "仕訳分類" },
   { id: "review", label: "仕訳確認" },
+  { id: "final_review", label: "最終確認" },
   { id: "done", label: "完了" },
 ];
 
@@ -26,19 +27,32 @@ const STEPS_A_FULL: Step[] = [
 const STEPS_A_HANDOFF: Step[] = [
   { id: "classify", label: "仕訳分類" },
   { id: "review", label: "仕訳確認" },
+  { id: "final_review", label: "最終確認" },
   { id: "done", label: "完了" },
 ];
 
-// B型: アップロード〜OCR確認〜引き継ぎ
+// B型: アップロード〜OCR確認〜ダブルチェック〜引き継ぎ
 const STEPS_B: Step[] = [
   { id: "upload", label: "アップロード" },
   { id: "ocr", label: "OCR読み取り" },
-  { id: "ocr_confirm", label: "OCR確認" },
+  { id: "ocr_confirm", label: "1stチェック" },
+  { id: "double_check", label: "ダブルチェック" },
   { id: "handoff", label: "引き継ぎ" },
+];
+
+// A型: 引き継ぎ受け（needsDoubleCheck 時）
+const STEPS_A_HANDOFF_DC: Step[] = [
+  { id: "double_check", label: "ダブルチェック" },
+  { id: "classify", label: "仕訳分類" },
+  { id: "review", label: "仕訳確認" },
+  { id: "final_review", label: "最終確認" },
+  { id: "done", label: "完了" },
 ];
 
 interface FolderInfo {
   handoffStatus: string | null;
+  doubleCheckStatus: string | null;
+  needsDoubleCheck: boolean;
   documents: { status: string }[];
 }
 
@@ -47,10 +61,12 @@ const STEP_ORDER: Record<string, number> = {
   upload: 0,
   ocr: 1,
   ocr_confirm: 2,
-  classify: 3,
-  review: 4,
-  done: 5,
-  handoff: 3, // B型の引き継ぎはOCR確認の次
+  double_check: 3,
+  classify: 4,
+  review: 5,
+  final_review: 6,
+  done: 7,
+  handoff: 4, // B型の引き継ぎはダブルチェックの次
 };
 
 /** フォルダ内ドキュメントの実際のステータスから現在のステップを算出 */
@@ -63,6 +79,13 @@ function computeCurrentStep(folder: FolderInfo, isTypeB: boolean, pathname: stri
   // B型: 引き継ぎ済みなら最終ステップ
   if (isTypeB && folder.handoffStatus === "handed_off") return "handoff";
 
+  // B型: ダブルチェック中
+  if (isTypeB && folder.doubleCheckStatus === "pending") return "double_check";
+  if (isTypeB && folder.doubleCheckStatus === "completed") return "handoff";
+
+  // A型: needsDoubleCheck
+  if (!isTypeB && folder.handoffStatus === "handed_off" && folder.needsDoubleCheck) return "double_check";
+
   // ドキュメントステータスからステップを算出
   let statusStep: string;
   if (statuses.some((s) => s === "uploaded" || s === "ocr_processing")) {
@@ -70,9 +93,11 @@ function computeCurrentStep(folder: FolderInfo, isTypeB: boolean, pathname: stri
   } else if (statuses.some((s) => s === "ocr_complete")) {
     statusStep = "ocr_confirm";
   } else if (statuses.every((s) => s === "ocr_confirmed")) {
-    statusStep = isTypeB ? "handoff" : "classify";
-  } else if (statuses.every((s) => s === "reviewed" || s === "exported")) {
+    statusStep = isTypeB ? "double_check" : "classify";
+  } else if (statuses.every((s) => s === "exported")) {
     statusStep = "done";
+  } else if (statuses.every((s) => s === "reviewed" || s === "exported")) {
+    statusStep = "final_review";
   } else if (statuses.some((s) => s === "classified" || s === "reviewed")) {
     statusStep = "review";
   } else {
@@ -120,6 +145,8 @@ export default function WorkflowProgressBar() {
       if (data.folder) {
         setFolderInfo({
           handoffStatus: data.folder.handoffStatus || null,
+          doubleCheckStatus: data.folder.doubleCheckStatus || null,
+          needsDoubleCheck: data.folder.needsDoubleCheck || false,
           documents: (data.folder.documents || []).map((d: { status: string }) => ({
             status: d.status,
           })),
@@ -152,6 +179,9 @@ export default function WorkflowProgressBar() {
   let steps: Step[];
   if (isTypeB) {
     steps = STEPS_B;
+  } else if (folderInfo.handoffStatus === "handed_off" && folderInfo.needsDoubleCheck) {
+    // A型で引き継ぎ受け + ダブルチェック必要
+    steps = STEPS_A_HANDOFF_DC;
   } else if (folderInfo.handoffStatus === "handed_off") {
     // A型で引き継ぎ受けフォルダ
     steps = STEPS_A_HANDOFF;

@@ -6,7 +6,7 @@ import { getEffectiveRole } from "@/lib/roleSimulation";
 // ページのOCRテキストを更新
 export async function PATCH(request: NextRequest) {
   try {
-    const { pageId, correctedText, isConfirmed, date, registrationNumber, amount, tax, memo } = await request.json();
+    const { pageId, correctedText, isConfirmed, isDoubleChecked, date, registrationNumber, amount, tax, memo } = await request.json();
 
     if (!pageId) {
       return NextResponse.json({ error: "ページIDが必要です", code: "PAGE_NO_ID" }, { status: 400 });
@@ -17,6 +17,7 @@ export async function PATCH(request: NextRequest) {
       data: {
         ...(correctedText !== undefined && { correctedText }),
         ...(isConfirmed !== undefined && { isConfirmed }),
+        ...(isDoubleChecked !== undefined && { isDoubleChecked }),
         ...(date !== undefined && { date }),
         ...(registrationNumber !== undefined && { registrationNumber }),
         ...(amount !== undefined && { amount }),
@@ -25,16 +26,51 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    // WorkLog: OCR確認完了を記録
+    const userSession = await auth();
+
+    // 1stチェック確認時: PageSnapshot を保存
     if (isConfirmed === true) {
       try {
-        const userSession = await auth();
         if (userSession?.user) {
           const effectiveRole = getEffectiveRole(userSession.user.role || "");
           const pageWithDoc = await prisma.documentPage.findUnique({
             where: { id: pageId },
-            select: { documentId: true, document: { select: { folderId: true } } },
+            select: {
+              documentId: true,
+              date: true,
+              registrationNumber: true,
+              amount: true,
+              tax: true,
+              memo: true,
+              document: { select: { folderId: true } },
+            },
           });
+
+          // PageSnapshot を upsert（1stチェック時の値を保存）
+          await prisma.pageSnapshot.upsert({
+            where: { pageId },
+            create: {
+              pageId,
+              userId: userSession.user.id!,
+              userName: userSession.user.name || "",
+              date: pageWithDoc?.date || "",
+              registrationNumber: pageWithDoc?.registrationNumber || "",
+              amount: pageWithDoc?.amount || "",
+              tax: pageWithDoc?.tax || "",
+              memo: pageWithDoc?.memo || "",
+            },
+            update: {
+              userId: userSession.user.id!,
+              userName: userSession.user.name || "",
+              date: pageWithDoc?.date || "",
+              registrationNumber: pageWithDoc?.registrationNumber || "",
+              amount: pageWithDoc?.amount || "",
+              tax: pageWithDoc?.tax || "",
+              memo: pageWithDoc?.memo || "",
+            },
+          });
+
+          // WorkLog: OCR確認完了を記録
           await prisma.workLog.create({
             data: {
               userId: userSession.user.id!,
@@ -48,7 +84,33 @@ export async function PATCH(request: NextRequest) {
           });
         }
       } catch (logError) {
-        console.error("WorkLog create error (ocr_confirm):", logError);
+        console.error("WorkLog/Snapshot create error (ocr_confirm):", logError);
+      }
+    }
+
+    // ダブルチェック確認時: WorkLog を記録
+    if (isDoubleChecked === true) {
+      try {
+        if (userSession?.user) {
+          const effectiveRole = getEffectiveRole(userSession.user.role || "");
+          const pageWithDoc = await prisma.documentPage.findUnique({
+            where: { id: pageId },
+            select: { documentId: true, document: { select: { folderId: true } } },
+          });
+          await prisma.workLog.create({
+            data: {
+              userId: userSession.user.id!,
+              userName: userSession.user.name || "",
+              userRole: effectiveRole,
+              folderId: pageWithDoc?.document?.folderId || null,
+              documentId: pageWithDoc?.documentId || null,
+              action: "double_check_confirm",
+              workType: "double_check",
+            },
+          });
+        }
+      } catch (logError) {
+        console.error("WorkLog create error (double_check_confirm):", logError);
       }
     }
 

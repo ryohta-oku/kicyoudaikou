@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Loader2, Trash2, Shield, Users, Eye, EyeOff, Pencil, UserPlus } from "lucide-react";
+import { Loader2, Trash2, Shield, Users, Eye, EyeOff, Pencil, UserPlus, Cpu, AlertTriangle, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UserInfo {
@@ -14,6 +14,37 @@ interface UserInfo {
   plainPassword: string;
   createdAt: string;
 }
+
+interface ModelInfo {
+  id: string;
+  provider: "gemini" | "openai";
+  label: string;
+  supportsVision: boolean;
+  inputPer1M: number;
+  outputPer1M: number;
+  note?: string;
+}
+
+interface AiModelSettings {
+  catalog: ModelInfo[];
+  ocrModel: string;
+  classifyModel: string;
+  sources: { ocr: string; classify: string };
+  providerKeys: { gemini: boolean; openai: boolean };
+}
+
+interface ModelTestResult {
+  modelId: string;
+  ok: boolean;
+  latencyMs: number;
+  error?: string;
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  db: "管理画面の設定",
+  env: "環境変数",
+  default: "組み込みの既定値",
+};
 
 const ROLE_OPTIONS = [
   { value: "admin", label: "管理者" },
@@ -65,6 +96,17 @@ export default function AdminPage() {
   const [adding, setAdding] = useState(false);
   const [setupUrl, setSetupUrl] = useState<string | null>(null);
 
+  // AIモデル設定（管理者のみ）
+  const [aiSettings, setAiSettings] = useState<AiModelSettings | null>(null);
+  const [ocrModel, setOcrModel] = useState("");
+  const [classifyModel, setClassifyModel] = useState("");
+  const [savingAi, setSavingAi] = useState(false);
+  const [testingAi, setTestingAi] = useState(false);
+  const [aiTest, setAiTest] = useState<{
+    ocr: ModelTestResult;
+    classify: ModelTestResult;
+  } | null>(null);
+
   useEffect(() => {
     if (status === "authenticated" && !isAdminOrInstructor) {
       router.replace("/");
@@ -84,6 +126,79 @@ export default function AdminPage() {
       setUsers(data.users || []);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // AIモデル設定は管理者のみ取得（指導者にはAI費用を変えさせない）
+  useEffect(() => {
+    if (status !== "authenticated" || !isAdmin) return;
+    fetch("/api/admin/ai-models")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: AiModelSettings | null) => {
+        if (!data) return;
+        setAiSettings(data);
+        setOcrModel(data.ocrModel);
+        setClassifyModel(data.classifyModel);
+      })
+      .catch(() => {
+        // 取得失敗時はカードを出さない
+      });
+  }, [status, isAdmin]);
+
+  // 選択中のモデルに実際に問い合わせて疎通確認する（保存前でも試せる）
+  const handleTestAiModels = async () => {
+    setTestingAi(true);
+    setAiTest(null);
+    setMessage(null);
+    setSetupUrl(null);
+
+    try {
+      const res = await fetch("/api/admin/ai-models/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ocrModel, classifyModel }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage({ type: "error", text: data.error || "接続テストに失敗しました" });
+        return;
+      }
+      setAiTest(data);
+    } catch {
+      setMessage({ type: "error", text: "接続テストに失敗しました" });
+    } finally {
+      setTestingAi(false);
+    }
+  };
+
+  const handleSaveAiModels = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingAi(true);
+    setMessage(null);
+    setSetupUrl(null);
+    setAiTest(null);
+
+    try {
+      const res = await fetch("/api/admin/ai-models", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ocrModel, classifyModel }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage({ type: "error", text: data.error || "保存に失敗しました" });
+        return;
+      }
+      setAiSettings((prev) =>
+        prev
+          ? { ...prev, ocrModel, classifyModel, sources: { ocr: "db", classify: "db" } }
+          : prev
+      );
+      setMessage({ type: "success", text: "AIモデルの設定を保存しました" });
+    } catch {
+      setMessage({ type: "error", text: "保存に失敗しました" });
+    } finally {
+      setSavingAi(false);
     }
   };
 
@@ -243,7 +358,9 @@ export default function AdminPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">管理画面</h1>
-        <p className="text-sm text-gray-500 mt-1">ユーザー管理</p>
+        <p className="text-sm text-gray-500 mt-1">
+          {isAdmin ? "ユーザー管理・AI設定" : "ユーザー管理"}
+        </p>
       </div>
 
       {message && (
@@ -503,6 +620,132 @@ export default function AdminPage() {
           </tbody>
         </table>
       </div>
+
+      {/* AIモデル設定（管理者のみ） */}
+      {isAdmin && aiSettings && (
+        <div className="bg-white border rounded-xl p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+            <Cpu className="h-5 w-5 text-gray-400" />
+            AIモデル設定
+          </h2>
+          <p className="text-sm text-gray-500 mb-4">
+            OCR（書類の読み取り）と仕訳分類に使うAIを選べます。精度に不満があれば切り替えてください。
+          </p>
+
+          <form onSubmit={handleSaveAiModels} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {([
+                {
+                  key: "ocr" as const,
+                  label: "OCR（書類の読み取り）",
+                  value: ocrModel,
+                  setValue: setOcrModel,
+                  options: aiSettings.catalog.filter((m) => m.supportsVision),
+                },
+                {
+                  key: "classify" as const,
+                  label: "仕訳分類",
+                  value: classifyModel,
+                  setValue: setClassifyModel,
+                  options: aiSettings.catalog,
+                },
+              ]).map((field) => {
+                const selected = aiSettings.catalog.find((m) => m.id === field.value);
+                const keyMissing =
+                  selected && !aiSettings.providerKeys[selected.provider];
+                return (
+                  <div key={field.key}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {field.label}
+                    </label>
+                    <select
+                      value={field.value}
+                      onChange={(e) => field.setValue(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    >
+                      {field.options.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label}
+                          {m.note ? `｜${m.note}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      現在の設定元: {SOURCE_LABELS[aiSettings.sources[field.key]] || "-"}
+                      {selected && (
+                        <>
+                          {" ／ "}
+                          100万トークンあたり 入力 ${selected.inputPer1M} ・ 出力 $
+                          {selected.outputPer1M}
+                        </>
+                      )}
+                    </p>
+                    {keyMissing && (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1 flex items-center gap-1">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        {selected?.provider === "openai" ? "OPENAI_API_KEY" : "GEMINI_API_KEY"}
+                        {" が未設定です。このまま保存すると処理に失敗します。"}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 接続テスト結果 */}
+            {aiTest && (
+              <div className="space-y-1.5">
+                {([
+                  { label: "OCR", result: aiTest.ocr },
+                  { label: "仕訳分類", result: aiTest.classify },
+                ]).map(({ label, result }) => (
+                  <div
+                    key={label}
+                    className={cn(
+                      "text-xs rounded px-2.5 py-1.5 border flex items-start gap-1.5",
+                      result.ok
+                        ? "bg-green-50 border-green-200 text-green-800"
+                        : "bg-red-50 border-red-200 text-red-700"
+                    )}
+                  >
+                    {result.ok ? (
+                      <Check className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    )}
+                    <span className="min-w-0">
+                      <span className="font-medium">{label}</span>: {result.modelId}
+                      {result.ok
+                        ? ` — 接続OK（${result.latencyMs}ms）`
+                        : ` — 接続失敗: ${result.error}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                disabled={savingAi || testingAi}
+                className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 disabled:opacity-50 flex items-center gap-1"
+              >
+                {savingAi && <Loader2 className="h-4 w-4 animate-spin" />}
+                保存
+              </button>
+              <button
+                type="button"
+                onClick={handleTestAiModels}
+                disabled={savingAi || testingAi}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1"
+              >
+                {testingAi && <Loader2 className="h-4 w-4 animate-spin" />}
+                接続テスト
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

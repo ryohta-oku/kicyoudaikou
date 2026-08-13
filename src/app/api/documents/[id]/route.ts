@@ -10,7 +10,10 @@ export async function GET(
     const document = await prisma.document.findUnique({
       where: { id },
       include: {
-        pages: { orderBy: { pageNumber: "asc" } },
+        pages: {
+          orderBy: { pageNumber: "asc" },
+          include: { snapshot: true },
+        },
         journalEntries: { orderBy: { createdAt: "asc" } },
       },
     });
@@ -21,7 +24,10 @@ export async function GET(
 
     // fileData / imageData はバイナリで巨大なためレスポンスから除外
     const { fileData: _, ...docWithoutFileData } = document;
-    const sanitizedPages = document.pages.map(({ imageData: __, ...page }) => page);
+    const sanitizedPages = document.pages.map(({ imageData: __, ...page }) => ({
+      ...page,
+      snapshot: page.snapshot || null,
+    }));
 
     return NextResponse.json({ document: { ...docWithoutFileData, pages: sanitizedPages } });
   } catch (error) {
