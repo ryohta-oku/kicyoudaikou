@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { sendVerificationEmail } from "@/lib/email";
+import { SHARED_LOGIN, rejectIfSharedLogin } from "@/lib/shared-login";
 
 async function requireAdminOrInstructor() {
   const session = await auth();
@@ -25,7 +26,11 @@ export async function GET() {
       select: { id: true, email: true, name: true, role: true, plainPassword: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     });
-    return NextResponse.json({ users });
+    /**
+     * 共通ログイン中かどうかを画面に渡す。**押してから 409 で気づく**のでは遅いので、
+     * 追加・変更のボタンを最初から出さないために使う
+     */
+    return NextResponse.json({ users, sharedLogin: SHARED_LOGIN });
   } catch (err) {
     console.error("Admin users fetch error:", err);
     return NextResponse.json({ error: "取得に失敗しました" }, { status: 500 });
@@ -36,6 +41,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const { error } = await requireAdminOrInstructor();
   if (error) return error;
+  // 共通ログイン中にここで作っても、照合先は client-hub なのでログインできない
+  const blocked = rejectIfSharedLogin("アカウントの追加");
+  if (blocked) return blocked;
 
   try {
     const { email, name, role, password } = await request.json();
@@ -100,6 +108,12 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const { session, error } = await requireAdminOrInstructor();
   if (error) return error;
+  /**
+   * 共通ログイン中は、パスワードは照合に使われず、役割は次のログインで
+   * client-hub の値に上書きされる。どちらも黙って無効になるので断る
+   */
+  const blocked = rejectIfSharedLogin("パスワード・役割の変更");
+  if (blocked) return blocked;
 
   try {
     const { userId, role, newPassword } = await request.json();
@@ -154,6 +168,12 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const { session, error } = await requireAdminOrInstructor();
   if (error) return error;
+  /**
+   * 共通ログイン中にここで消しても、client-hub 側のアカウントは生きているので
+   * 次のログインで影の行が作り直される。**止めたことにならない**
+   */
+  const blocked = rejectIfSharedLogin("アカウントの停止・削除");
+  if (blocked) return blocked;
 
   try {
     const { userId } = await request.json();

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { rejectIfSharedLogin } from "@/lib/shared-login";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "管理者",
@@ -56,8 +57,12 @@ export async function PUT(request: NextRequest) {
       });
     }
 
-    // パスワード変更
+    // パスワード変更。氏名の変更は影の行を直すだけなので共通ログイン中でも通す
     if (newPassword) {
+      // 共通ログイン中はここで変えても照合に使われない
+      const blocked = rejectIfSharedLogin("パスワードの変更");
+      if (blocked) return blocked;
+
       if (!currentPassword) {
         return NextResponse.json({ error: "現在のパスワードを入力してください" }, { status: 400 });
       }

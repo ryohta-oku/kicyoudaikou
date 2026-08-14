@@ -86,6 +86,12 @@ export default function AdminPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [changingRole, setChangingRole] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  /**
+   * 共通ログイン中（認証を Client Hub に委ねている）。
+   * このときアカウントの追加・パスワード変更・役割変更・削除はここでは効かないので、
+   * ボタンを**出さない**。API も 409 で断るが、押してから気づくのでは遅い
+   */
+  const [sharedLogin, setSharedLogin] = useState(false);
 
   // パスワード表示/編集
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
@@ -130,6 +136,7 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/users");
       const data = await res.json();
       setUsers(data.users || []);
+      setSharedLogin(Boolean(data.sharedLogin));
     } finally {
       setLoading(false);
     }
@@ -369,6 +376,22 @@ export default function AdminPage() {
         </p>
       </div>
 
+      {sharedLogin && (
+        <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
+          <p className="text-sm font-medium text-blue-900">
+            ログインは Client Hub で管理しています
+          </p>
+          <p className="text-sm text-blue-800 mt-1 leading-relaxed">
+            アカウントの追加・パスワードの変更・役割の変更は Client Hub の
+            「スタッフ管理」または顧客台帳から行ってください。
+            ここでの操作は照合に使われないため、できないようにしてあります。
+          </p>
+          <p className="text-xs text-blue-700 mt-2">
+            下の一覧は、このアプリが作業記録の名義として持っている控えです。
+          </p>
+        </div>
+      )}
+
       {message && (
         <div
           className={cn(
@@ -401,8 +424,8 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ユーザー追加 */}
-      {showAddForm ? (
+      {/* ユーザー追加。共通ログイン中は Client Hub の仕事なので出さない */}
+      {sharedLogin ? null : showAddForm ? (
         <div className="bg-white border rounded-xl p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-gray-400" />
@@ -508,7 +531,11 @@ export default function AdminPage() {
               const isPasswordVisible = visiblePasswords.has(user.id);
               const isEditingPw = editingPassword === user.id;
               // 指導者は管理者を削除不可
-              const canDelete = !isMe && !(session!.user.role === "instructor" && user.role === "admin");
+              // 共通ログイン中は消しても次のログインで作り直されるので出さない
+              const canDelete =
+                !sharedLogin &&
+                !isMe &&
+                !(session!.user.role === "instructor" && user.role === "admin");
               return (
                 <tr key={user.id} className="border-b hover:bg-gray-50">
                   <td className="px-6 py-3 font-medium text-gray-900">
@@ -521,7 +548,10 @@ export default function AdminPage() {
                   </td>
                   <td className="px-6 py-3 text-gray-500">{user.email}</td>
                   <td className="px-6 py-3">
-                    {isEditingPw ? (
+                    {sharedLogin ? (
+                      // パスワードは Client Hub にあり、こちらの控えは照合に使われない
+                      <span className="text-xs text-gray-400">Client Hub で管理</span>
+                    ) : isEditingPw ? (
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
@@ -570,7 +600,8 @@ export default function AdminPage() {
                     )}
                   </td>
                   <td className="px-6 py-3">
-                    {isMe || !isAdmin ? (
+                    {/* 共通ログイン中に変えても、次のログインで Client Hub の値に戻る */}
+                    {sharedLogin || isMe || !isAdmin ? (
                       <span className={cn("inline-block text-xs font-medium px-2.5 py-1 rounded-full border", ROLE_COLORS[user.role])}>
                         {(isMe || user.role === "admin") && <Shield className="inline h-3 w-3 mr-1 -mt-0.5" />}
                         {ROLE_LABELS[user.role]}
