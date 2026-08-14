@@ -2,14 +2,20 @@ import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth.config";
 
 /**
- * /admin 配下の保護。
+ * `/admin` と `/api` の保護。
  *
- * これが無かったため、/admin/crm が**未認証で誰でも見られる状態**だった。
- * あの画面は client-hub の顧客台帳を表示し、台帳には就労支援事業所の
- * 利用者（氏名・A型/B型）が入っている。
+ * 最初は `/admin` だけを守ったが、**それでは足りなかった。**
+ * 画面を塞いでも、そのデータを配っている API が開いていれば同じものが取れる。
+ * 実際 `/api/documents/[id]`（会計証憑の閲覧・書き換え・削除）、
+ * `/api/clients/merge`（得意先の統合）、`/api/accounts`（勘定科目）が
+ * 未認証のまま外から叩ける状態だった。
+ *
+ * 除外の判断は auth.config.ts の authorized に置く（`/api/auth/*` は
+ * ログイン前に必要なので通す）。matcher で除外しないのは、
+ * 「どれを通すか」が1か所に書かれているほうが読み落としにくいため。
  */
 export default NextAuth(authConfig).auth;
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/api/:path*"],
 };
