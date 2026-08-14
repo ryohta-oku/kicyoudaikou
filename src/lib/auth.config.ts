@@ -28,16 +28,44 @@ export const authConfig = {
       return session;
     },
     /**
-     * /admin 配下はログイン必須。さらに**役割で絞る**。
+     * 経路の可否判定。守るのは2種類ある。
      *
-     * この画面（/admin/crm）は client-hub の顧客台帳を表示する。台帳には
-     * 就労支援事業所「ここぼし」の利用者（氏名・A型/B型）が入っているので、
-     * 記帳代行の利用者アカウント（user_a / user_b）からは見せない。
+     * **① /api 配下はログイン必須。**
+     * 画面だけ塞いでも、そのデータを配っている API が開いていれば意味が無い。
+     * 実際 `/api/documents/[id]`（会計証憑の閲覧・書き換え・削除）や
+     * `/api/clients/merge`（得意先の統合）が未認証で叩ける状態だった。
+     * 役割では絞らない ―― 利用者アカウント（user_a / user_b）も
+     * 作業記録などの API を正当に使うため。
+     *
+     * **② /admin 配下はさらに役割で絞る。**
+     * /admin/crm は client-hub の顧客台帳を表示する。台帳には就労支援事業所
+     * 「ここぼし」の利用者（氏名・A型/B型）が入っているので、記帳代行の
+     * 利用者アカウントからは見せない。
      */
     authorized({ auth, request: { nextUrl } }) {
-      if (!nextUrl.pathname.startsWith("/admin")) return true;
-
+      const { pathname } = nextUrl;
       const isLoggedIn = !!auth?.user;
+
+      if (pathname.startsWith("/api")) {
+        // ログイン前に叩かれる口。ここを塞ぐとログインも初期設定もできなくなる
+        //   /api/auth/[...nextauth]   … NextAuth 本体
+        //   /api/auth/register        … 利用者0人のときの初期管理者登録
+        //   /api/auth/setup-password  … 招待リンクからのパスワード設定
+        if (pathname.startsWith("/api/auth")) return true;
+
+        if (!isLoggedIn) {
+          // API にはログイン画面へのリダイレクトではなく 401 を返す。
+          // fetch の呼び出し側がHTMLを受け取って解析に失敗するのを避ける
+          return new Response(JSON.stringify({ error: "unauthorized" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return true;
+      }
+
+      if (!pathname.startsWith("/admin")) return true;
+
       if (!isLoggedIn) return false;
 
       const role = auth.user?.role;
