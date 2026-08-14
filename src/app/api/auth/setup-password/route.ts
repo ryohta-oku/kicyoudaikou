@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { rejectIfSharedLogin } from "@/lib/shared-login";
 
 // トークン検証（GET）
 export async function GET(request: NextRequest) {
+  // 共通ログイン中は招待リンク自体が無効。ここで設定しても照合に使われない
+  const blocked = rejectIfSharedLogin("パスワードの設定");
+  if (blocked) return blocked;
+
   const token = request.nextUrl.searchParams.get("token");
   if (!token) {
     return NextResponse.json({ error: "トークンが必要です" }, { status: 400 });
@@ -34,6 +39,9 @@ export async function GET(request: NextRequest) {
 
 // パスワード設定 or 認証完了（POST）
 export async function POST(request: NextRequest) {
+  const blocked = rejectIfSharedLogin("パスワードの設定");
+  if (blocked) return blocked;
+
   try {
     const { token, password, verifyOnly } = await request.json();
 

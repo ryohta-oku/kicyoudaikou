@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { SHARED_LOGIN, rejectIfSharedLogin } from "@/lib/shared-login";
 
 // ユーザーが0人かどうかを返す（初期セットアップ判定用）
 export async function GET() {
   try {
+    // 共通ログイン中に初期セットアップ画面を出さない。
+    // アカウントは client-hub にあり、こちらの User が0人でも「未設定」ではない
+    if (SHARED_LOGIN) return NextResponse.json({ needsSetup: false });
+
     const count = await prisma.user.count();
     return NextResponse.json({ needsSetup: count === 0 });
   } catch (error) {
@@ -15,6 +20,9 @@ export async function GET() {
 
 // 初期管理者登録（ユーザーが0人の場合のみ、招待コード不要）
 export async function POST(request: NextRequest) {
+  const blocked = rejectIfSharedLogin("管理者の登録");
+  if (blocked) return blocked;
+
   try {
     const { email, password, name } = await request.json();
 

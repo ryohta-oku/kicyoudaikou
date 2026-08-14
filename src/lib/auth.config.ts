@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
+import { ADMIN_AREA_ROLES } from "@/lib/roles";
 
 /**
  * ミドルウェアから使える認証設定。
@@ -41,6 +42,11 @@ export const authConfig = {
      * /admin/crm は client-hub の顧客台帳を表示する。台帳には就労支援事業所
      * 「ここぼし」の利用者（氏名・A型/B型）が入っているので、記帳代行の
      * 利用者アカウントからは見せない。
+     *
+     * 通す役割は `ADMIN_AREA_ROLES`（admin / instructor）。
+     * ここは以前 `admin` と **`staff`** で絞っていたが、記帳代行に `staff` は
+     * 存在せず、指導員が締め出される状態だった（本番が管理者1人だけだったので
+     * 表面化していない）。client-hub の語彙をそのまま持ち込んだ誤り。
      */
     authorized({ auth, request: { nextUrl } }) {
       const { pathname } = nextUrl;
@@ -69,7 +75,7 @@ export const authConfig = {
       if (!isLoggedIn) return false;
 
       const role = auth.user?.role;
-      if (role !== "admin" && role !== "staff") {
+      if (!role || !ADMIN_AREA_ROLES.includes(role)) {
         return Response.redirect(new URL("/", nextUrl));
       }
       return true;
