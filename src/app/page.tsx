@@ -283,9 +283,15 @@ export default function DashboardPage() {
     }
   };
 
-  // B型: ダブルチェック待ちタスクの有無（ヘッダー表示制御用）
+  /**
+   * ダブルチェック待ちタスクの有無（ヘッダー表示制御用）。
+   *
+   * **役割で絞らない。** 2026-09-01 に A型のみになり、ダブルチェックは
+   * 「作業者と確認者が別人」という条件になった。誰が1stチェックしたかだけを見る。
+   * 過去の user_b のアカウントでも同じに動く。
+   */
   const hasDoubleCheckTasks = useMemo(() => {
-    if (userRole !== "user_b") return false;
+    if (userRole !== "user_a" && userRole !== "user_b") return false;
     const effectiveId = getEffectiveUserId(session?.user?.role || "", session?.user?.id || "");
     return folders.some(
       (f) => f.doubleCheckStatus === "pending" && f.firstCheckById !== effectiveId
@@ -301,7 +307,8 @@ export default function DashboardPage() {
       );
     }
     if (userRole === "user_a") {
-      // エクスポート済みで初めて完了扱い（reviewed は最終確認待ち）
+      // エクスポート済みで初めて完了扱い（reviewed は最終確認待ち）。
+      // ダブルチェック待ちのフォルダも「やることが残っている」に含める
       return folders.some(
         (f) => !(f.documents.length > 0 && f.alertCount === 0 && f.documents.every((d) => d.status === "exported"))
       );
@@ -696,8 +703,22 @@ export default function DashboardPage() {
           );
         })()
       ) : userRole === "user_a" ? (
-        /* ===== A型専用: タスク状況別ビュー ===== */
+        /* ===== 利用者（A型）: タスク状況別ビュー =====
+         *
+         * 2026-09-01 に AB多機能から A型のみになり、B型→A型 の引き継ぎ工程が無くなった。
+         * **利用者が最初から最後まで一人で通す**（アップロード → OCR確認 →
+         * ダブルチェック → 仕訳 → 最終確認 → エクスポート）。
+         *
+         * ダブルチェックは残す。ただし「B型が作業して別のB型/A型が確認」ではなく
+         * **「作業者と確認者が別人」**という条件に変わった。判定は役割ではなく
+         * firstCheckById（1stチェックした人のid）が自分と違うかどうか。
+         *
+         * 引き継ぎ（handoffStatus）の付いた過去のフォルダは残るので、
+         * 表示は従来どおり扱う。新しく付けることはない。
+         */
         (() => {
+          const effectiveId = getEffectiveUserId(session?.user?.role || "", session?.user?.id || "");
+
           // 完了＝エクスポート済み。reviewed のみのフォルダは「最終確認」待ちとして未完了に残す
           const isFolderCompleted = (f: Folder) =>
             f.documents.length > 0 &&
@@ -711,13 +732,25 @@ export default function DashboardPage() {
             f.documents.every((d) => d.status === "reviewed" || d.status === "exported") &&
             !isFolderCompleted(f);
 
-          // 引き継ぎフォルダ（未処理のみ）
-          const handoffPending = folders.filter(
-            (f) => f.handoffStatus === "handed_off" && !isFolderCompleted(f)
+          /** 他の人が1stチェックしたので、自分が2ndチェックできる */
+          const doubleCheckWaiting = folders.filter(
+            (f) => f.doubleCheckStatus === "pending" && f.firstCheckById !== effectiveId
           );
-          // 自分の作業中フォルダ（引き継ぎ以外の未完了）
+          /** 自分が1stチェックした。誰か別の人の2ndチェックを待っている */
+          const waitingForOthers = folders.filter(
+            (f) => f.doubleCheckStatus === "pending" && f.firstCheckById === effectiveId
+          );
+
+          // 上の2区分に出るフォルダは未完了タスクから外す（二重に並べない）
+          const isAwaitingCheck = (f: Folder) => f.doubleCheckStatus === "pending";
+
+          // 引き継ぎフォルダ（過去のもの。未処理のみ）
+          const handoffPending = folders.filter(
+            (f) => f.handoffStatus === "handed_off" && !isFolderCompleted(f) && !isAwaitingCheck(f)
+          );
+          // 自分の作業中フォルダ
           const ownIncomplete = folders.filter(
-            (f) => f.handoffStatus !== "handed_off" && !isFolderCompleted(f)
+            (f) => f.handoffStatus !== "handed_off" && !isFolderCompleted(f) && !isAwaitingCheck(f)
           );
           // 完了済み（引き継ぎ・自作問わず）
           const completedFolders = folders.filter((f) => isFolderCompleted(f));
@@ -738,7 +771,13 @@ export default function DashboardPage() {
             return { label: STATUS_LABELS[status] || status, color: STATUS_COLORS[status] || "bg-gray-100 text-gray-800" };
           };
 
-          const renderFolderCard = (folder: Folder, badge?: { label: string; color: string }, isHandoff?: boolean) => (
+          const renderFolderCard = (
+            folder: Folder,
+            badge?: { label: string; color: string },
+            isHandoff?: boolean,
+            /** 「1stチェック: 〇〇」のような補助表示。ダブルチェック待ちで使う */
+            subText?: string,
+          ) => (
             <Link
               key={folder.id}
               href={`/folders/${folder.id}`}
@@ -765,6 +804,7 @@ export default function DashboardPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
+                    {subText && <span className="text-orange-700">{subText}</span>}
                     {isHandoff && folder.handoffBy && (
                       <span>引継元: {folder.handoffBy}</span>
                     )}
@@ -835,6 +875,56 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
+
+              {/* ダブルチェック待ち（他の人が1stチェックした分） */}
+              {doubleCheckWaiting.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-orange-500" />
+                    <h2 className="text-base md:text-lg font-bold text-foreground">ダブルチェック待ち</h2>
+                    <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-orange-500 rounded-full">
+                      {doubleCheckWaiting.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {doubleCheckWaiting.map((f, idx) => (
+                      <div key={f.id} className="relative">
+                        {renderFolderCard(
+                          f,
+                          { label: "ダブルチェック", color: "bg-orange-100 text-orange-800" },
+                          false,
+                          `1stチェック: ${f.firstCheckByName}`
+                        )}
+                        {idx === 0 && (
+                          <div className="absolute left-4 -bottom-2 translate-y-full bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
+                            ダブルチェックを行いましょう →
+                            <div className="absolute bottom-full left-6 border-8 border-transparent border-b-teal-600" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 待機中（自分が1stチェックした分。別の人の2ndチェックを待つ） */}
+              {waitingForOthers.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-gray-400" />
+                    <h2 className="text-base md:text-lg font-bold text-foreground">待機中</h2>
+                    <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-sm font-bold text-white bg-gray-400 rounded-full">
+                      {waitingForOthers.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {waitingForOthers.map((f) => renderFolderCard(
+                      f,
+                      { label: "2ndチェック待ち", color: "bg-gray-100 text-gray-600" }
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* 完了済み */}
               {completedFolders.length > 0 && (

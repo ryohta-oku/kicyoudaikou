@@ -53,7 +53,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "このメールアドレスは既に登録されています" }, { status: 409 });
     }
 
-    const userRole = ["admin", "instructor", "user_a", "user_b"].includes(role) ? role : "user_b";
+    // 役割の既定は利用者（A型）。2026-09-01 に B型が無くなったため。
+    // user_b を許可リストに残すのは、既存アカウントの編集を 400 にしないため
+    const userRole = ["admin", "instructor", "user_a", "user_b"].includes(role) ? role : "user_a";
     const inviteToken = randomUUID();
     const inviteTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24時間後
 

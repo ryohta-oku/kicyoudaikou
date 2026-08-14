@@ -12,11 +12,17 @@ interface Step {
   label: string;
 }
 
-// A型: 全工程
+/**
+ * 利用者の全工程。
+ *
+ * 2026-09-01 に A型のみになり、**ダブルチェックがこの流れの中に入った**
+ * （それまでは B型がOCR確認まで進めてA型に引き継いでいた）。
+ */
 const STEPS_A_FULL: Step[] = [
   { id: "upload", label: "アップロード" },
   { id: "ocr", label: "OCR読み取り" },
   { id: "ocr_confirm", label: "OCR確認" },
+  { id: "double_check", label: "ダブルチェック" },
   { id: "classify", label: "仕訳分類" },
   { id: "review", label: "仕訳確認" },
   { id: "final_review", label: "最終確認" },
@@ -76,14 +82,14 @@ function computeCurrentStep(folder: FolderInfo, isTypeB: boolean, pathname: stri
 
   const statuses = docs.map((d) => d.status);
 
-  // B型: 引き継ぎ済みなら最終ステップ
-  if (isTypeB && folder.handoffStatus === "handed_off") return "handoff";
+  // ダブルチェック中は役割を問わずこのステップ（2026-09-01 以降 A型もここを通る）
+  if (folder.doubleCheckStatus === "pending") return "double_check";
 
-  // B型: ダブルチェック中
-  if (isTypeB && folder.doubleCheckStatus === "pending") return "double_check";
+  // 過去のB型フォルダ: 引き継ぎが最終ステップ
+  if (isTypeB && folder.handoffStatus === "handed_off") return "handoff";
   if (isTypeB && folder.doubleCheckStatus === "completed") return "handoff";
 
-  // A型: needsDoubleCheck
+  // 過去の「A型が引き継ぎ受け + ダブルチェック必要」のフォルダ
   if (!isTypeB && folder.handoffStatus === "handed_off" && folder.needsDoubleCheck) return "double_check";
 
   // ドキュメントステータスからステップを算出
@@ -93,7 +99,9 @@ function computeCurrentStep(folder: FolderInfo, isTypeB: boolean, pathname: stri
   } else if (statuses.some((s) => s === "ocr_complete")) {
     statusStep = "ocr_confirm";
   } else if (statuses.every((s) => s === "ocr_confirmed")) {
-    statusStep = isTypeB ? "double_check" : "classify";
+    // OCR確認が済んだらダブルチェックの工程。済んでいれば仕訳へ進む
+    statusStep =
+      folder.doubleCheckStatus === "completed" ? "classify" : "double_check";
   } else if (statuses.every((s) => s === "exported")) {
     statusStep = "done";
   } else if (statuses.every((s) => s === "reviewed" || s === "exported")) {

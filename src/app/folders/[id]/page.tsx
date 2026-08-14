@@ -163,15 +163,35 @@ export default function FolderDetailPage({
   const [requestingDeleteId, setRequestingDeleteId] = useState<string | null>(null);
   const [approvingDeleteId, setApprovingDeleteId] = useState<string | null>(null);
   const [hasUnresolvedAlerts, setHasUnresolvedAlerts] = useState(false);
-  const [handingOff, setHandingOff] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showFormatPicker, setShowFormatPicker] = useState(false);
-  const [userBCount, setUserBCount] = useState<number | null>(null);
+  /**
+   * 利用者の人数。**「同じ人が2ndチェックしてよいか」の判定に使う。**
+   *
+   * 2026-09-01 に A型のみになり、ダブルチェックは「作業者と確認者が別人」に変わった。
+   * ただし利用者が1人しかいないときに作業が止まるのは困るので、そのときだけ
+   * 同じ人がもう一度チェックできる（2回確認した記録は残る）。
+   *
+   * **指導員・管理者は確認役に入れない。** 全体を見る立場なので、
+   * その人が個々の仕訳を確認する運用にはしない。
+   */
+  const [workerCount, setWorkerCount] = useState<number | null>(null);
   const [firstCheckCompleting, setFirstCheckCompleting] = useState(false);
   const [doubleCheckCompleting, setDoubleCheckCompleting] = useState(false);
   const [updatingNeedsDoubleCheck, setUpdatingNeedsDoubleCheck] = useState(false);
 
-  // 工数記録: ロールに応じてworkTypeを切り替え
+  /**
+   * 工数記録の種別。
+   *
+   * 2026-09-01 に A型のみになり、この画面で利用者が OCR確認・ダブルチェック・
+   * 仕訳確認を続けて行うようになった。種別は1つにまとまるので、利用者の時間は
+   * 従来の A型と同じ "review" に入る。
+   *
+   * **フォルダの状態に応じて動的に変えてはいけない。** useWorkLogger の effect は
+   * sendLog（workType に依存）が変わると再実行され、そこで accumulatedRef が
+   * 0 に戻る ―― 途中まで計測した作業時間が消える。種別を細かく分けたいなら、
+   * まずフック側の再計測を直す必要がある。
+   */
   const workType = userRole === "user_b" ? "ocr_review" : "review";
   useWorkLogger(workType, true, {
     sessionId: typeof window !== "undefined" ? localStorage.getItem("workSessionId") : null,
@@ -400,16 +420,19 @@ export default function FolderDetailPage({
     [runOCR]
   );
 
-  // B型ユーザー数を取得（シミュレーション中はペルソナ数を使用）
+  // 利用者の人数を取得（シミュレーション中はペルソナ数を使う）
   useEffect(() => {
-    if (session?.user?.role === "admin" && userRole === "user_b") {
-      setUserBCount(SIMULATION_PERSONAS.user_b.length);
+    if (session?.user?.role === "admin" && (userRole === "user_a" || userRole === "user_b")) {
+      const personas =
+        userRole === "user_b" ? SIMULATION_PERSONAS.user_b : SIMULATION_PERSONAS.user_a;
+      setWorkerCount(personas.length);
       return;
     }
-    fetch("/api/users/count-by-role?role=user_b")
+    // B型は 2026-09-01 に無くなったので、数えるのは A型（利用者）だけ
+    fetch("/api/users/count-by-role?role=user_a")
       .then((res) => res.json())
-      .then((data) => setUserBCount(data.count ?? 0))
-      .catch(() => setUserBCount(0));
+      .then((data) => setWorkerCount(data.count ?? 0))
+      .catch(() => setWorkerCount(0));
   }, [session?.user?.role, userRole]);
 
   // 初回ロード時に自動OCR開始 & OCR完了ドキュメントの詳細を一括取得
@@ -543,22 +566,43 @@ export default function FolderDetailPage({
   };
 
   /** ダブルチェック完了 + 引き継ぎ（B型2人以上パターン） */
+  /**
+   * ダブルチェック完了。**ここが AI仕訳分類の起動役になった。**
+   *
+   * 2026-09-01 まではB型からA型への引き継ぎボタンが `/api/classify` を呼んでいた。
+   * A型のみになって引き継ぎ工程が無くなったので、その呼び出しをここに移した。
+   * **これを外すと仕訳分類が始まらない**（分類を起動する箇所は他に無い）。
+   *
+   * `handoffStatus` はもう書かない。引き継ぎ先が無く、過去のフォルダの記録として
+   * 列だけ残している。
+   */
   const handleDoubleCheckComplete = async () => {
     if (!session?.user) return;
     setDoubleCheckCompleting(true);
     try {
-      await fetch(`/api/folders/${id}`, {
+      const res = await fetch(`/api/folders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           doubleCheckStatus: "completed",
           doubleCheckById: effectiveUserId,
           doubleCheckByName: effectiveUserName,
-          handoffStatus: "handed_off",
-          handoffBy: effectiveUserName,
         }),
       });
-      router.push("/");
+      if (!res.ok) throw new Error("ダブルチェック完了に失敗しました");
+
+      // AI仕訳分類を起動。失敗しても止めない（仕訳画面から手で分類できる）
+      (folder?.documents ?? [])
+        .filter((d) => d.status === "ocr_confirmed")
+        .forEach((doc) => {
+          fetch("/api/classify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ documentId: doc.id }),
+          }).catch(() => {});
+        });
+
+      router.push(`/folders/${id}/classify`);
     } catch (err) {
       alert(err instanceof Error ? err.message : "ダブルチェック完了に失敗しました");
     } finally {
@@ -1630,21 +1674,37 @@ export default function FolderDetailPage({
 
       {/* OCR内容確認セクション */}
       {(() => {
-        // ダブルチェックモード判定
-        const isBTypeDoubleChecker =
-          userRole === "user_b" &&
+        /**
+         * ダブルチェックモード判定。**役割ではなく「誰が1stチェックしたか」で決める。**
+         *
+         * 2026-09-01 に A型のみになり「B型が作業してA型が確認」ではなくなった。
+         * 原則は別人だが、利用者が1人のときは同じ人がもう一度確認する
+         * ―― そこで止めると作業が進まない。2回確認した記録は残る。
+         *
+         * **指導員・管理者は確認役に入れない。** 全体を見る立場なので、
+         * その人が個々の仕訳を確認する運用にはしない。
+         */
+        const isWorker = userRole === "user_a" || userRole === "user_b";
+        const isSoleWorker = workerCount !== null && workerCount <= 1;
+        const isDoubleChecker =
+          isWorker &&
           folder.doubleCheckStatus === "pending" &&
-          effectiveUserId !== folder.firstCheckById;
-        const isATypeDoubleChecker =
+          (effectiveUserId !== folder.firstCheckById || isSoleWorker);
+        /** 過去の「B型1人 → A型が確認」のフォルダ。新規では発生しない */
+        const isLegacyHandoffChecker =
           canViewJournal &&
           folder.handoffStatus === "handed_off" &&
           folder.needsDoubleCheck;
-        const isDoubleCheckMode = isBTypeDoubleChecker || isATypeDoubleChecker;
-        // 同一人物ブロック（B型で1stチェック者が自分の場合はreadOnly）
+        const isDoubleCheckMode = isDoubleChecker || isLegacyHandoffChecker;
+        /**
+         * 同一人物ブロック（readOnly にする）。**他に利用者がいるときだけ**効かせる。
+         * 1人しかいないなら本人がもう一度見るしかない
+         */
         const isSamePersonBlock =
-          userRole === "user_b" &&
+          isWorker &&
           folder.doubleCheckStatus === "pending" &&
-          effectiveUserId === folder.firstCheckById;
+          effectiveUserId === folder.firstCheckById &&
+          !isSoleWorker;
 
         // OCRデータがあるドキュメント（ocr_complete + ocr_confirmed）
         const ocrVisibleDocs = folder.documents.filter((d) => ocrDocsData[d.id]);
@@ -1771,11 +1831,11 @@ export default function FolderDetailPage({
               );
             })}
 
-            {/* B型2人以上: 1stチェック完了ボタン */}
-            {userRole === "user_b" &&
+            {/* 1stチェック完了ボタン。**人数で出し分けない** ――
+                利用者が1人でも、本人がもう一度確認する経路があるため */}
+            {isWorker &&
               !folder.handoffStatus &&
               !folder.doubleCheckStatus &&
-              userBCount !== null && userBCount >= 2 &&
               allOcrConfirmed && (
                 <div className="flex justify-center">
                   <div className="relative">
@@ -1799,13 +1859,13 @@ export default function FolderDetailPage({
                 </div>
               )}
 
-            {/* B型: ダブルチェック完了 → 引き継ぎ（1ステップ） */}
-            {isBTypeDoubleChecker && allPagesDoubleChecked && !folder.handoffStatus &&
+            {/* ダブルチェック完了 → そのまま仕訳へ進む */}
+            {isDoubleChecker && allPagesDoubleChecked && !folder.handoffStatus &&
               folder.doubleCheckStatus !== "completed" && (
               <div className="flex justify-center">
                 <div className="relative">
                   <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-teal-600 text-white text-sm rounded-full px-4 py-1.5 shadow-lg animate-bounce whitespace-nowrap z-10">
-                    全項目チェック済み！A型さんに引き継ぎましょう ↓
+                    全項目チェック済み！仕訳に進みましょう ↓
                     <span className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-teal-600" />
                   </span>
                   <button
@@ -1816,62 +1876,20 @@ export default function FolderDetailPage({
                     {doubleCheckCompleting ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
-                      <Send className="w-5 h-5" />
+                      <Check className="w-5 h-5" />
                     )}
-                    ダブルチェック完了・引き継ぎ
+                    ダブルチェック完了
                   </button>
                 </div>
               </div>
             )}
 
-            {/* B型1人: 従来の引き継ぎボタン（needsDoubleCheck を付与） */}
-            {userRole === "user_b" &&
-              !folder.handoffStatus &&
-              !folder.doubleCheckStatus &&
-              userBCount !== null && userBCount < 2 &&
-              allOcrConfirmed && (
-                <div className="flex justify-center">
-                  <div className="relative">
-                    <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-teal-600 text-white text-sm rounded-full px-4 py-1.5 shadow-lg animate-bounce whitespace-nowrap z-10">
-                      A型さんに引き継ぎましょう ↓
-                      <span className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-teal-600" />
-                    </span>
-                    <button
-                      onClick={async () => {
-                        setHandingOff(true);
-                        try {
-                          await fetch(`/api/folders/${id}`, {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              handoffStatus: "handed_off",
-                              handoffBy: effectiveUserName,
-                              needsDoubleCheck: true,
-                              firstCheckById: effectiveUserId,
-                              firstCheckByName: effectiveUserName,
-                            }),
-                          });
-                          router.push("/");
-                        } finally {
-                          setHandingOff(false);
-                        }
-                      }}
-                      disabled={handingOff}
-                      className="inline-flex items-center gap-2 px-6 py-3 text-base font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-xl transition-colors shadow-lg disabled:opacity-50"
-                    >
-                      {handingOff ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <Send className="w-5 h-5" />
-                      )}
-                      引き継ぎ完了
-                    </button>
-                  </div>
-                </div>
-              )}
+            {/* 2026-09-01: 「B型1人 → A型に引き継ぎ」のボタンは削除した。
+                A型のみになり引き継ぎ先が無い。利用者が1人でも、上の
+                「1stチェック完了」→ 本人がもう一度確認 → 仕訳、で通る */}
 
             {/* A型: needsDoubleCheck → ダブルチェック完了ボタン */}
-            {isATypeDoubleChecker && allPagesDoubleChecked && (
+            {isLegacyHandoffChecker && allPagesDoubleChecked && (
               <div className="flex justify-center">
                 <div className="relative">
                   <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-teal-600 text-white text-sm rounded-full px-4 py-1.5 shadow-lg animate-bounce whitespace-nowrap z-10">
@@ -2670,67 +2688,9 @@ export default function FolderDetailPage({
         </div>
       )}
 
-      {/* B型: フローティング引き継ぎ完了ボタン（2人パターンでは非表示） */}
-      {userRole === "user_b" &&
-        !folder.handoffStatus &&
-        !folder.doubleCheckStatus &&
-        !(userBCount !== null && userBCount >= 2) &&
-        folder.documents.length > 0 &&
-        folder.documents.every(
-          (d) =>
-            d.status === "ocr_confirmed" ||
-            d.status === "classified" ||
-            d.status === "reviewed" ||
-            d.status === "exported"
-        ) && (
-        <div className="fixed bottom-6 right-6 z-40">
-          <div className="relative">
-            <span className="absolute -top-10 right-0 bg-teal-600 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">
-              全て確認済み！引き継ぎしましょう ↓
-            </span>
-            <button
-              onClick={async () => {
-                if (!confirm("このフォルダをA型利用者に引き継ぎますか？")) return;
-                setHandingOff(true);
-                try {
-                  const res = await fetch(`/api/folders/${id}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      handoffStatus: "handed_off",
-                      handoffBy: effectiveUserName,
-                    }),
-                  });
-                  if (!res.ok) throw new Error("引き継ぎに失敗しました");
-                  folder.documents
-                    .filter(d => d.status === "ocr_confirmed")
-                    .forEach(doc => {
-                      fetch("/api/classify", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ documentId: doc.id }),
-                      }).catch(() => {});
-                    });
-                  router.push("/");
-                } catch (err) {
-                  alert(err instanceof Error ? err.message : "引き継ぎに失敗しました");
-                } finally {
-                  setHandingOff(false);
-                }
-              }}
-              disabled={handingOff}
-              className="inline-flex items-center gap-2 px-6 py-3 text-base font-medium text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 rounded-full shadow-xl transition-colors disabled:opacity-50"
-            >
-              {handingOff ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Send className="w-5 h-5" />
-              )}
-              引き継ぎ完了
-            </button>
-          </div>
-        </div>
-      )}
+      {/* 2026-09-01: 引き継ぎのフローティングボタンは削除した。
+          A型のみになり引き継ぎ先が無い。**このボタンが AI仕訳分類の起動役も
+          兼ねていた**ので、その呼び出しは handleDoubleCheckComplete に移した */}
 
       {/* A型: フローティングCSVエクスポートボタン（アラート未解消時は非表示） */}
       {canViewJournal &&

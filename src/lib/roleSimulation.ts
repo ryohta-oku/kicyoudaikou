@@ -1,13 +1,23 @@
 const ROLE_STORAGE_KEY = "simulatedRole";
 const USER_STORAGE_KEY = "simulatedUser";
 
+/**
+ * 管理者が役割を切り替えて動作を確かめるための仮の人格。
+ *
+ * user_a を2人にしているのは、**ダブルチェックが「作業者と確認者が別人」**
+ * という条件になったため。1人だと切り替えて確かめられない。
+ *
+ * user_b は 2026-09-01 に A型のみへ移行したので新規では使わないが、
+ * 過去のフォルダの表示確認のために残す。
+ */
 export const SIMULATION_PERSONAS = {
   user_b: [
     { id: "sim-b-1", name: "B型Aさん" },
     { id: "sim-b-2", name: "B型Bさん" },
   ],
   user_a: [
-    { id: "sim-a-1", name: "A型さん" },
+    { id: "sim-a-1", name: "利用者Aさん" },
+    { id: "sim-a-2", name: "利用者Bさん" },
   ],
 } as const;
 
