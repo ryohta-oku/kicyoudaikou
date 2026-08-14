@@ -10,12 +10,21 @@ import { getSelectedClientId, setSelectedClientId } from "@/lib/client";
 import { getSimulatedRole, setSimulatedRole, getSimulatedUser, setSimulatedUser, SIMULATION_PERSONAS } from "@/lib/roleSimulation";
 import ClientSelector from "@/components/ClientSelector";
 
+/**
+ * 管理者が動作を確かめるための切り替え。
+ *
+ * 利用者を2人にしているのは、2026-09-01 の A型のみ移行で**ダブルチェックが
+ * 「作業者と確認者が別人」**になったため。1人だと2ndチェックの側を確かめられない。
+ *
+ * B型は新規では使わないが、過去のフォルダの表示確認のために残す。
+ */
 const ROLE_VIEW_OPTIONS = [
   { value: "", role: "", label: "管理者（自分）", persona: null },
   { value: "instructor", role: "instructor", label: "指導者として表示", persona: null },
-  { value: "user_a:sim-a-1", role: "user_a", label: "A型さんとして表示", persona: SIMULATION_PERSONAS.user_a[0] },
-  { value: "user_b:sim-b-1", role: "user_b", label: "B型Aさんとして表示", persona: SIMULATION_PERSONAS.user_b[0] },
-  { value: "user_b:sim-b-2", role: "user_b", label: "B型Bさんとして表示", persona: SIMULATION_PERSONAS.user_b[1] },
+  { value: "user_a:sim-a-1", role: "user_a", label: "利用者Aさんとして表示", persona: SIMULATION_PERSONAS.user_a[0] },
+  { value: "user_a:sim-a-2", role: "user_a", label: "利用者Bさんとして表示", persona: SIMULATION_PERSONAS.user_a[1] },
+  { value: "user_b:sim-b-1", role: "user_b", label: "旧B型Aさんとして表示", persona: SIMULATION_PERSONAS.user_b[0] },
+  { value: "user_b:sim-b-2", role: "user_b", label: "旧B型Bさんとして表示", persona: SIMULATION_PERSONAS.user_b[1] },
 ];
 
 export default function Header() {

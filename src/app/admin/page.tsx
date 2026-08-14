@@ -46,18 +46,24 @@ const SOURCE_LABELS: Record<string, string> = {
   default: "組み込みの既定値",
 };
 
+/**
+ * 新しく作れる役割。
+ *
+ * **user_b（B型）は入れない。** 2026-09-01 に AB多機能から A型のみになり、
+ * B型の利用者はいなくなった。既存の user_b アカウントは引き続きログインでき、
+ * 過去の作業ログにも残るので、下の ROLE_LABELS からは消さない。
+ */
 const ROLE_OPTIONS = [
   { value: "admin", label: "管理者" },
   { value: "instructor", label: "指導者" },
-  { value: "user_a", label: "利用者（A型）" },
-  { value: "user_b", label: "利用者（B型）" },
+  { value: "user_a", label: "利用者" },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "管理者",
   instructor: "指導者",
-  user_a: "利用者（A型）",
-  user_b: "利用者（B型）",
+  user_a: "利用者",
+  user_b: "利用者（旧B型）",
   user: "利用者", // 旧ロール互換
 };
 
@@ -92,7 +98,7 @@ export default function AdminPage() {
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
   const [addPassword, setAddPassword] = useState("");
-  const [addRole, setAddRole] = useState("user_b");
+  const [addRole, setAddRole] = useState("user_a");
   const [adding, setAdding] = useState(false);
   const [setupUrl, setSetupUrl] = useState<string | null>(null);
 
@@ -325,7 +331,7 @@ export default function AdminPage() {
       setAddName("");
       setAddEmail("");
       setAddPassword("");
-      setAddRole("user_b");
+      setAddRole("user_a");
 
       if (data.emailSent) {
         setMessage({ type: "success", text: `「${data.user.name}」を追加しました。招待メールを送信しました。` });
@@ -460,7 +466,7 @@ export default function AdminPage() {
               </button>
               <button
                 type="button"
-                onClick={() => { setShowAddForm(false); setAddName(""); setAddEmail(""); setAddPassword(""); setAddRole("user_b"); }}
+                onClick={() => { setShowAddForm(false); setAddName(""); setAddEmail(""); setAddPassword(""); setAddRole("user_a"); }}
                 className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
               >
                 キャンセル
