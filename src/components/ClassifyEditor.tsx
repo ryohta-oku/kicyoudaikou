@@ -509,7 +509,7 @@ function ClassifyCheckButton({
       </button>
       {isGuideActive && !checked && (
         <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-teal-600 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10">
-          <span className="font-bold">{guideStep}/{CLASSIFY_CHECK_FIELDS.length}</span>{" "}内容を確認してチェック →
+          <span className="font-bold">{guideStep}/{CLASSIFY_CHECK_FIELDS.length}</span>{" "}合っていたらチェック →
           <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-teal-600" />
         </div>
       )}

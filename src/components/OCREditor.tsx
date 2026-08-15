@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Check, RotateCcw, Loader2, CircleCheck, Sparkles, RefreshCw, Pencil, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
+import GuideBubble from "@/components/GuideBubble";
 import DateInput, { isValidDateValue } from "@/components/DateInput";
 import Image from "next/image";
 
@@ -293,22 +294,46 @@ export default function OCREditor({
       {pages.length > 1 && (
         <div className="flex items-center gap-2 mb-4">
           <span className="text-sm text-gray-600 mr-2">ページ:</span>
-          {pages.map((page, index) => (
-            <button
-              key={page.id}
-              onClick={() => setCurrentPageIndex(index)}
-              className={cn(
-                "w-10 h-10 rounded-lg text-sm font-medium transition-colors",
-                index === currentPageIndex
-                  ? "bg-teal-600 text-white"
-                  : confirmedPages[page.id]
-                    ? "bg-green-100 text-green-700 border border-green-300"
-                    : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-              )}
-            >
-              {page.pageNumber}
-            </button>
-          ))}
+          {pages.map((page, index) => {
+            /*
+              いま見ているページを確認し終えると、項目ごとの吹き出しが全て消える。
+              未確認のページが残っているのに何も指さない状態になるため、
+              最初の未確認ページのボタンに誘導を出す。
+            */
+            const showNextPageGuide =
+              confirmedPages[currentPage.id] &&
+              !confirmedPages[page.id] &&
+              page.id === pages.find((p) => !confirmedPages[p.id])?.id;
+
+            return (
+              <div key={page.id} className="relative">
+                <button
+                  onClick={() => setCurrentPageIndex(index)}
+                  className={cn(
+                    "w-10 h-10 rounded-lg text-sm font-medium transition-colors",
+                    index === currentPageIndex
+                      ? "bg-teal-600 text-white"
+                      : confirmedPages[page.id]
+                        ? "bg-green-100 text-green-700 border border-green-300"
+                        : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                  )}
+                >
+                  {page.pageNumber}
+                </button>
+                {showNextPageGuide && (
+                  <GuideBubble
+                    arrow="left"
+                    arrowAlign="center"
+                    size="sm"
+                    announce
+                    className="absolute left-full ml-2 top-1/2 -translate-y-1/2"
+                  >
+                    このページも確認しましょう →
+                  </GuideBubble>
+                )}
+              </div>
+            );
+          })}
           <span className="text-sm text-gray-500 ml-2">
             ({pages.filter((p) => confirmedPages[p.id]).length}/{pages.length} 確認済)
           </span>
@@ -526,14 +551,14 @@ export default function OCREditor({
                 </div>
               )}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">メモ</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">メモ（書かなくても大丈夫です）</label>
                 <textarea
                   value={fields.memo}
                   onChange={(e) => handleFieldChange(currentPage.id, "memo", e.target.value)}
                   disabled={isDisabled || isDoubleCheck}
                   rows={2}
                   className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:bg-gray-50 disabled:text-gray-500 resize-none"
-                  placeholder="取引先名・品目など"
+                  placeholder="お店の名前や、買ったものなど"
                 />
               </div>
             </div>
@@ -543,8 +568,11 @@ export default function OCREditor({
           <div className="bg-white border rounded-xl overflow-hidden">
             <div className="bg-gray-50 px-4 py-3 border-b">
               <h3 className="text-sm font-medium text-gray-700">
-                OCR読み取りテキスト（全文）
+                読み取った文字（ぜんぶ）
               </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                ここは直さなくてかまいません。上の4つが合っていれば大丈夫です。
+              </p>
             </div>
             <div className="p-4">
               <textarea
@@ -671,7 +699,7 @@ function CheckButton({
       )}
       {!showError && isGuideActive && !checked && !validationError && (
         <div className="absolute right-0 bottom-full mb-2 whitespace-nowrap bg-teal-600 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10">
-          <span className="font-bold">{guideStep}/{CHECK_FIELDS.length}</span>{" "}内容を確認してチェック →
+          <span className="font-bold">{guideStep}/{CHECK_FIELDS.length}</span>{" "}合っていたらチェック →
           <div className="absolute right-2.5 top-full border-4 border-transparent border-t-teal-600" />
         </div>
       )}
