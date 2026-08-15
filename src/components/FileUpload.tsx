@@ -15,6 +15,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import GuideBubble from "@/components/GuideBubble";
 import { setSelectedClientId } from "@/lib/client";
 import ClientSelector from "@/components/ClientSelector";
 
@@ -259,6 +260,14 @@ export default function FileUpload({
           selectedId={clientId}
           onSelect={(id, name) => {
             const changed = id !== clientId;
+            // 得意先を変えると、入れたファイルは取り消される。
+            // 黙って消すと「入れたはずのファイルが無い」状態になるため、先に確認する。
+            if (changed && files.length > 0) {
+              const ok = confirm(
+                `得意先を変えると、いま入れたファイル${files.length}件は取り消されます。変えますか？`
+              );
+              if (!ok) return;
+            }
             setClientId(id);
             setClientName(name || "");
             setSelectedClientId(id);
@@ -273,12 +282,14 @@ export default function FileUpload({
         />
         {/* Step 1: 得意先未選択 → 吹き出しナビ */}
         {!clientId && (
-          <div className="absolute top-full left-8 mt-2 z-10">
-            <div className="relative bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-2 shadow-lg animate-bounce whitespace-nowrap">
-              ↑ まず得意先を選んでください
-              <div className="absolute bottom-full left-6 border-8 border-transparent border-b-teal-600" />
-            </div>
-          </div>
+          <GuideBubble
+            arrow="top"
+            arrowAlign="start"
+            announce
+            className="absolute top-full left-8 mt-2"
+          >
+            ↑ まず、どこの会社の書類かを選んでください
+          </GuideBubble>
         )}
       </div>
 
@@ -318,12 +329,14 @@ export default function FileUpload({
           </label>
           {/* Step 2: 得意先選択済み・未確認 → 吹き出しナビ */}
           {!clientConfirmed && (
-            <div className="absolute top-full left-8 mt-2 z-10">
-              <div className="relative bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-2 shadow-lg animate-bounce whitespace-nowrap">
-                ↑ チェックを入れて確認してください
-                <div className="absolute bottom-full left-6 border-8 border-transparent border-b-teal-600" />
-              </div>
-            </div>
+            <GuideBubble
+              arrow="top"
+              arrowAlign="start"
+              announce
+              className="absolute top-full left-8 mt-2"
+            >
+              ↑ 会社の名前が合っていたら、チェックを入れてください
+            </GuideBubble>
           )}
         </div>
       )}
@@ -363,17 +376,21 @@ export default function FileUpload({
             またはクリックしてファイルを選択（PDF, JPEG, PNG, HEIC 等）
           </p>
           <p className="text-xs text-teal-600 mt-2">
-            ファイルを追加してから「送信」ボタンでアップロード＆OCR処理を開始します
+            {clientConfirmed
+              ? "ファイルを入れたあと、下の「送信」ボタンを押します"
+              : "得意先を確認すると、ここにファイルを入れられます"}
           </p>
         </label>
         {/* Step 3: 確認済み・ファイル未追加 → 吹き出しナビ */}
         {clientConfirmed && files.length === 0 && !isProcessing && (
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-            <div className="relative bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-2 shadow-lg animate-bounce whitespace-nowrap">
-              ↓ ファイルをドラッグ&ドロップ！
-              <div className="absolute left-1/2 -translate-x-1/2 top-full border-8 border-transparent border-t-teal-600" />
-            </div>
-          </div>
+          <GuideBubble
+            arrow="bottom"
+            arrowAlign="center"
+            announce
+            className="absolute -top-3 left-1/2 -translate-x-1/2"
+          >
+            ↓ スキャンしたPDFを、この枠の中に落としてください
+          </GuideBubble>
         )}
       </div>
 
@@ -482,11 +499,14 @@ export default function FileUpload({
                   送信してOCR処理を開始
                 </button>
                 {clientId && clientConfirmed && (
-                  <div className="absolute -top-9 right-0">
-                    <span className="bg-teal-600 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap inline-block">
-                      ↓ ここを押して送信！
-                    </span>
-                  </div>
+                  <GuideBubble
+                    arrow="bottom"
+                    arrowAlign="end"
+                    announce
+                    className="absolute -top-11 right-0"
+                  >
+                    ↓ ここを押すと、文字の読み取りが始まります
+                  </GuideBubble>
                 )}
               </div>
             )}
