@@ -92,6 +92,8 @@ interface Page {
   amount: string;
   tax: string;
   memo: string;
+  /** この領収書に登録番号が「元から無い」と人が確認した印 */
+  noRegistrationNumber?: boolean;
 }
 
 interface FullDocument {

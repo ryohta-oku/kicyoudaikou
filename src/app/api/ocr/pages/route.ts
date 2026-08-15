@@ -6,7 +6,7 @@ import { getEffectiveRole } from "@/lib/roleSimulation";
 // ページのOCRテキストを更新
 export async function PATCH(request: NextRequest) {
   try {
-    const { pageId, correctedText, isConfirmed, isDoubleChecked, date, registrationNumber, amount, tax, memo } = await request.json();
+    const { pageId, correctedText, isConfirmed, isDoubleChecked, date, registrationNumber, amount, tax, memo, noRegistrationNumber } = await request.json();
 
     if (!pageId) {
       return NextResponse.json({ error: "ページIDが必要です", code: "PAGE_NO_ID" }, { status: 400 });
@@ -23,6 +23,7 @@ export async function PATCH(request: NextRequest) {
         ...(amount !== undefined && { amount }),
         ...(tax !== undefined && { tax }),
         ...(memo !== undefined && { memo }),
+        ...(noRegistrationNumber !== undefined && { noRegistrationNumber }),
       },
     });
 

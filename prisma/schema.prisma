@@ -102,6 +102,13 @@ model DocumentPage {
   tax                String @default("") // 消費税
   memo               String @default("") // メモ
 
+  /// この領収書に登録番号が「元から無い」ことを人が確認した印。
+  /// 免税事業者や手書きの領収書では番号が存在しないため、これが無いと
+  /// 登録番号のチェックが通らず確認完了できなかった。
+  /// registrationNumber が空なだけの状態（＝読み取れなかっただけかもしれない）と
+  /// 区別できるようにフラグで持つ。ダブルチェックする人が探し直さずに済む。
+  noRegistrationNumber Boolean @default(false)
+
   // ダブルチェック
   isDoubleChecked    Boolean @default(false)
 
