@@ -179,6 +179,8 @@ export default function FolderDetailPage({
   const [workerCount, setWorkerCount] = useState<number | null>(null);
   const [firstCheckCompleting, setFirstCheckCompleting] = useState(false);
   const [doubleCheckCompleting, setDoubleCheckCompleting] = useState(false);
+  /** ダブルチェック完了の連打よけ（成功時は画面遷移するので戻さない） */
+  const doubleCheckSubmitting = useRef(false);
   const [updatingNeedsDoubleCheck, setUpdatingNeedsDoubleCheck] = useState(false);
 
   /**
@@ -626,6 +628,14 @@ export default function FolderDetailPage({
    */
   const handleDoubleCheckComplete = async () => {
     if (!session?.user) return;
+    /**
+     * 連打よけ。**state ではなく ref で持つ。**
+     * `doubleCheckCompleting` は再レンダーされるまで false のままなので、
+     * ボタンの disabled では素早い2回目を止められない。2回走ると
+     * `/api/classify` も2本飛び、同じ経費が二重に記帳される。
+     */
+    if (doubleCheckSubmitting.current) return;
+    doubleCheckSubmitting.current = true;
     setDoubleCheckCompleting(true);
     try {
       const res = await fetch(`/api/folders/${id}`, {
@@ -653,6 +663,7 @@ export default function FolderDetailPage({
       router.push(`/folders/${id}/classify`);
     } catch (err) {
       alert(err instanceof Error ? err.message : "ダブルチェック完了に失敗しました");
+      doubleCheckSubmitting.current = false;
     } finally {
       setDoubleCheckCompleting(false);
     }
