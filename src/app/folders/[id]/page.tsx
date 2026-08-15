@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, use } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -33,6 +33,7 @@ import Image from "next/image";
 import OCREditor, { type PageUpdateData } from "@/components/OCREditor";
 import SubAccountCombobox from "@/components/SubAccountCombobox";
 import MismatchAlert from "@/components/MismatchAlert";
+import GuideBubble from "@/components/GuideBubble";
 import { useWorkLogger } from "@/hooks/useWorkLogger";
 
 interface AccountData {
@@ -192,6 +193,53 @@ export default function FolderDetailPage({
    * 0 に戻る ―― 途中まで計測した作業時間が消える。種別を細かく分けたいなら、
    * まずフック側の再計測を直す必要がある。
    */
+  /**
+   * ダブルチェックの役割判定。**役割ではなく「誰が1stチェックしたか」で決める。**
+   *
+   * 2026-09-01 に A型のみになり「B型が作業してA型が確認」ではなくなった。
+   * 原則は別人だが、利用者が1人のときは同じ人がもう一度確認する
+   * ―― そこで止めると作業が進まない。2回確認した記録は残る。
+   *
+   * **指導員・管理者は確認役に入れない。** 全体を見る立場なので、
+   * その人が個々の仕訳を確認する運用にはしない。
+   *
+   * 以前は OCR確認セクションのIIFE内で計算していたため、画面上部の説明バナーが
+   * 同じ判定を使えず、独自に `userRole === "user_b"` で出し分けていた。
+   * その結果 A型のみの運用になったあと、**編集できない理由が誰にも表示されない**
+   * 状態になっていた。ここへ引き上げて、バナーと編集欄が同じ値を見るようにする。
+   */
+  const doubleCheckRole = useMemo(() => {
+    const isWorker = userRole === "user_a" || userRole === "user_b";
+    const isSoleWorker = workerCount !== null && workerCount <= 1;
+    const isDoubleChecker =
+      isWorker &&
+      folder?.doubleCheckStatus === "pending" &&
+      (effectiveUserId !== folder?.firstCheckById || isSoleWorker);
+    /** 過去の「B型1人 → A型が確認」のフォルダ。新規では発生しない */
+    const isLegacyHandoffChecker =
+      canViewJournal &&
+      folder?.handoffStatus === "handed_off" &&
+      Boolean(folder?.needsDoubleCheck);
+    /**
+     * 同一人物ブロック（readOnly にする）。**他に利用者がいるときだけ**効かせる。
+     * 1人しかいないなら本人がもう一度見るしかない
+     */
+    const isSamePersonBlock =
+      isWorker &&
+      folder?.doubleCheckStatus === "pending" &&
+      effectiveUserId === folder?.firstCheckById &&
+      !isSoleWorker;
+
+    return {
+      isWorker,
+      isSoleWorker,
+      isDoubleChecker,
+      isLegacyHandoffChecker,
+      isDoubleCheckMode: isDoubleChecker || isLegacyHandoffChecker,
+      isSamePersonBlock,
+    };
+  }, [userRole, workerCount, folder, effectiveUserId, canViewJournal]);
+
   const workType = userRole === "user_b" ? "ocr_review" : "review";
   useWorkLogger(workType, true, {
     sessionId: typeof window !== "undefined" ? localStorage.getItem("workSessionId") : null,
@@ -816,17 +864,42 @@ export default function FolderDetailPage({
           </div>
         </div>
       )}
-      {/* B型: ダブルチェック待ち（自分が1stチェック者の場合） */}
-      {userRole === "user_b" &&
-        folder.doubleCheckStatus === "pending" &&
-        effectiveUserId === folder.firstCheckById && (
-          <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-            <Clock className="h-5 w-5 text-amber-600 flex-shrink-0" />
-            <span className="text-sm text-amber-800">
-              別の利用者がダブルチェックを行います。完了までお待ちください。
-            </span>
+      {/*
+        自分が1stチェックしたので、いまは編集できない状態。
+        編集不可の判定（isSamePersonBlock）と同じ条件を使う ―― 以前は役割で
+        出し分けていたため、A型のみの運用になったあと理由が誰にも出ていなかった。
+      */}
+      {doubleCheckRole.isSamePersonBlock && (
+        <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+          <div className="flex items-start gap-3">
+            <Clock className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-amber-900">
+              <p className="font-medium">この書類は、あなたが1回目の確認をしました。</p>
+              <p className="text-amber-800 mt-0.5">
+                2回目の確認は別の人が行います。いまは見るだけです。
+              </p>
+            </div>
           </div>
-        )}
+          <div className="relative flex-shrink-0 pb-9 sm:pb-0">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-teal-700 bg-white border border-teal-300 rounded-lg hover:bg-teal-50 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              ダッシュボードに戻る
+            </Link>
+            <GuideBubble
+              arrow="top"
+              arrowAlign="start"
+              announce
+              className="absolute left-0 bottom-0 sm:left-auto sm:right-0 sm:top-full sm:bottom-auto sm:mt-2"
+              arrowClassName="left-6"
+            >
+              ← ここから戻って、次の作業をしましょう
+            </GuideBubble>
+          </div>
+        </div>
+      )}
 
       {/* B型: ダブルチェック完了 → 引き継ぎ可能 */}
       {userRole === "user_b" &&
@@ -877,6 +950,43 @@ export default function FolderDetailPage({
         folder.handoffStatus === "handed_off" &&
         folder.doubleCheckStatus === "completed" && (
           <MismatchAlert folderId={id} onResolve={() => fetchFolder()} />
+        )}
+
+      {/*
+        完了したフォルダ。エクスポートが済むと下部の誘導が消えて画面が無言になるため、
+        スクロールせずに見える位置で「終わったこと」と「次にどこへ行くか」を示す。
+      */}
+      {folder.documents.length > 0 &&
+        folder.documents.every((d) => d.status === "exported") && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+            <div className="flex items-start gap-3">
+              <Check className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-green-900">
+                <p className="font-medium">このフォルダは完了しました</p>
+                <p className="text-green-800 mt-0.5">
+                  CSVの書き出しまで終わりました。おつかれさまでした。
+                </p>
+              </div>
+            </div>
+            <div className="relative flex-shrink-0 pb-9 sm:pb-0">
+              <Link
+                href="/"
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-teal-700 bg-white border border-teal-300 rounded-lg hover:bg-teal-50 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                ダッシュボードに戻る
+              </Link>
+              <GuideBubble
+                arrow="top"
+                arrowAlign="start"
+                announce
+                className="absolute left-0 bottom-0 sm:left-auto sm:right-0 sm:top-full sm:bottom-auto sm:mt-2"
+                arrowClassName="left-6"
+              >
+                ← 次の作業はこちらから
+              </GuideBubble>
+            </div>
+          </div>
         )}
 
       {/* フォルダ詳細情報カード */}
@@ -1144,7 +1254,7 @@ export default function FolderDetailPage({
       {folder.documents.some(d => d.status === "ocr_complete") && (
         <div className="flex justify-center">
           <span className="inline-flex items-center gap-1.5 bg-teal-600 text-white text-sm rounded-full px-4 py-2 shadow-lg animate-bounce">
-            ↓ 下にスクロールしてOCR内容を確認してください
+            ↓ 下にスクロールして、読み取った内容が合っているか見てください
           </span>
         </div>
       )}
@@ -1349,7 +1459,6 @@ export default function FolderDetailPage({
                         const a = getAlerts(e);
                         return a.length > 0 || !e.isConfirmed;
                       })?.id ?? null;
-                      let actionIndex = 0;
                       const totalActions = allEntries.filter((e) => {
                         const a = getAlerts(e);
                         return a.length > 0 || !e.isConfirmed;
@@ -1362,7 +1471,6 @@ export default function FolderDetailPage({
                       const missingAlerts = alerts.filter((a) => a !== "重複の可能性" && a !== "削除依頼中");
                       const hasIssue = alerts.length > 0 || !entry.isConfirmed;
                       const isFirstAction = entry.id === firstActionEntryId;
-                      if (hasIssue) actionIndex++;
 
                       // アラート種別の判定（1つのバッジにまとめる）
                       const alertDetails: { label: string; color: string }[] = [];
@@ -1455,10 +1563,19 @@ export default function FolderDetailPage({
                               </div>
                               {/* ステップガイド吹き出し */}
                               {isFirstAction && (
-                                <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-teal-600 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-10 animate-bounce">
-                                  アラートを確認してください（残り{totalActions}件）
-                                  <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-teal-600" />
-                                </div>
+                                <GuideBubble
+                                  arrow="right"
+                                  arrowAlign="center"
+                                  size="sm"
+                                  announce
+                                  className="absolute left-full ml-2 top-1/2 -translate-y-1/2"
+                                >
+                                  {missingAlerts.length > 0
+                                    ? `入力がたりない所があります。ここを押して直しましょう（残り${totalActions}件）`
+                                    : isDuplicate
+                                      ? `同じ内容が2つあるかもしれません。ここを押して見くらべましょう（残り${totalActions}件）`
+                                      : `ここを押して、内容が合っているか見てください（残り${totalActions}件）`}
+                                </GuideBubble>
                               )}
                             </div>
                           ) : (
@@ -1674,38 +1791,6 @@ export default function FolderDetailPage({
 
       {/* OCR内容確認セクション */}
       {(() => {
-        /**
-         * ダブルチェックモード判定。**役割ではなく「誰が1stチェックしたか」で決める。**
-         *
-         * 2026-09-01 に A型のみになり「B型が作業してA型が確認」ではなくなった。
-         * 原則は別人だが、利用者が1人のときは同じ人がもう一度確認する
-         * ―― そこで止めると作業が進まない。2回確認した記録は残る。
-         *
-         * **指導員・管理者は確認役に入れない。** 全体を見る立場なので、
-         * その人が個々の仕訳を確認する運用にはしない。
-         */
-        const isWorker = userRole === "user_a" || userRole === "user_b";
-        const isSoleWorker = workerCount !== null && workerCount <= 1;
-        const isDoubleChecker =
-          isWorker &&
-          folder.doubleCheckStatus === "pending" &&
-          (effectiveUserId !== folder.firstCheckById || isSoleWorker);
-        /** 過去の「B型1人 → A型が確認」のフォルダ。新規では発生しない */
-        const isLegacyHandoffChecker =
-          canViewJournal &&
-          folder.handoffStatus === "handed_off" &&
-          folder.needsDoubleCheck;
-        const isDoubleCheckMode = isDoubleChecker || isLegacyHandoffChecker;
-        /**
-         * 同一人物ブロック（readOnly にする）。**他に利用者がいるときだけ**効かせる。
-         * 1人しかいないなら本人がもう一度見るしかない
-         */
-        const isSamePersonBlock =
-          isWorker &&
-          folder.doubleCheckStatus === "pending" &&
-          effectiveUserId === folder.firstCheckById &&
-          !isSoleWorker;
-
         // OCRデータがあるドキュメント（ocr_complete + ocr_confirmed）
         const ocrVisibleDocs = folder.documents.filter((d) => ocrDocsData[d.id]);
         if (ocrVisibleDocs.length === 0) return null;
@@ -1718,7 +1803,7 @@ export default function FolderDetailPage({
         );
 
         // ダブルチェックモード: 全ページの isDoubleChecked を確認
-        const allPagesDoubleChecked = isDoubleCheckMode && ocrVisibleDocs.every((doc) => {
+        const allPagesDoubleChecked = doubleCheckRole.isDoubleCheckMode && ocrVisibleDocs.every((doc) => {
           const fullDoc = ocrDocsData[doc.id];
           return fullDoc && fullDoc.pages.length > 0 && fullDoc.pages.every((p) => p.isDoubleChecked);
         });
@@ -1727,15 +1812,15 @@ export default function FolderDetailPage({
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-foreground">
-                {isDoubleCheckMode ? "ダブルチェック" : "OCR内容確認"}
-                {!isDoubleCheckMode && unconfirmedCount > 0 && (
+                {doubleCheckRole.isDoubleCheckMode ? "ダブルチェック" : "OCR内容確認"}
+                {!doubleCheckRole.isDoubleCheckMode && unconfirmedCount > 0 && (
                   <span className="ml-2 text-sm font-normal text-teal-700">
                     ({unconfirmedCount} 件未確認)
                   </span>
                 )}
               </h2>
               {/* 通常モード: 一括仕訳分類ボタン */}
-              {!isDoubleCheckMode && canViewJournal && allOcrConfirmed && hasClassifyTarget && (
+              {!doubleCheckRole.isDoubleCheckMode && canViewJournal && allOcrConfirmed && hasClassifyTarget && (
                 <div className="relative">
                   <button
                     onClick={() => router.push(`/folders/${id}/classify`)}
@@ -1744,16 +1829,19 @@ export default function FolderDetailPage({
                     <Sparkles className="w-4 h-4" />
                     一括仕訳分類
                   </button>
-                  <div className="absolute top-full mt-1 right-0">
-                    <span className="bg-teal-600 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap inline-block">
-                      ↑ 次はこちら
-                    </span>
-                  </div>
+                  <GuideBubble
+                    arrow="top"
+                    arrowAlign="end"
+                    announce
+                    className="absolute top-full mt-2 right-0"
+                  >
+                    ↑ 次はここを押して、仕訳をつくります
+                  </GuideBubble>
                 </div>
               )}
             </div>
 
-            {!isDoubleCheckMode && canViewJournal && !allOcrConfirmed && (
+            {!doubleCheckRole.isDoubleCheckMode && canViewJournal && !allOcrConfirmed && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                 <p className="text-sm text-yellow-800">
                   すべてのドキュメントのOCR確認が完了すると「一括仕訳分類」ボタンが表示されます。
@@ -1770,7 +1858,7 @@ export default function FolderDetailPage({
                   <div className="bg-teal-50/80 px-4 py-3 border-b flex items-center gap-2">
                     <FileText className="w-4 h-4 text-red-500" />
                     <h3 className="text-sm font-medium text-teal-800">{doc.filename}</h3>
-                    {isConfirmed && !isDoubleCheckMode && (
+                    {isConfirmed && !doubleCheckRole.isDoubleCheckMode && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
                         確認完了
                       </span>
@@ -1782,10 +1870,10 @@ export default function FolderDetailPage({
                         pages={fullDoc.pages}
                         documentFileType={fullDoc.fileType}
                         documentFilepath={fullDoc.filepath}
-                        readOnly={isSamePersonBlock || (!isDoubleCheckMode && isConfirmed)}
-                        mode={isDoubleCheckMode ? "double_check" : "first_check"}
+                        readOnly={doubleCheckRole.isSamePersonBlock || (!doubleCheckRole.isDoubleCheckMode && isConfirmed)}
+                        mode={doubleCheckRole.isDoubleCheckMode ? "double_check" : "first_check"}
                         onPageUpdate={handlePageUpdate}
-                        onPageConfirm={isDoubleCheckMode
+                        onPageConfirm={doubleCheckRole.isDoubleCheckMode
                           ? async (pageId) => {
                               await handleDoubleCheckPageConfirm(pageId);
                               setOcrDocsData((prev) => {
@@ -1819,7 +1907,7 @@ export default function FolderDetailPage({
                               });
                             }
                         }
-                        onAllPagesConfirmed={isDoubleCheckMode ? undefined : () => handleAllPagesConfirmed(doc.id)}
+                        onAllPagesConfirmed={doubleCheckRole.isDoubleCheckMode ? undefined : () => handleAllPagesConfirmed(doc.id)}
                       />
                     ) : (
                       <div className="text-center py-8 text-gray-500">
@@ -1833,7 +1921,7 @@ export default function FolderDetailPage({
 
             {/* 1stチェック完了ボタン。**人数で出し分けない** ――
                 利用者が1人でも、本人がもう一度確認する経路があるため */}
-            {isWorker &&
+            {doubleCheckRole.isWorker &&
               !folder.handoffStatus &&
               !folder.doubleCheckStatus &&
               allOcrConfirmed && (
@@ -1860,7 +1948,7 @@ export default function FolderDetailPage({
               )}
 
             {/* ダブルチェック完了 → そのまま仕訳へ進む */}
-            {isDoubleChecker && allPagesDoubleChecked && !folder.handoffStatus &&
+            {doubleCheckRole.isDoubleChecker && allPagesDoubleChecked && !folder.handoffStatus &&
               folder.doubleCheckStatus !== "completed" && (
               <div className="flex justify-center">
                 <div className="relative">
@@ -1889,7 +1977,7 @@ export default function FolderDetailPage({
                 「1stチェック完了」→ 本人がもう一度確認 → 仕訳、で通る */}
 
             {/* A型: needsDoubleCheck → ダブルチェック完了ボタン */}
-            {isLegacyHandoffChecker && allPagesDoubleChecked && (
+            {doubleCheckRole.isLegacyHandoffChecker && allPagesDoubleChecked && (
               <div className="flex justify-center">
                 <div className="relative">
                   <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-teal-600 text-white text-sm rounded-full px-4 py-1.5 shadow-lg animate-bounce whitespace-nowrap z-10">
