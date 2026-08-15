@@ -14,10 +14,9 @@ import {
   AlertTriangle,
   ScanLine,
   ChevronRight,
-  Power,
   FileStack,
   Play,
-  MonitorSmartphone,
+  MousePointerClick,
   Send,
   ArrowRight,
   Check,
@@ -27,6 +26,7 @@ import {
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
 import FileUpload from "@/components/FileUpload";
+import GuideBubble from "@/components/GuideBubble";
 import { useWorkLogger } from "@/hooks/useWorkLogger";
 
 interface FolderDocument {
@@ -92,14 +92,16 @@ export default function DashboardPage() {
     userName: session?.user?.name || "",
     userRole: userRole,
   });
-  const checkScanFolder = useCallback(async () => {
+  /** スキャン監視フォルダの状態を取得する。設定されていれば true を返す */
+  const checkScanFolder = useCallback(async (): Promise<boolean> => {
     try {
       const res = await fetch("/api/scan");
       const data = await res.json();
       setScanConfigured(data.configured);
       setScanFiles(data.files || []);
+      return Boolean(data.configured);
     } catch {
-      // ignore
+      return false;
     }
   }, []);
 
@@ -260,16 +262,34 @@ export default function DashboardPage() {
     fetchPendingSubAccounts();
     fetchPendingDeletions();
     fetchPendingClients();
-    checkScanFolder();
-
-    // スキャンフォルダを5秒ごとにポーリング
-    const interval = setInterval(checkScanFolder, 5000);
-    return () => clearInterval(interval);
+    // スキャンフォルダは、設定されている環境でだけポーリングする。
+    // 未設定（本番）では常に configured:false が返るため、
+    // 5秒ごとに叩き続けても無駄になる。
+    let interval: ReturnType<typeof setInterval> | undefined;
+    checkScanFolder().then((configured) => {
+      if (configured) {
+        interval = setInterval(checkScanFolder, 5000);
+      }
+    });
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [fetchFolders, fetchDuplicates, fetchPendingSubAccounts, fetchPendingDeletions, fetchPendingClients, checkScanFolder]);
 
   const handleBulkUploadComplete = (folderId: string) => {
     // アップロード完了後、フォルダ詳細ページへ遷移（OCRはそこで自動開始）
     router.push(`/folders/${folderId}`);
+  };
+
+  /** 「スキャンの流れ」Step3 から、上のボタンと同じ入口に入る */
+  const handleScanStepClick = () => {
+    if (!isWorkStarted) {
+      handleWorkStart();
+    } else {
+      setShowUpload(true);
+    }
+    // アップロード欄は画面上部にあるので、押した位置から見上げる形になる
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDelete = async (id: string) => {
@@ -316,6 +336,9 @@ export default function DashboardPage() {
     return false;
   }, [userRole, folders]);
 
+  /** 手つかず・途中の作業が残っているか（入口ボタンを控えめにする条件） */
+  const hasPendingWork = hasDoubleCheckTasks || hasIncompleteTasks;
+
   return (
     <div className="space-y-6 md:space-y-8">
       {/* ヘッダー */}
@@ -325,41 +348,70 @@ export default function DashboardPage() {
           <p className="text-sm text-teal-700 mt-1">
             アップロードされたフォルダの管理
           </p>
+          {hasPendingWork && (
+            <p className="text-sm text-gray-600 mt-1">
+              まずは下の「未完了タスク」を終わらせましょう。新しい書類を取り込むこともできます。
+            </p>
+          )}
         </div>
-        {/* 未完了タスクまたはダブルチェック待ちがある場合はボタンを非表示 */}
-        {!hasDoubleCheckTasks && !hasIncompleteTasks && (
-          <div className="relative flex-shrink-0">
-            {isWorkStarted ? (
-              <button
-                onClick={() => setShowUpload(!showUpload)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium"
-              >
+        {/*
+          未完了の作業があるときも入口は残す。
+          消してしまうと、新しい書類を取り込む手段が無くなるうえ、
+          作業セッション（workSessionId）が始められず工数が記録されなくなる。
+          「先に終わらせてほしい」意図は、吹き出しを未完了フォルダ側に置くことで表す。
+        */}
+        <div className="relative flex-shrink-0">
+          {hasPendingWork ? (
+            <button
+              onClick={handleScanStepClick}
+              disabled={workStarting}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-teal-300 text-teal-700 rounded-lg hover:bg-teal-50 transition-colors text-sm font-medium disabled:opacity-50"
+            >
+              {workStarting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
                 <Upload className="w-4 h-4" />
-                <span className="hidden sm:inline">ファイルを</span>アップロード
-              </button>
-            ) : (
-              <button
-                onClick={handleWorkStart}
-                disabled={workStarting}
-                className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl hover:from-amber-600 hover:to-amber-700 transition-colors text-base font-bold shadow-lg disabled:opacity-50"
-              >
-                {workStarting ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Timer className="w-5 h-5" />
-                )}
-                作業開始
-              </button>
-            )}
-            {/* ステップガイド: 作業未開始時に表示 */}
-            {!isWorkStarted && !loading && (
-              <div className="absolute top-full right-2 mt-3 whitespace-nowrap bg-teal-600 text-white text-sm font-medium rounded-full px-5 py-2 shadow-lg animate-bounce z-10">
-                ↑ まずここから始めましょう！
-                <div className="absolute bottom-full right-8 border-8 border-transparent border-b-teal-600" />
-              </div>
-            )}
-          </div>
-        )}
+              )}
+              新しく取り込む
+            </button>
+          ) : isWorkStarted ? (
+            <button
+              onClick={() => setShowUpload(!showUpload)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium"
+            >
+              <Upload className="w-4 h-4" />
+              <span className="hidden sm:inline">ファイルを</span>アップロード
+            </button>
+          ) : (
+            <button
+              onClick={handleWorkStart}
+              disabled={workStarting}
+              className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl hover:from-amber-600 hover:to-amber-700 transition-colors text-base font-bold shadow-lg disabled:opacity-50"
+            >
+              {workStarting ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Timer className="w-5 h-5" />
+              )}
+              作業開始
+            </button>
+          )}
+          {/*
+            吹き出しは「未完了の作業がない」ときだけ。
+            未完了があるときの吹き出しは、下のフォルダカード側に出る。
+            アップロード欄を開いている間も、そちらの案内と競合するので出さない。
+          */}
+          {!hasPendingWork && !isWorkStarted && !loading && !showUpload && (
+            <GuideBubble
+              arrow="top"
+              arrowAlign="end"
+              announce
+              className="absolute top-full right-2 mt-3"
+            >
+              ↑ ここを押すと、ファイルを入れる画面が開きます
+            </GuideBubble>
+          )}
+        </div>
       </div>
 
       {/* 重複アラート */}
@@ -457,33 +509,58 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* スキャンガイドカード */}
+      {/*
+        紙の書類が画面に入るまでの流れ。
+        Step1・2はスキャナー側の作業なので押せない。Step3だけを実際の入口にする。
+      */}
       <div className="card-glass rounded-xl p-4 md:p-5">
         <h3 className="text-base font-semibold text-foreground mb-3">
-          スキャンの流れ
+          紙の書類をパソコンに入れる流れ
         </h3>
         <div className="grid grid-cols-4 gap-2 md:gap-4">
           {[
-            { icon: Power, label: "電源を入れる", step: 1 },
-            { icon: FileStack, label: "書類をセット", step: 2 },
-            { icon: Play, label: "スキャン開始", step: 3 },
-            { icon: MonitorSmartphone, label: "自動で取込", step: 4 },
-          ].map(({ icon: Icon, label, step }) => (
-            <div
-              key={step}
-              className="flex flex-col items-center text-center gap-1.5 p-2 md:p-3 rounded-lg bg-teal-50/50"
-            >
-              <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-teal-100 flex items-center justify-center">
-                <Icon className="w-4 h-4 md:w-5 md:h-5 text-teal-600" />
-              </div>
-              <div>
-                <span className="text-xs font-bold text-teal-600">
-                  Step {step}
-                </span>
-                <p className="text-xs md:text-sm text-gray-700 mt-0.5">{label}</p>
-              </div>
-            </div>
-          ))}
+            { icon: FileStack, label: "紙をスキャナーにセット", step: 1 },
+            { icon: Play, label: "ScanSnapのボタンでPDFにする", step: 2 },
+            { icon: Upload, label: "できたPDFをこの画面に入れる", step: 3, action: true },
+            { icon: MousePointerClick, label: "あとは吹き出しの通りに進める", step: 4 },
+          ].map(({ icon: Icon, label, step, action }) => {
+            const content = (
+              <>
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-teal-100 flex items-center justify-center">
+                  <Icon className="w-4 h-4 md:w-5 md:h-5 text-teal-600" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-teal-600">
+                    Step {step}
+                  </span>
+                  <p className="text-xs md:text-sm text-gray-700 mt-0.5">{label}</p>
+                </div>
+              </>
+            );
+
+            if (!action) {
+              return (
+                <div
+                  key={step}
+                  className="flex flex-col items-center text-center gap-1.5 p-2 md:p-3 rounded-lg bg-teal-50/50"
+                >
+                  {content}
+                </div>
+              );
+            }
+
+            return (
+              <button
+                key={step}
+                type="button"
+                onClick={handleScanStepClick}
+                className="flex flex-col items-center text-center gap-1.5 p-2 md:p-3 rounded-lg bg-teal-50/50 hover:bg-teal-100 transition-colors cursor-pointer"
+              >
+                {content}
+                <span className="text-[11px] text-teal-700">ここを押しても始められます</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -618,13 +695,20 @@ export default function DashboardPage() {
                 ) : (
                   <div className="space-y-2">
                     {incompleteFolders.map((f, idx) => (
-                      <div key={f.id} className="relative">
+                      <div
+                        key={f.id}
+                        className={cn("relative", idx === 0 && !showUpload && "pb-9")}
+                      >
                         {renderFolderCard(f, getBTypeBadge(f))}
-                        {idx === 0 && (
-                          <div className="absolute left-4 -bottom-2 translate-y-full bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
+                        {idx === 0 && !showUpload && (
+                          <GuideBubble
+                            arrow="top"
+                            arrowAlign="start"
+                            announce
+                            className="absolute left-4 bottom-0"
+                          >
                             このフォルダを開いて確認しましょう →
-                            <div className="absolute bottom-full left-6 border-8 border-transparent border-b-teal-600" />
-                          </div>
+                          </GuideBubble>
                         )}
                       </div>
                     ))}
@@ -644,17 +728,24 @@ export default function DashboardPage() {
                   </div>
                   <div className="space-y-2">
                     {doubleCheckWaiting.map((f, idx) => (
-                      <div key={f.id} className="relative">
+                      <div
+                        key={f.id}
+                        className={cn("relative", idx === 0 && !showUpload && "pb-9")}
+                      >
                         {renderFolderCard(
                           f,
                           { label: "ダブルチェック", color: "bg-orange-100 text-orange-800" },
                           `1stチェック: ${f.firstCheckByName}`
                         )}
-                        {idx === 0 && (
-                          <div className="absolute left-4 -bottom-2 translate-y-full bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
+                        {idx === 0 && !showUpload && (
+                          <GuideBubble
+                            arrow="top"
+                            arrowAlign="start"
+                            announce
+                            className="absolute left-4 bottom-0"
+                          >
                             ダブルチェックを行いましょう →
-                            <div className="absolute bottom-full left-6 border-8 border-transparent border-b-teal-600" />
-                          </div>
+                          </GuideBubble>
                         )}
                       </div>
                     ))}
@@ -855,10 +946,18 @@ export default function DashboardPage() {
                 ) : (
                   <div className="space-y-2">
                     {incompleteFolders.map((f, idx) => (
-                      <div key={f.id} className="relative">
+                      <div
+                        key={f.id}
+                        className={cn("relative", idx === 0 && !showUpload && "pb-9")}
+                      >
                         {renderFolderCard(f, getATypeBadge(f), f.handoffStatus === "handed_off")}
-                        {idx === 0 && (
-                          <div className="absolute left-4 -bottom-2 translate-y-full bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
+                        {idx === 0 && !showUpload && (
+                          <GuideBubble
+                            arrow="top"
+                            arrowAlign="start"
+                            announce
+                            className="absolute left-4 bottom-0"
+                          >
                             {f.alertCount > 0 && f.documents.every((d) => d.status === "reviewed" || d.status === "exported")
                               ? "アラートを確認してください →"
                               : isFinalReviewPending(f)
@@ -867,8 +966,7 @@ export default function DashboardPage() {
                                   ? "引き継ぎフォルダを確認しましょう →"
                                   : "このフォルダを開いて作業しましょう →"
                             }
-                            <div className="absolute bottom-full left-6 border-8 border-transparent border-b-teal-600" />
-                          </div>
+                          </GuideBubble>
                         )}
                       </div>
                     ))}
@@ -888,18 +986,25 @@ export default function DashboardPage() {
                   </div>
                   <div className="space-y-2">
                     {doubleCheckWaiting.map((f, idx) => (
-                      <div key={f.id} className="relative">
+                      <div
+                        key={f.id}
+                        className={cn("relative", idx === 0 && !showUpload && "pb-9")}
+                      >
                         {renderFolderCard(
                           f,
                           { label: "ダブルチェック", color: "bg-orange-100 text-orange-800" },
                           false,
                           `1stチェック: ${f.firstCheckByName}`
                         )}
-                        {idx === 0 && (
-                          <div className="absolute left-4 -bottom-2 translate-y-full bg-teal-600 text-white text-sm font-medium rounded-full px-4 py-1.5 shadow-lg animate-bounce z-10">
+                        {idx === 0 && !showUpload && (
+                          <GuideBubble
+                            arrow="top"
+                            arrowAlign="start"
+                            announce
+                            className="absolute left-4 bottom-0"
+                          >
                             ダブルチェックを行いましょう →
-                            <div className="absolute bottom-full left-6 border-8 border-transparent border-b-teal-600" />
-                          </div>
+                          </GuideBubble>
                         )}
                       </div>
                     ))}

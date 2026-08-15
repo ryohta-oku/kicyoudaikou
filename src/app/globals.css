@@ -92,3 +92,32 @@ body {
 .animate-alert-bounce {
   animation: alert-bounce 1.5s ease-in-out infinite;
 }
+
+/*
+ * 動きを抑える設定をしている人には、跳ねる・点滅する演出を止める。
+ * 誘導の吹き出しは画面に出っぱなしなので、動き続けると人によっては
+ * 目が疲れる・酔うため。
+ *
+ * animate-spin は除外する ―― あれは「処理中」を示す実用の表示で、
+ * 止めると固まったように見えてしまう。
+ */
+@media (prefers-reduced-motion: reduce) {
+  .animate-bounce,
+  .animate-pulse,
+  .animate-alert-bounce,
+  .animate-fade-up {
+    animation: none !important;
+  }
+}
+
+/*
+ * キーボードで操作したときに、いまどこにいるかを分かるようにする。
+ * ボタンとリンクには focus のスタイルが一切なかった。
+ *
+ * :where() は詳細度が0なので、既に focus:ring-* が指定されている
+ * 入力欄などはそちらが優先され、見た目は変わらない。
+ */
+:where(button, a, [role="button"]):focus-visible {
+  outline: 3px solid #134e4a;
+  outline-offset: 2px;
+}
