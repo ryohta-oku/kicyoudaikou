@@ -4,14 +4,56 @@ import { classifyWithAI, classifyText, parseOCRText } from "@/lib/classifier";
 import { auth } from "@/lib/auth";
 import { getEffectiveRole } from "@/lib/roleSimulation";
 
+/** 返す中身。同時実行をまとめる都合で、Response そのものは使い回さない */
+type ClassifyResult = { status: number; body: unknown };
+
+/**
+ * いま分類中の書類。**同じ書類を同時に2本走らせないための鍵。**
+ *
+ * この処理は冒頭で既存の仕訳を deleteMany してから AI を呼ぶ。AI の応答に
+ * 数秒かかるので、その間に2本目が入ると「両方が削除を終えてから、両方が作成する」
+ * 形になり、**同じ経費が二重に記帳される**。
+ *
+ * 実際に踏める経路がある: 「ダブルチェック完了」は押すと各書類へ
+ * `/api/classify` を投げるが、ボタンの disabled は再レンダー後にしか効かないため、
+ * 反応がないと思って素早く2回押すと2本走る。同時実行で3件→6件になることを確認済み。
+ *
+ * 本番の PM2 は1プロセスなので、プロセス内の Map で足りる。
+ */
+const inFlight = new Map<string, Promise<ClassifyResult>>();
+
 export async function POST(request: NextRequest) {
+  let documentId: string | undefined;
   try {
-    const { documentId } = await request.json();
+    ({ documentId } = await request.json());
+  } catch {
+    return NextResponse.json(
+      { error: "リクエストの形式が不正です", code: "CLASSIFY_BAD_REQUEST" },
+      { status: 400 }
+    );
+  }
 
-    if (!documentId) {
-      return NextResponse.json({ error: "ドキュメントIDが必要です", code: "CLASSIFY_NO_DOCUMENT_ID" }, { status: 400 });
-    }
+  if (!documentId) {
+    return NextResponse.json({ error: "ドキュメントIDが必要です", code: "CLASSIFY_NO_DOCUMENT_ID" }, { status: 400 });
+  }
 
+  // 既に走っていれば、その結果をそのまま返す（2本目は新たに分類しない）
+  const running = inFlight.get(documentId);
+  if (running) {
+    const result = await running;
+    return NextResponse.json(result.body, { status: result.status });
+  }
+
+  const id = documentId;
+  const task = runClassify(id).finally(() => inFlight.delete(id));
+  inFlight.set(id, task);
+
+  const result = await task;
+  return NextResponse.json(result.body, { status: result.status });
+}
+
+async function runClassify(documentId: string): Promise<ClassifyResult> {
+  try {
     const document = await prisma.document.findUnique({
       where: { id: documentId },
       include: {
@@ -20,7 +62,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!document) {
-      return NextResponse.json({ error: "ドキュメントが見つかりません", code: "CLASSIFY_DOCUMENT_NOT_FOUND" }, { status: 404 });
+      return { status: 404, body: { error: "ドキュメントが見つかりません", code: "CLASSIFY_DOCUMENT_NOT_FOUND" } };
     }
 
     // 既存の仕訳を削除
@@ -40,7 +82,7 @@ export async function POST(request: NextRequest) {
         where: { id: documentId },
         data: { status: "classified" },
       });
-      return NextResponse.json({ entries: [] });
+      return { status: 200, body: { entries: [] } };
     }
 
     // ページごとに分類する（1ページ＝1仕訳）。
@@ -175,10 +217,10 @@ export async function POST(request: NextRequest) {
       console.error("WorkLog create error (classify):", logError);
     }
 
-    return NextResponse.json({ entries });
+    return { status: 200, body: { entries } };
   } catch (error) {
     console.error("Classification error:", error);
     const detail = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: "仕訳分類に失敗しました", code: "CLASSIFY_FAILED", detail }, { status: 500 });
+    return { status: 500, body: { error: "仕訳分類に失敗しました", code: "CLASSIFY_FAILED", detail } };
   }
 }

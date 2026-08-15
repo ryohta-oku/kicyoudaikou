@@ -121,3 +121,15 @@ body {
   outline: 3px solid #134e4a;
   outline-offset: 2px;
 }
+
+/*
+ * ログインとパスワード設定は暗い画面（bg-teal-950）で、上の teal-900 の枠は
+ * 背景に沈んで見えない（実測でコントラスト比 1.92。基準は 3.0）。
+ * この2画面だけ白い枠にする（比 9.1）。
+ *
+ * bg-teal-950 を目印にしているのは、全画面の暗い背景がこの2箇所だけで、
+ * どちらも同じクラスを使っているため。TSX を触らずに済む。
+ */
+.bg-teal-950 :where(button, a, [role="button"]):focus-visible {
+  outline-color: #ffffff;
+}

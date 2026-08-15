@@ -5,6 +5,7 @@ import { Check, RotateCcw, Loader2, CircleCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import SubAccountCombobox from "./SubAccountCombobox";
+import GuideBubble from "./GuideBubble";
 
 interface Page {
   id: string;
@@ -199,28 +200,63 @@ export default function ClassifyEditor({
   );
   const subAccounts = selectedAccount?.subAccounts || [];
 
+  /*
+    いま見ている仕訳を確認し終えると、項目ごとの吹き出しが全て消える。
+    未確認の仕訳が残っているのに何も指さない画面になってしまうため、
+    最初の未確認の仕訳に誘導を出す。OCR確認画面と同じ作法。
+  */
+  const firstUnconfirmedEntry = entries.find((e) => !confirmedEntries[e.id]);
+  const currentEntryForGuide = entries[currentEntryIndex];
+  const showEntryGuide =
+    !!currentEntryForGuide &&
+    !!firstUnconfirmedEntry &&
+    !!confirmedEntries[currentEntryForGuide.id] &&
+    firstUnconfirmedEntry.id !== currentEntryForGuide.id;
+
   return (
     <div className="space-y-4">
       {/* エントリナビゲーション */}
       {entries.length > 1 && (
-        <div className="flex items-center gap-2 mb-4">
+        <div
+          className={cn(
+            "flex items-center gap-2",
+            /* 誘導はボタンの下に出るので、その分だけ余白を足す */
+            showEntryGuide ? "mb-12" : "mb-4"
+          )}
+        >
           <span className="text-sm text-gray-600 mr-2">仕訳:</span>
-          {entries.map((entry, index) => (
-            <button
-              key={entry.id}
-              onClick={() => setCurrentEntryIndex(index)}
-              className={cn(
-                "w-10 h-10 rounded-lg text-sm font-medium transition-colors",
-                index === currentEntryIndex
-                  ? "bg-teal-600 text-white"
-                  : confirmedEntries[entry.id]
-                    ? "bg-green-100 text-green-700 border border-green-300"
-                    : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-              )}
-            >
-              {index + 1}
-            </button>
-          ))}
+          {entries.map((entry, index) => {
+            const showNextEntryGuide = showEntryGuide && entry.id === firstUnconfirmedEntry!.id;
+
+            return (
+              <div key={entry.id} className="relative">
+                <button
+                  onClick={() => setCurrentEntryIndex(index)}
+                  className={cn(
+                    "w-10 h-10 rounded-lg text-sm font-medium transition-colors",
+                    index === currentEntryIndex
+                      ? "bg-teal-600 text-white"
+                      : confirmedEntries[entry.id]
+                        ? "bg-green-100 text-green-700 border border-green-300"
+                        : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                  )}
+                >
+                  {index + 1}
+                </button>
+                {showNextEntryGuide && (
+                  <GuideBubble
+                    arrow="top"
+                    arrowAlign="start"
+                    size="sm"
+                    announce
+                    className="absolute top-full mt-2 left-0"
+                  >
+                    この仕訳を確認しましょう ↑
+                  </GuideBubble>
+                )}
+              </div>
+            );
+          })}
           <span className="text-sm text-gray-500 ml-2">
             ({entries.filter((e) => confirmedEntries[e.id]).length}/{entries.length} 確認済)
           </span>

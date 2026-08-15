@@ -278,6 +278,18 @@ export default function OCREditor({
     }
   })();
 
+  /*
+    いま見ているページを確認し終えると、項目ごとの吹き出しが全て消える。
+    未確認のページが残っているのに何も指さない画面になってしまうため、
+    最初の未確認ページのボタンに誘導を出す。
+  */
+  const firstUnconfirmedPage = pages.find((p) => !confirmedPages[p.id]);
+  const showPageGuide =
+    !!currentPage &&
+    !!firstUnconfirmedPage &&
+    !!confirmedPages[currentPage.id] &&
+    firstUnconfirmedPage.id !== currentPage.id;
+
   return (
     <div className="space-y-4">
       {/* ダブルチェックモードバナー */}
@@ -292,18 +304,16 @@ export default function OCREditor({
 
       {/* ページナビゲーション */}
       {pages.length > 1 && (
-        <div className="flex items-center gap-2 mb-4">
+        <div
+          className={cn(
+            "flex items-center gap-2",
+            /* 誘導はボタンの下に出るので、その分だけ余白を足す */
+            showPageGuide ? "mb-12" : "mb-4"
+          )}
+        >
           <span className="text-sm text-gray-600 mr-2">ページ:</span>
           {pages.map((page, index) => {
-            /*
-              いま見ているページを確認し終えると、項目ごとの吹き出しが全て消える。
-              未確認のページが残っているのに何も指さない状態になるため、
-              最初の未確認ページのボタンに誘導を出す。
-            */
-            const showNextPageGuide =
-              confirmedPages[currentPage.id] &&
-              !confirmedPages[page.id] &&
-              page.id === pages.find((p) => !confirmedPages[p.id])?.id;
+            const showNextPageGuide = showPageGuide && page.id === firstUnconfirmedPage!.id;
 
             return (
               <div key={page.id} className="relative">
@@ -322,13 +332,13 @@ export default function OCREditor({
                 </button>
                 {showNextPageGuide && (
                   <GuideBubble
-                    arrow="left"
-                    arrowAlign="center"
+                    arrow="top"
+                    arrowAlign="start"
                     size="sm"
                     announce
-                    className="absolute left-full ml-2 top-1/2 -translate-y-1/2"
+                    className="absolute top-full mt-2 left-0"
                   >
-                    このページも確認しましょう →
+                    このページを確認しましょう ↑
                   </GuideBubble>
                 )}
               </div>
