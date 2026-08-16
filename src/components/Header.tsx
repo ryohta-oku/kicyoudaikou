@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { FileText, Home, Settings, Building2, Shield, LogOut, Menu, User, ShieldCheck, X, Eye, Clock, Users, ExternalLink, FileCheck2 } from "lucide-react";
+import { FileText, Home, Settings, Building2, Shield, LogOut, Menu, User, ShieldCheck, X, Eye, Clock, Users, ExternalLink, FileCheck2, BookOpen } from "lucide-react";
 import { getSelectedClientId, setSelectedClientId } from "@/lib/client";
 import { getSimulatedRole, setSimulatedRole, getSimulatedUser, setSimulatedUser, SIMULATION_PERSONAS } from "@/lib/roleSimulation";
 import ClientSelector from "@/components/ClientSelector";
@@ -42,6 +42,9 @@ export default function Header() {
 
   const navItems = [
     { href: "/", label: "ダッシュボード", icon: Home },
+    // 迷ったときにどの画面からでも戻れるよう、常に出す。
+    // 説明書は「探して見つける」ものではなく「いつでもそこにある」もの
+    { href: "/guide", label: "使い方", icon: BookOpen },
     { href: "/worklogs", label: "工数管理", icon: Clock },
     { href: "/accounts", label: "勘定科目管理", icon: Settings },
     { href: "/clients", label: "得意先管理", icon: Building2 },
@@ -150,7 +153,7 @@ export default function Header() {
 
   return (
     <>
-      <header className="bg-white/90 backdrop-blur-md border-b border-teal-100/50 sticky top-0 z-50">
+      <header className="app-chrome bg-white/90 backdrop-blur-md border-b border-teal-100/50 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 md:h-16">
             {/* ロゴ */}
@@ -163,7 +166,14 @@ export default function Header() {
             </Link>
 
             {/* デスクトップ: 得意先セレクタ + ナビ + メニュー */}
-            <div className="hidden md:flex items-center gap-4">
+            {/*
+              **横に並べるのは xl 以上だけ。** ここには得意先の選択・立場の切り替え・
+              税理士ボタン・ナビ5つ・アカウントが入っていて、実測で 1020px ある。
+              md（768px）で出すと 783px の画面ではみ出し、ページごと横に流れていた
+              （ナビが「使い方」で1つ増えて悪化したが、元から入っていなかった）。
+              入らない幅ではハンバーガーに任せる。
+            */}
+            <div className="hidden xl:flex items-center gap-4">
               {/* 得意先セレクタ */}
               <ClientSelector
                 selectedId={selectedClientId}
@@ -305,7 +315,7 @@ export default function Header() {
             {/* モバイル: ハンバーガーボタン */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden p-2 text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
+              className="xl:hidden p-2 text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
             >
               {isMobileMenuOpen ? (
                 <X className="h-6 w-6" />
@@ -335,7 +345,7 @@ export default function Header() {
 
       {/* モバイルメニュー（オーバーレイ） */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
+        <div className="fixed inset-0 z-40 xl:hidden">
           {/* 背景オーバーレイ */}
           <div
             className="absolute inset-0 bg-black/30"

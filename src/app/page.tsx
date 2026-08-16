@@ -14,11 +14,7 @@ import {
   AlertTriangle,
   ScanLine,
   ChevronRight,
-  FileStack,
-  Play,
-  MousePointerClick,
   Send,
-  ArrowRight,
   Check,
   Clock,
   Timer,
@@ -29,6 +25,7 @@ import { getSelectedClientId } from "@/lib/client";
 import FileUpload from "@/components/FileUpload";
 import GuideBubble from "@/components/GuideBubble";
 import { useWorkLogger } from "@/hooks/useWorkLogger";
+import GuideStepCard from "@/components/guide/GuideStepCard";
 
 interface FolderDocument {
   id: string;
@@ -326,6 +323,16 @@ export default function DashboardPage() {
    * 「作業者と確認者が別人」という条件になった。誰が1stチェックしたかだけを見る。
    * 過去の user_b のアカウントでも同じに動く。
    */
+  /*
+    Step 3（PDFをこの画面に入れる）だけは、**システムが終わったかどうかを知っている**。
+    今日フォルダが作られていれば取り込みは済んでいる。
+    手でチェックし忘れて、いつまでも「いまここ」のままになるのを防ぐ。
+  */
+  const hasFolderCreatedToday = useMemo(() => {
+    const today = new Date().toDateString();
+    return folders.some((f) => new Date(f.createdAt).toDateString() === today);
+  }, [folders]);
+
   const hasDoubleCheckTasks = useMemo(() => {
     if (userRole !== "user_a" && userRole !== "user_b") return false;
     const effectiveId = getEffectiveUserId(session?.user?.role || "", session?.user?.id || "");
@@ -527,58 +534,14 @@ export default function DashboardPage() {
 
       {/*
         紙の書類が画面に入るまでの流れ。
-        Step1・2はスキャナー側の作業なので押せない。Step3だけを実際の入口にする。
+        **ここが進行管理そのもの** ―― 押すと右に「やり方」が出て、
+        終わると ☑ が付いて次が「いまここ」になる。
+        題名は説明書の章から取る（文言を2か所に書かない）。
       */}
-      <div className="card-glass rounded-xl p-4 md:p-5">
-        <h3 className="text-base font-semibold text-foreground mb-3">
-          紙の書類をパソコンに入れる流れ
-        </h3>
-        <div className="grid grid-cols-4 gap-2 md:gap-4">
-          {[
-            { icon: FileStack, label: "紙をスキャナーにセット", step: 1 },
-            { icon: Play, label: "ScanSnapのボタンでPDFにする", step: 2 },
-            { icon: Upload, label: "できたPDFをこの画面に入れる", step: 3, action: true },
-            { icon: MousePointerClick, label: "あとは吹き出しの通りに進める", step: 4 },
-          ].map(({ icon: Icon, label, step, action }) => {
-            const content = (
-              <>
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-teal-100 flex items-center justify-center">
-                  <Icon className="w-4 h-4 md:w-5 md:h-5 text-teal-600" />
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-teal-600">
-                    Step {step}
-                  </span>
-                  <p className="text-xs md:text-sm text-gray-700 mt-0.5">{label}</p>
-                </div>
-              </>
-            );
-
-            if (!action) {
-              return (
-                <div
-                  key={step}
-                  className="flex flex-col items-center text-center gap-1.5 p-2 md:p-3 rounded-lg bg-teal-50/50"
-                >
-                  {content}
-                </div>
-              );
-            }
-
-            return (
-              <button
-                key={step}
-                type="button"
-                onClick={handleScanStepClick}
-                className="flex flex-col items-center text-center gap-1.5 p-2 md:p-3 rounded-lg bg-teal-50/50 hover:bg-teal-100 transition-colors cursor-pointer"
-              >
-                {content}
-                <span className="text-[11px] text-teal-700">ここを押しても始められます</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <GuideStepCard
+        uploadedToday={hasFolderCreatedToday}
+        onStartUpload={handleScanStepClick}
+      />
 
       {/* フォルダ一覧 */}
       {loading ? (
@@ -1141,9 +1104,18 @@ export default function DashboardPage() {
                           </span>
                         </td>
                         <td className="px-4 py-4">
-                          <span className={cn("inline-flex px-2.5 py-1 rounded-full text-xs font-medium", STATUS_COLORS[folderStatus] || "bg-gray-100 text-gray-800")}>
-                            {STATUS_LABELS[folderStatus] || folderStatus}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className={cn("inline-flex px-2.5 py-1 rounded-full text-xs font-medium", STATUS_COLORS[folderStatus] || "bg-gray-100 text-gray-800")}>
+                              {STATUS_LABELS[folderStatus] || folderStatus}
+                            </span>
+                            {/* 税理士がその場で直した分。差し戻しとは別の色にする */}
+                            {(folder.advisorEditedCount ?? 0) > 0 && (
+                              <span className="inline-flex items-center gap-1 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2 py-0.5 whitespace-nowrap">
+                                <Pencil className="w-3 h-3" />
+                                税理士が{folder.advisorEditedCount}件直しました
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-4 text-teal-700">{folder.creator || "-"}</td>
                         <td className="px-4 py-4">
@@ -1198,6 +1170,13 @@ export default function DashboardPage() {
                           </span>
                           {folder.creator && <span>{folder.creator}</span>}
                         </div>
+                        {/* 税理士がその場で直した分。差し戻しとは別の色にする */}
+                        {(folder.advisorEditedCount ?? 0) > 0 && (
+                          <span className="inline-flex items-center gap-1 mt-1.5 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2 py-0.5">
+                            <Pencil className="w-3 h-3" />
+                            税理士が{folder.advisorEditedCount}件直しました
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className={cn("inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium", STATUS_COLORS[folderStatus] || "bg-gray-100 text-gray-800")}>

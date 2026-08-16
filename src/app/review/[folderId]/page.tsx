@@ -2,11 +2,13 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { getClientScope, isClientAllowed } from "@/lib/advisor";
+import { getClientScope, isClientAllowed, isExternalScope } from "@/lib/advisor";
 import { resolveEntryImage } from "@/lib/entry-image";
 import ReviewShell from "@/components/review/ReviewShell";
 import ReviewList, { type ReceiptGroup } from "@/components/review/ReviewList";
 import { INVOICE_KINDS, type InvoiceKind } from "@/lib/tax-class";
+import { ADMIN_AREA_ROLES } from "@/lib/roles";
+import { auth } from "@/lib/auth";
 import { resolvePreview } from "../page";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +38,7 @@ export default async function ReviewFolderPage({
 
   const scope = await getClientScope();
   if (!scope) redirect("/login");
+  const userName = (await auth())?.user?.name || undefined;
 
   const preview = await resolvePreview(scope, as);
   const effective = preview?.scope ?? scope;
@@ -168,7 +171,12 @@ export default async function ReviewFolderPage({
   const receipts = [...groups.values()].sort((a, b) => a.date.localeCompare(b.date));
 
   return (
-    <ReviewShell previewName={preview?.name} actingAsAdvisor={!!effective.actingAsAdvisor}>
+    <ReviewShell
+      previewName={preview?.name}
+      actingAsAdvisor={!!effective.actingAsAdvisor}
+      canReturnToOffice={ADMIN_AREA_ROLES.includes(scope.role)}
+      userName={userName}
+    >
       <Link
         href={preview ? `/review?as=${preview.userId}` : "/review"}
         className="inline-flex items-center gap-1 text-sm text-teal-700 hover:text-teal-900 mb-3"
@@ -186,8 +194,18 @@ export default async function ReviewFolderPage({
         initialStatus={folder.taxReviewStatus}
         receipts={receipts}
         nonQualifiedInvoiceKind={invoiceKind}
-        readOnly={!!preview}
-        readOnlyReason={preview ? "プレビューでは操作できません" : ""}
+        /*
+          **税理士の立場で見ていないときは操作させない。**
+          事業所の管理者はこの画面を開けるが、確認や修正のAPIは
+          税理士の立場でないと 403 で断る。押せてしまうと、
+          押してからエラーで気づくことになる。
+        */
+        readOnly={!!preview || !isExternalScope(effective)}
+        readOnlyReason={
+          preview
+            ? "プレビューでは操作できません"
+            : "「税理士として確認」に切り替えてから操作してください"
+        }
       />
     </ReviewShell>
   );

@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { FolderCheck, Inbox } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getClientScope, whereClientScope, type ClientScope } from "@/lib/advisor";
+import { ADMIN_AREA_ROLES } from "@/lib/roles";
+import { auth } from "@/lib/auth";
 import ReviewShell from "@/components/review/ReviewShell";
 
 export const metadata = { title: "確認する書類 | 記帳代行ツール" };
@@ -29,6 +31,7 @@ export default async function ReviewIndexPage({
   const { as } = await searchParams;
   const scope = await getClientScope();
   if (!scope) redirect("/login");
+  const userName = (await auth())?.user?.name || undefined;
 
   // ?as= は「この税理士には何が見えているか」を確かめるためのもの（読み取り専用）
   const preview = await resolvePreview(scope, as);
@@ -50,7 +53,13 @@ export default async function ReviewIndexPage({
   });
 
   return (
-    <ReviewShell previewName={preview?.name} actingAsAdvisor={!!effective.actingAsAdvisor}>
+    <ReviewShell
+      previewName={preview?.name}
+      actingAsAdvisor={!!effective.actingAsAdvisor}
+      /* 切り替えの有無にかかわらず、事業所の人には戻り道を出す */
+      canReturnToOffice={ADMIN_AREA_ROLES.includes(scope.role)}
+      userName={userName}
+    >
       <h1 className="text-2xl font-black text-foreground mb-1">確認する書類</h1>
       <p className="text-sm text-gray-600 mb-6">
         事業所から確認をお願いされている分です。上から順に見ていってください。

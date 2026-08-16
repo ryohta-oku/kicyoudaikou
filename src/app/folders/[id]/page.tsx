@@ -2951,7 +2951,7 @@ export default function FolderDetailPage({
         folder.documents.every(
           (d) => d.status === "reviewed" || d.status === "exported"
         ) && (
-        <div className="fixed bottom-6 right-6 z-40">
+        <div className="guide-shift fixed bottom-6 right-6 z-40">
           <div className="relative">
             {!showFormatPicker && !folder.documents.every((d) => d.status === "exported") && (
               <span className="absolute -top-10 right-0 bg-teal-600 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">

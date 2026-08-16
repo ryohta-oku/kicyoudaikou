@@ -6,6 +6,16 @@ import { useEffect, useState, useCallback } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getEffectiveRole } from "@/lib/roleSimulation";
+/*
+  工程の判定は lib に移した。**説明のパネルも同じ判定を使う** ――
+  2か所に別々に書くと、バーは「仕訳分類」なのに説明は「最終確認」を出す、
+  という形の食い違いになる。
+*/
+import {
+  computeCurrentStep,
+  extractFolderId,
+  type FolderInfo,
+} from "@/lib/workflow-step";
 
 interface Step {
   id: string;
@@ -56,90 +66,6 @@ const STEPS_A_HANDOFF_DC: Step[] = [
   { id: "final_review", label: "最終確認" },
   { id: "done", label: "完了" },
 ];
-
-interface FolderInfo {
-  handoffStatus: string | null;
-  doubleCheckStatus: string | null;
-  needsDoubleCheck: boolean;
-  taxReviewStatus?: string | null;
-  documents: { status: string }[];
-}
-
-/** ステップの順序マップ（大きいほど進んでいる） */
-const STEP_ORDER: Record<string, number> = {
-  upload: 0,
-  ocr: 1,
-  ocr_confirm: 2,
-  double_check: 3,
-  classify: 4,
-  review: 5,
-  final_review: 6,
-  tax_review: 7,
-  done: 8,
-  handoff: 4, // B型の引き継ぎはダブルチェックの次
-};
-
-/** フォルダ内ドキュメントの実際のステータスから現在のステップを算出 */
-function computeCurrentStep(folder: FolderInfo, isTypeB: boolean, pathname: string): string {
-  const docs = folder.documents;
-  if (docs.length === 0) return "upload";
-
-  const statuses = docs.map((d) => d.status);
-
-  // ダブルチェック中は役割を問わずこのステップ（2026-09-01 以降 A型もここを通る）
-  if (folder.doubleCheckStatus === "pending") return "double_check";
-
-  // 過去のB型フォルダ: 引き継ぎが最終ステップ
-  if (isTypeB && folder.handoffStatus === "handed_off") return "handoff";
-  if (isTypeB && folder.doubleCheckStatus === "completed") return "handoff";
-
-  // 過去の「A型が引き継ぎ受け + ダブルチェック必要」のフォルダ
-  if (!isTypeB && folder.handoffStatus === "handed_off" && folder.needsDoubleCheck) return "double_check";
-
-  // ドキュメントステータスからステップを算出
-  let statusStep: string;
-  if (statuses.some((s) => s === "uploaded" || s === "ocr_processing")) {
-    statusStep = "ocr";
-  } else if (statuses.some((s) => s === "ocr_complete")) {
-    statusStep = "ocr_confirm";
-  } else if (statuses.every((s) => s === "ocr_confirmed")) {
-    // OCR確認が済んだらダブルチェックの工程。済んでいれば仕訳へ進む
-    statusStep =
-      folder.doubleCheckStatus === "completed" ? "classify" : "double_check";
-  } else if (statuses.every((s) => s === "exported")) {
-    statusStep = "done";
-  } else if (folder.taxReviewStatus === "pending") {
-    // 税理士に預けている間。事業所の手は離れている
-    statusStep = "tax_review";
-  } else if (statuses.every((s) => s === "reviewed" || s === "exported")) {
-    // 差し戻されたときもここに戻る（直してもう一度依頼する）
-    statusStep = "final_review";
-  } else if (statuses.some((s) => s === "classified" || s === "reviewed")) {
-    statusStep = "review";
-  } else {
-    statusStep = "classify";
-  }
-
-  // 現在のページに対応するステップ
-  let pageStep: string | null = null;
-  if (pathname.endsWith("/classify")) {
-    pageStep = "classify";
-  }
-
-  // ページのステップとドキュメントステータスの低い方を採用
-  // （classifyページにいるのに「完了」になるのを防ぐ）
-  if (pageStep && (STEP_ORDER[statusStep] ?? 0) > (STEP_ORDER[pageStep] ?? 0)) {
-    return pageStep;
-  }
-
-  return statusStep;
-}
-
-/** パス名からフォルダIDを取得 */
-function extractFolderId(pathname: string): string | null {
-  const match = pathname.match(/^\/folders\/([^/]+)/);
-  return match ? match[1] : null;
-}
 
 export default function WorkflowProgressBar() {
   const pathname = usePathname();
@@ -216,7 +142,7 @@ export default function WorkflowProgressBar() {
   const currentIndex = rawIndex === steps.length - 1 ? steps.length : rawIndex;
 
   return (
-    <div className="bg-white border-b">
+    <div className="app-chrome bg-white border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between py-2 overflow-x-auto">
           {steps.map((step, index) => {
