@@ -52,12 +52,12 @@ export function FigureOpenCover() {
  * ② 紙の向き。**この図がこの説明書でいちばん大事。**
  *
  * ScanSnap は上から下へ紙を送るので、読みたい面を下にして、
- * 文字の上side が先に入るようにセットする。
+ * 文字の上のほうが先に入るようにセットする。
  */
 export function FigurePaperDirection() {
   return (
     <figure>
-      <svg viewBox="0 0 320 210" role="img" aria-label="レシートのおもて面を下に向け、文字の上side が先に入るようにセットする図" className="w-full h-auto">
+      <svg viewBox="0 0 320 210" role="img" aria-label="レシートのおもて面を下に向け、文字の上のほうが先に入るようにセットする図" className="w-full h-auto">
         {/* 給紙口 */}
         <rect x="55" y="150" width="210" height="42" rx="6" fill={SHADE} stroke={LINE} strokeWidth="2.5" />
         <line x1="70" y1="150" x2="250" y2="150" stroke={LINE} strokeWidth="2.5" />

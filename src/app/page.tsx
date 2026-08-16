@@ -1159,9 +1159,18 @@ export default function DashboardPage() {
                           </span>
                         </td>
                         <td className="px-4 py-4">
-                          <span className={cn("inline-flex px-2.5 py-1 rounded-full text-xs font-medium", STATUS_COLORS[folderStatus] || "bg-gray-100 text-gray-800")}>
-                            {STATUS_LABELS[folderStatus] || folderStatus}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className={cn("inline-flex px-2.5 py-1 rounded-full text-xs font-medium", STATUS_COLORS[folderStatus] || "bg-gray-100 text-gray-800")}>
+                              {STATUS_LABELS[folderStatus] || folderStatus}
+                            </span>
+                            {/* 税理士がその場で直した分。差し戻しとは別の色にする */}
+                            {(folder.advisorEditedCount ?? 0) > 0 && (
+                              <span className="inline-flex items-center gap-1 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2 py-0.5 whitespace-nowrap">
+                                <Pencil className="w-3 h-3" />
+                                税理士が{folder.advisorEditedCount}件直しました
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-4 text-teal-700">{folder.creator || "-"}</td>
                         <td className="px-4 py-4">
@@ -1216,6 +1225,13 @@ export default function DashboardPage() {
                           </span>
                           {folder.creator && <span>{folder.creator}</span>}
                         </div>
+                        {/* 税理士がその場で直した分。差し戻しとは別の色にする */}
+                        {(folder.advisorEditedCount ?? 0) > 0 && (
+                          <span className="inline-flex items-center gap-1 mt-1.5 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2 py-0.5">
+                            <Pencil className="w-3 h-3" />
+                            税理士が{folder.advisorEditedCount}件直しました
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className={cn("inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium", STATUS_COLORS[folderStatus] || "bg-gray-100 text-gray-800")}>

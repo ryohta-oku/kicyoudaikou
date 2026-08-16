@@ -160,7 +160,8 @@ export default function GuidePage() {
           印刷はブラウザの標準機能に任せる。ボタンを置くとクライアント部品が要るが、
           このページは中身が動かないので、サーバー側で組み立てたままにしたい。
         */}
-        <p className="mt-4 inline-flex items-center gap-1.5 text-sm text-gray-600 print:hidden">
+        {/* inline-flex は折り返さないので、狭い画面でここだけ横にはみ出していた */}
+        <p className="mt-4 flex flex-wrap items-center gap-1.5 text-sm text-gray-600 print:hidden">
           <Printer className="w-4 h-4 text-gray-400" />
           紙で持っておきたいときは <kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded text-xs">⌘</kbd>
           <span>＋</span>

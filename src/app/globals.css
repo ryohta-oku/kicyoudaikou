@@ -145,8 +145,12 @@ body {
  * - リンク先のURLは紙では追えないので出さない
  */
 @media print {
-  header,
-  nav,
+  /*
+    **アプリの上枠だけを消す。** `header` をまとめて消すと、
+    説明書自身の見出しブロック（<header> で組んでいる）まで消えて、
+    表題の無い紙が出てしまう。狙う相手は名指しにする。
+  */
+  .app-chrome,
   .print\:hidden {
     display: none !important;
   }

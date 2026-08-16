@@ -153,7 +153,7 @@ export default function Header() {
 
   return (
     <>
-      <header className="bg-white/90 backdrop-blur-md border-b border-teal-100/50 sticky top-0 z-50">
+      <header className="app-chrome bg-white/90 backdrop-blur-md border-b border-teal-100/50 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 md:h-16">
             {/* ロゴ */}
@@ -166,7 +166,14 @@ export default function Header() {
             </Link>
 
             {/* デスクトップ: 得意先セレクタ + ナビ + メニュー */}
-            <div className="hidden md:flex items-center gap-4">
+            {/*
+              **横に並べるのは xl 以上だけ。** ここには得意先の選択・立場の切り替え・
+              税理士ボタン・ナビ5つ・アカウントが入っていて、実測で 1020px ある。
+              md（768px）で出すと 783px の画面ではみ出し、ページごと横に流れていた
+              （ナビが「使い方」で1つ増えて悪化したが、元から入っていなかった）。
+              入らない幅ではハンバーガーに任せる。
+            */}
+            <div className="hidden xl:flex items-center gap-4">
               {/* 得意先セレクタ */}
               <ClientSelector
                 selectedId={selectedClientId}
@@ -308,7 +315,7 @@ export default function Header() {
             {/* モバイル: ハンバーガーボタン */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden p-2 text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
+              className="xl:hidden p-2 text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
             >
               {isMobileMenuOpen ? (
                 <X className="h-6 w-6" />
@@ -338,7 +345,7 @@ export default function Header() {
 
       {/* モバイルメニュー（オーバーレイ） */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
+        <div className="fixed inset-0 z-40 xl:hidden">
           {/* 背景オーバーレイ */}
           <div
             className="absolute inset-0 bg-black/30"
