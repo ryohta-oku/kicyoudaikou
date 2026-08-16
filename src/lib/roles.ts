@@ -57,6 +57,19 @@ export function isExternalRole(role: string | null | undefined): boolean {
 }
 
 /**
+ * 事業所の人が「税理士として操作している」ことを表す cookie。
+ *
+ * **署名は付けない。付ける必要が無い。** サーバー側ではこれを「要求」として
+ * 扱い、**制限する方向にしか効かせない** ―― 担当の得意先を1件も持たない人が
+ * 立てても、見えるものが空になるだけで、権限は1ミリも増えない。
+ *
+ * ミドルウェア（Edge）と各ルートの両方から読むので、名前をここに置く。
+ * roles.ts に prisma を持ち込まない約束はそのまま。
+ */
+export const VIEW_COOKIE = "kicyou_view";
+export const VIEW_AS_ADVISOR = "tax_advisor";
+
+/**
  * `/admin` に入れる役割。
  *
  * ここは以前 `admin` と **`staff`** で絞っていたが、記帳代行に `staff` は存在せず、

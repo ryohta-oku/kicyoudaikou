@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { isExternalRole } from "@/lib/roles";
+import { isExternalRole, ADMIN_AREA_ROLES } from "@/lib/roles";
 
 /**
  * 税理士（社外）が見てよい得意先の割り当て。
@@ -33,12 +33,24 @@ export async function GET() {
       select: { id: true, name: true, email: true, role: true },
       orderBy: { createdAt: "asc" },
     });
-    const advisors = users.filter((u) => isExternalRole(u.role));
 
+    /*
+      並べるのは2種類。意味が違うので、画面側で分けて見せる。
+
+        税理士（社外）          … 見える得意先そのもの
+        管理者・指導者（社内）  … 「税理士として操作」に切り替えたときに見る得意先。
+                                  普段の見え方は変わらない
+
+      社内の人も**全員並べる**。行を持っていることが「税理士として操作できる」印
+      なので、まだ持っていない人が一覧に出ないと、最初の1件を付けられない。
+    */
     const assignments = await prisma.advisorClient.findMany({
-      where: { userId: { in: advisors.map((a) => a.id) } },
       select: { userId: true, clientId: true },
     });
+
+    const advisors = users.filter(
+      (u) => isExternalRole(u.role) || ADMIN_AREA_ROLES.includes(u.role)
+    );
 
     const clients = await prisma.company.findMany({
       where: { isApproved: true },
@@ -81,11 +93,22 @@ export async function PUT(request: NextRequest) {
     if (!target) {
       return NextResponse.json({ error: "ユーザーが見つかりません" }, { status: 404 });
     }
-    // 社外の役割にしか割り当てない。社内の人は元から全得意先を見られるので、
-    // ここに行があると「絞っているつもり」の誤解を生む
-    if (!isExternalRole(target.role)) {
+    /*
+      社内の人にも割り当てられる。**意味が2通りある。**
+
+        税理士（社外）        … 見える得意先そのもの
+        事業所の人（社内）    … 「税理士として操作」に切り替えたときに見る得意先。
+                               普段の見え方は変わらない（元どおり全部見える）
+
+      行を持っていること自体が「税理士として操作できる」印になるので、
+      列を増やさずに済む。ただし**利用者（user_a / user_b）には付けない** ――
+      税理士の工程は事業所の管理側の仕事で、利用者さんの担当ではない。
+    */
+    const canHoldAdvisorHat =
+      isExternalRole(target.role) || ADMIN_AREA_ROLES.includes(target.role);
+    if (!canHoldAdvisorHat) {
       return NextResponse.json(
-        { error: "社外の役割（税理士）にのみ割り当てられます" },
+        { error: "税理士、または管理者・指導者にのみ割り当てられます" },
         { status: 400 }
       );
     }

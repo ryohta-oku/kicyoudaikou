@@ -1,6 +1,8 @@
+import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isExternalRole } from "@/lib/roles";
+import { isViewingAsAdvisor } from "@/lib/auth.config";
 
 /**
  * 「この人はどの得意先を見てよいか」をサーバー側で決める。
@@ -27,6 +29,14 @@ export type ClientScope = {
   userId: string;
   /** 見てよい得意先の id。`null` は「制限なし」＝社内の人 */
   clientIds: string[] | null;
+  /**
+   * 事業所の人が「税理士として」操作しているか。
+   *
+   * 本物の税理士のときは false。**記録を分けるために持つ** ――
+   * 「山田税理士事務所（税理士）」と「奥 亮太（事業所・税理士として）」を
+   * 後から区別できないと、誰が承認したかの記録が意味を失う。
+   */
+  actingAsAdvisor?: boolean;
 };
 
 /**
@@ -46,15 +56,41 @@ export async function getClientScope(): Promise<ClientScope | null> {
   if (!session?.user?.id) return null;
 
   const role = session.user.role || "";
-  if (!isExternalRole(role)) {
-    return { role, userId: session.user.id, clientIds: null };
+  const userId = session.user.id;
+
+  /*
+    本物の税理士（社外）と、事業所の人が「税理士として操作」しているとき。
+    **どちらも同じ絞り込みを通す。** 別経路を作ると、片方だけ直して
+    もう片方が漏れる、という形の事故になる。
+  */
+  const asAdvisor = isExternalRole(role) || (await isViewingAsAdvisorHere(role));
+  if (!asAdvisor) {
+    return { role, userId, clientIds: null };
   }
 
   const rows = await prisma.advisorClient.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
     select: { clientId: true },
   });
-  return { role, userId: session.user.id, clientIds: rows.map((r) => r.clientId) };
+  return {
+    role,
+    userId,
+    clientIds: rows.map((r) => r.clientId),
+    // 事業所の人が税理士の立場で操作しているか（記録の残し方が変わる）
+    actingAsAdvisor: !isExternalRole(role),
+  };
+}
+
+/**
+ * 「税理士として操作」に切り替えているか。
+ *
+ * 判定の中身はミドルウェアと共有する（`auth.config.ts`）。
+ * **2か所に別々の条件を書かない** ―― 片方だけ直したときに、
+ * 画面は絞られているのにAPIは絞られていない、という形の穴になる。
+ */
+async function isViewingAsAdvisorHere(role: string): Promise<boolean> {
+  const store = await cookies();
+  return isViewingAsAdvisor(role, store);
 }
 
 /**

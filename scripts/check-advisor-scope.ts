@@ -22,7 +22,8 @@ import {
   isFilePathAllowed,
   type ClientScope,
 } from "@/lib/advisor";
-import { isAllowedForExternal } from "@/lib/auth.config";
+import { isAllowedForExternal, isViewingAsAdvisor } from "@/lib/auth.config";
+import { VIEW_COOKIE, VIEW_AS_ADVISOR } from "@/lib/roles";
 import { roleFromHub, isExternalRole, ADMIN_AREA_ROLES } from "@/lib/roles";
 
 const TMP_FOLDER = "check-advisor-folder";
@@ -92,6 +93,26 @@ function checkGate() {
   }
 }
 
+/** ②' 兼任（事業所の人が「税理士として操作」する）の切り替え条件 */
+function checkAdvisorHat() {
+  console.log("\n=== ②' 兼任の切り替えが効く相手 ===");
+  const 立っている = { get: (n: string) => (n === VIEW_COOKIE ? { value: VIEW_AS_ADVISOR } : undefined) };
+  const 無し = { get: () => undefined };
+
+  check("管理者は切り替えられる", isViewingAsAdvisor("admin", 立っている), true);
+  check("指導者は切り替えられる", isViewingAsAdvisor("instructor", 立っている), true);
+  // 利用者に効かせない。効かせると、戻す画面にも入れず自力で抜け出せなくなる
+  check("利用者には効かない", isViewingAsAdvisor("user_a", 立っている), false);
+  check("旧B型にも効かない", isViewingAsAdvisor("user_b", 立っている), false);
+  check("役割が空なら効かない", isViewingAsAdvisor("", 立っている), false);
+  check("cookie が無ければ効かない", isViewingAsAdvisor("admin", 無し), false);
+  check(
+    "別の値なら効かない",
+    isViewingAsAdvisor("admin", { get: () => ({ value: "なにか別の値" }) }),
+    false
+  );
+}
+
 /** ③ 得意先の判定（純粋な部分） */
 function checkClientPredicate() {
   console.log("\n=== ③ 得意先の判定 ===");
@@ -153,6 +174,7 @@ async function checkAgainstRealData() {
 async function main() {
   checkRoleMapping();
   checkGate();
+  checkAdvisorHat();
   checkClientPredicate();
   await checkAgainstRealData();
 

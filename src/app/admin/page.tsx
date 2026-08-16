@@ -729,37 +729,55 @@ export default function AdminPage() {
       </div>
 
       {/*
-        税理士（社外）の担当得意先。
-        税理士アカウントが1つも無ければ出さない ―― 使わない設定を常に見せない。
+        税理士が見る得意先。**同じ表に2つの意味が並ぶ**ので、行ごとに書き分ける。
+          税理士（社外）        … 見える得意先そのもの
+          管理者・指導者（社内）… 「税理士として操作」に切り替えたときに見る得意先
       */}
       {advisors.length > 0 && (
         <div className="bg-white border rounded-xl overflow-hidden">
           <div className="flex items-center gap-2 px-6 py-4 border-b bg-gray-50">
             <Building2 className="h-5 w-5 text-gray-400" />
             <h2 className="text-lg font-semibold text-gray-900">
-              税理士が見る得意先（{advisors.length}名）
+              税理士が見る得意先
             </h2>
           </div>
 
           <div className="px-6 py-4 bg-indigo-50/50 border-b border-indigo-100">
             <p className="text-sm text-indigo-900">
-              税理士は<strong>社外の方</strong>です。ここでチェックを入れた得意先の書類・仕訳だけが見えます。
+              チェックを入れた得意先の書類・仕訳だけが見えるようになります。
             </p>
             <p className="text-xs text-indigo-700 mt-1">
-              1つもチェックが無い場合、その税理士には何も見えません。得意先が設定されていないフォルダも見えません。
+              1つもチェックが無いと何も見えません。得意先が設定されていないフォルダも見えません。
             </p>
           </div>
 
           <div className="divide-y">
-            {advisors.map((advisor) => (
+            {advisors.map((advisor) => {
+              const isOutside = advisor.role === "tax_advisor";
+              return (
               <div key={advisor.id} className="px-6 py-4">
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
                   <span className="font-medium text-gray-900">{advisor.name}</span>
                   <span className="text-sm text-gray-500">{advisor.email}</span>
+                  <span
+                    className={cn(
+                      "text-xs px-2 py-0.5 rounded-full border",
+                      isOutside
+                        ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                        : "bg-gray-50 text-gray-600 border-gray-200"
+                    )}
+                  >
+                    {isOutside ? "税理士（社外）" : ROLE_LABELS[advisor.role] || advisor.role}
+                  </span>
                   {savingAdvisor === advisor.id && (
                     <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
                   )}
                 </div>
+                <p className="text-xs text-gray-500 mb-3">
+                  {isOutside
+                    ? "この方に見える得意先です。"
+                    : "「税理士として操作」に切り替えたときだけ、この得意先に絞られます。普段の見え方は変わりません。"}
+                </p>
 
                 {clientOptions.length === 0 ? (
                   <p className="text-sm text-gray-500">
@@ -793,7 +811,8 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
