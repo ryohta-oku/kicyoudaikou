@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Check, MessageSquareWarning, Loader2, FileText, CircleCheck, Download } from "lucide-react";
+import { Check, MessageSquareWarning, Loader2, CircleCheck, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { EntryImageSource } from "@/lib/entry-image";
+import PdfPageCanvas from "@/components/PdfPageCanvas";
 
 export interface ReviewRow {
   id: string;
@@ -371,14 +372,16 @@ function Thumbnail({ image, alt }: { image: EntryImageSource; alt: string }) {
   }
 
   if (image.kind === "pdf") {
-    // PDFにはページごとの画像が無いので、いまはアイコンで示す。
-    // ブラウザで画像化して並べるのは次の段階
+    // PDFにはページごとの画像が無いので、その場で描く
     return (
-      <div className={cn(box, "flex-col gap-1 text-gray-500")}>
-        <FileText className="w-7 h-7 text-teal-600" />
-        <span className="text-[10px]">
-          PDF{image.pageNumber ? ` ${image.pageNumber}ページ` : ""}
-        </span>
+      <div className={box}>
+        <PdfPageCanvas
+          src={image.src}
+          pageNumber={image.pageNumber ?? 1}
+          maxWidth={80}
+          className="w-full h-full"
+          label={`PDF ${image.pageNumber ?? 1}ページ`}
+        />
       </div>
     );
   }
@@ -416,9 +419,12 @@ function Enlarged({
             unoptimized
           />
         ) : (
-          <div className="w-[420px] h-[520px]">
-            <iframe src={image.src} className="w-full h-full rounded" title={alt} />
-          </div>
+          <PdfPageCanvas
+            src={image.src}
+            pageNumber={image.pageNumber ?? 1}
+            maxWidth={420}
+            label={`PDF ${image.pageNumber ?? 1}ページ`}
+          />
         )}
       </div>
     </div>

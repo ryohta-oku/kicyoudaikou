@@ -404,8 +404,17 @@ export default function OCREditor({
           </div>
           <div className="p-4">
             {isPdf ? (
+              /*
+                **`#page=N` を付ける。** これが無いと、何ページ目を選んでも
+                1ページ目が表示される。見出しには「ページ2」と出ているのに
+                中身は1ページ目、という状態だった。
+
+                key にページ番号を入れているのは、同じ src のまま fragment だけ
+                変えても iframe が読み直さないため。
+              */
               <iframe
-                src={`/api/files?path=${encodeURIComponent(documentFilepath)}`}
+                key={currentPage.pageNumber}
+                src={`/api/files?path=${encodeURIComponent(documentFilepath)}#page=${currentPage.pageNumber}`}
                 className="w-full border rounded"
                 style={{ height: "600px" }}
                 title={`PDF ページ ${currentPage.pageNumber}`}

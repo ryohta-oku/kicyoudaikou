@@ -58,3 +58,6 @@ next-env.d.ts
 .claude/
 test-screenshots/
 public/test-images/
+
+# pdf.js のワーカー。scripts/copy-pdf-worker.mjs が npm install / build のたびに置く
+/public/pdf.worker.min.mjs

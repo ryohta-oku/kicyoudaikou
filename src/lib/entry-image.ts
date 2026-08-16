@@ -26,12 +26,26 @@ export type EntryImageSource =
     }
   | {
       kind: "pdf";
-      /** iframe / embed に渡すURL。`#page=N` 付き */
+      /**
+       * PDF本体のURL。**`#page=` は付けない。**
+       * canvas に描くときはページ番号を別で渡し、iframe で開くときだけ
+       * `pdfHref()` で付ける。
+       */
       src: string;
       /** PDF内の何ページ目か（1始まり）。分からなければ null */
       pageNumber: number | null;
     }
   | { kind: "none" };
+
+/**
+ * iframe / 新しいタブで開くときのURL。
+ *
+ * `#page=N` を付けないと、何ページ目を選んでも1ページ目が表示される
+ * （既存の OCR確認・仕訳確認の画面はその状態だった）。
+ */
+export function pdfHref(src: string, pageNumber: number | null): string {
+  return pageNumber ? `${src}#page=${pageNumber}` : src;
+}
 
 export interface EntryImageInput {
   /** 仕訳が指しているページ。null なら書類の先頭ページを使う */
@@ -59,16 +73,11 @@ export function resolveEntryImage(input: EntryImageInput): EntryImageSource {
     return { kind: "image", src: fileUrl(page.imagePath), pageNumber };
   }
 
-  /*
-    PDF。**ページ番号を `#page=N` で渡す。**
-    これが無いと、何ページ目を選んでも1ページ目が表示される
-    （既存の OCR確認・仕訳確認の画面はその状態になっている）。
-  */
+  // PDF。本体のURLとページ番号を返し、描き方は呼び出し側に任せる
   if (fileType === "pdf" || pathIsPdf) {
-    const base = fileUrl(page && pathIsPdf ? page.imagePath : filepath);
     return {
       kind: "pdf",
-      src: pageNumber ? `${base}#page=${pageNumber}` : base,
+      src: fileUrl(page && pathIsPdf ? page.imagePath : filepath),
       pageNumber,
     };
   }
