@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { getEffectiveRole, getEffectiveUserId, getEffectiveUserName, SIMULATION_PERSONAS } from "@/lib/roleSimulation";
 import { isExternalRole } from "@/lib/roles";
+import { EXPORT_FORMATS, downloadExport, type ExportFormat } from "@/lib/export-download";
 import {
   FileText,
   ArrowLeft,
@@ -798,31 +799,16 @@ export default function FolderDetailPage({
     }
   };
 
-  const handleFolderExport = async (format: "generic" | "yayoi" | "freee") => {
+  const handleFolderExport = async (format: ExportFormat) => {
     setExporting(true);
     try {
-      const res = await fetch("/api/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderId: id, format }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "エクスポートに失敗しました");
+      const error = await downloadExport({ folderId: id, format });
+      if (error) {
+        alert(error);
+        return;
       }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = window.document.createElement("a");
-      a.href = url;
-      a.download = `journal_entries_${format}.csv`;
-      window.document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      a.remove();
       setShowFormatPicker(false);
       await fetchFolder();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "エクスポートに失敗しました");
     } finally {
       setExporting(false);
     }
@@ -2891,21 +2877,20 @@ export default function FolderDetailPage({
               </span>
             )}
             {showFormatPicker && (
-              <div className="absolute bottom-full right-0 mb-2 bg-white rounded-xl shadow-2xl border p-3 w-56">
-                <p className="text-xs font-medium text-teal-700 mb-2">出力形式を選択</p>
+              <div className="absolute bottom-full right-0 mb-2 bg-white rounded-xl shadow-2xl border p-3 w-72">
+                <p className="text-xs font-medium text-teal-700 mb-2">
+                  税理士さんがお使いの会計ソフトを選んでください
+                </p>
                 <div className="space-y-1">
-                  {[
-                    { value: "generic" as const, label: "汎用CSV" },
-                    { value: "yayoi" as const, label: "弥生会計形式" },
-                    { value: "freee" as const, label: "freee形式" },
-                  ].map((opt) => (
+                  {EXPORT_FORMATS.map((opt) => (
                     <button
                       key={opt.value}
                       onClick={() => handleFolderExport(opt.value)}
                       disabled={exporting}
                       className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 rounded-lg transition-colors disabled:opacity-50"
                     >
-                      {opt.label}
+                      <span className="font-medium block">{opt.label}</span>
+                      <span className="text-xs text-gray-500 block">{opt.description}</span>
                     </button>
                   ))}
                 </div>

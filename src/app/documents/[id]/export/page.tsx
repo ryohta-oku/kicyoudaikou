@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Download, Loader2, FileSpreadsheet, CheckCircle } from "lucide-react";
 import Stepper, { WORKFLOW_STEPS } from "@/components/Stepper";
 import { cn } from "@/lib/utils";
+import { EXPORT_FORMATS, downloadExport, type ExportFormat } from "@/lib/export-download";
 
 interface Document {
   id: string;
@@ -13,31 +14,13 @@ interface Document {
   journalEntries: { id: string; isConfirmed: boolean }[];
 }
 
-type CSVFormat = "generic" | "yayoi" | "freee";
-
-const FORMAT_OPTIONS: { value: CSVFormat; label: string; description: string }[] = [
-  {
-    value: "generic",
-    label: "汎用CSV",
-    description: "どの会計ソフトにも取り込める一般的な形式",
-  },
-  {
-    value: "yayoi",
-    label: "弥生会計形式",
-    description: "弥生会計の仕訳日記帳に取り込める形式",
-  },
-  {
-    value: "freee",
-    label: "freee形式",
-    description: "freee会計に取り込める形式",
-  },
-];
+const FORMAT_OPTIONS = EXPORT_FORMATS;
 
 export default function ExportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedFormat, setSelectedFormat] = useState<CSVFormat>("generic");
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("mf");
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,30 +46,8 @@ export default function ExportPage({ params }: { params: Promise<{ id: string }>
     setExported(false);
 
     try {
-      const res = await fetch("/api/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documentId: id, format: selectedFormat }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        const code = data.code ? `[${data.code}] ` : "";
-        const detail = data.detail ? `\n詳細: ${data.detail}` : "";
-        throw new Error(`${code}${data.error || "エクスポートに失敗しました"}${detail}`);
-      }
-
-      // CSVをダウンロード
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = window.document.createElement("a");
-      a.href = url;
-      a.download = `journal_entries_${selectedFormat}.csv`;
-      window.document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      a.remove();
-
+      const failure = await downloadExport({ documentId: id, format: selectedFormat });
+      if (failure) throw new Error(failure);
       setExported(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "エクスポートに失敗しました");

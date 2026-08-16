@@ -31,6 +31,28 @@ model Company {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  /// レシートの相手科目（貸方）の既定値。
+  ///
+  /// **弥生・マネーフォワード・freee のいずれも貸方勘定科目が必須**で、
+  /// 空のままだと3社ともCSVを取り込めない。仕訳としても片側だけでは成立しない。
+  /// 「現金で払った」が既定だが、カード払い中心の顧問先では「未払金」になる。
+  /// 得意先ごとに違うので、ここに持つ。
+  defaultCreditAccountCode String @default("1111")
+  defaultCreditAccountName String @default("現金")
+
+  /// 登録番号（インボイスのT番号）が無い領収書に付けるインボイス区分。
+  ///
+  /// **日付から自動判定しない。** 仕入税額控除の経過措置は割合の切り替わり日が
+  /// 資料によって食い違う（マネーフォワードの案内は「70%控除＝2026年10月1日以降」、
+  /// 一般に知られている法令上の区分は「2026年10月1日から50%」）。
+  /// アプリが日付で決めると、どちらが正しくても黙って間違える側になる。
+  /// 設定値として画面に見える形にしておき、税理士に確認して直せるようにする。
+  ///
+  /// 空欄にしないのはマネーフォワードが空欄を「適格」とみなすため
+  /// （免税事業者の領収書が適格扱いになってしまう）。
+  /// 値: "適格" / "80%控除" / "70%控除" / "50%控除" / "30%控除" / "控除なし"
+  nonQualifiedInvoiceKind String @default("80%控除")
+
   folders        Folder[]
   subAccounts    SubAccount[]
   advisorClients AdvisorClient[]
@@ -132,6 +154,15 @@ model DocumentPage {
   tax                String @default("") // 消費税
   memo               String @default("") // メモ
 
+  /// 税率ごとの内訳（JSON配列）。軽減税率8%と標準税率10%が1枚に混ざるレシート用。
+  ///
+  /// 内訳を持たないと全額が片方の税率で記帳され、消費税額が合わなくなる
+  /// （税込1,302円・消費税112円の領収書を全額10%とすると118円になる）。
+  ///
+  /// 形: [{"rate":"8","amount":"378","tax":"28","items":"お茶、おにぎり"}, ...]
+  /// 税率が1種類だけの書類では空のまま（分ける意味が無いため）。
+  taxLines String @default("")
+
   /// この領収書に登録番号が「元から無い」ことを人が確認した印。
   /// 免税事業者や手書きの領収書では番号が存在しないため、これが無いと
   /// 登録番号のチェックが通らず確認完了できなかった。
@@ -179,6 +210,11 @@ model JournalEntry {
   debitAmount     Int      @default(0)  // 借方金額
   creditAmount    Int      @default(0)  // 貸方金額
   taxRate         String   @default("") // 税率区分
+
+  /// 相手科目（この仕訳の反対側）。空なら得意先の既定値を使う。
+  /// 同じ得意先でも「この1枚だけカード払い」があるので、仕訳ごとに上書きできる。
+  creditAccountCode String @default("")
+  creditAccountName String @default("")
   aiSuggested     Boolean  @default(false) // AI推測かどうか
   aiReasoning     String   @default("") // AIによる勘定科目選定理由
   isConfirmed     Boolean  @default(false) // 確認済みかどうか

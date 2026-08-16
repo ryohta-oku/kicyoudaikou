@@ -220,6 +220,8 @@ export async function POST(request: NextRequest) {
           registrationNumber: fields.registrationNumber,
           amount: fields.amount,
           tax: fields.tax,
+          // 税率が1種類なら空配列が返る。そのときは保存しない（従来どおり1仕訳）
+          taxLines: fields.taxLines.length > 0 ? JSON.stringify(fields.taxLines) : "",
           memo: fields.memo,
         },
       });

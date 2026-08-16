@@ -70,8 +70,8 @@ export async function classifyWithAI(ocrText: string): Promise<ParsedJournalEntr
 }
 
 ルール:
-- **1つの書類につき仕訳は必ず1件だけ出力する**（entries配列の要素は常に1つ）
-- 複数の明細や金額がある場合は、合計金額で1件にまとめる
+- **原則、1枚の書類につき仕訳は1件**。複数の明細や金額があっても合計金額で1件にまとめる
+- **ただし税率が混在する場合だけは、税率ごとに分ける**（下記「税率が混在する場合」を参照）
 - 日付が見つからない場合は空文字""にする
 - 金額は税込み総額を使用する。見つからない場合は0
 - reasoningには、なぜその勘定科目を選んだかを日本語1-2文で説明する
@@ -88,7 +88,17 @@ export async function classifyWithAI(ocrText: string): Promise<ParsedJournalEntr
   例: レシートの店名「スターバックス」→ subAccountName: "スターバックス"
   例: 請求書の発行元「株式会社ABC」→ subAccountName: "株式会社ABC"
   例: 領収書の宛先が「タクシー代」で店名が「日本交通」→ subAccountName: "日本交通"
-  マスターに該当する補助科目がある場合はそのコードと名前を使用し、なければsubAccountCodeは空文字でsubAccountNameだけ入力する。${accountMaster}`;
+  マスターに該当する補助科目がある場合はそのコードと名前を使用し、なければsubAccountCodeは空文字でsubAccountNameだけ入力する。
+
+税率が混在する場合:
+- 入力に「税率ごとの内訳」が付いているときは、**内訳の1件につき仕訳を1件ずつ**作る
+- 各仕訳の amount は、その内訳の対象額（税込）をそのまま使う。**勝手に足したり割ったりしない**
+- taxRate は内訳の税率に合わせる（10→課税10%、8→課税8%、0→非課税）
+- **勘定科目は、その税率に含まれる品目の内容で判断する。**
+  同じ領収書でも、飲食料品と事務用品では科目が変わる
+  例: お茶・おにぎり（8%）→ 会議費や福利厚生費 ／ コピー用紙・ボールペン（10%）→ 消耗品費
+- description には、その仕訳に含まれる品目が分かるように書く
+- 内訳が付いていないときは、従来どおり1件にまとめる${accountMaster}`;
 
   const response = await runClassify(
     systemPrompt,

@@ -6,6 +6,7 @@ import { Check, MessageSquareWarning, Loader2, CircleCheck, Download, ExternalLi
 import { cn } from "@/lib/utils";
 import { pdfHref, type EntryImageSource } from "@/lib/entry-image";
 import PdfPageCanvas from "@/components/PdfPageCanvas";
+import { EXPORT_FORMATS, downloadExport, type ExportFormat } from "@/lib/export-download";
 
 export interface ReviewRow {
   id: string;
@@ -35,11 +36,6 @@ export interface ReviewRow {
  * 重ねるのをやめたことで、card-glass の backdrop-filter が行ごとに
  * 重なりの文脈を作る問題（拡大が次の行に潜り込む）も原因ごと消えている。
  */
-const CSV_FORMATS = [
-  { value: "generic", label: "汎用CSV" },
-  { value: "yayoi", label: "弥生会計形式" },
-  { value: "freee", label: "freee形式" },
-] as const;
 
 export default function ReviewList({
   folderId,
@@ -99,29 +95,12 @@ export default function ReviewList({
     }
   };
 
-  const exportCsv = async (format: string) => {
+  const exportCsv = async (format: ExportFormat) => {
     if (readOnly) return refuse("footer");
     setExporting(true);
     try {
-      const res = await fetch("/api/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderId, format }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        alert(data.error || "書き出せませんでした");
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${folderName}_${format}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      URL.revokeObjectURL(url);
-      a.remove();
+      const error = await downloadExport({ folderId, format }, folderName);
+      if (error) alert(error);
     } finally {
       setExporting(false);
     }
@@ -311,7 +290,7 @@ export default function ReviewList({
               お使いの会計ソフトの形式でCSVを書き出せます。
             </p>
             <div className="flex flex-wrap gap-2">
-              {CSV_FORMATS.map((f) => (
+              {EXPORT_FORMATS.map((f) => (
                 <button
                   key={f.value}
                   onClick={() => exportCsv(f.value)}
