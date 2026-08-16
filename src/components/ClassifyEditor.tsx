@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Check, RotateCcw, Loader2, CircleCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { pdfPageHref } from "@/lib/entry-image";
 import Image from "next/image";
 import SubAccountCombobox from "./SubAccountCombobox";
 import GuideBubble from "./GuideBubble";
@@ -285,7 +286,7 @@ export default function ClassifyEditor({
               */
               <iframe
                 key={matchedPage?.pageNumber ?? 1}
-                src={`/api/files?path=${encodeURIComponent(documentFilepath)}#page=${matchedPage?.pageNumber ?? 1}`}
+                src={pdfPageHref(matchedPage?.imagePath, matchedPage?.pageNumber ?? 1, documentFilepath)}
                 className="w-full border rounded"
                 style={{ height: "600px" }}
                 title={`PDF ページ ${matchedPage?.pageNumber ?? 1}`}

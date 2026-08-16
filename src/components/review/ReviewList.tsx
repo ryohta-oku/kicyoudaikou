@@ -402,7 +402,7 @@ function Thumbnail({ image, alt }: { image: EntryImageSource; alt: string }) {
       <div className={box}>
         <PdfPageCanvas
           src={image.src}
-          pageNumber={image.pageNumber ?? 1}
+          pageNumber={image.pageInFile}
           maxWidth={80}
           className="w-full h-full"
           label={`PDF ${image.pageNumber ?? 1}ページ`}
@@ -448,7 +448,7 @@ function ReceiptPane({ row }: { row: ReviewRow | undefined }) {
           ) : image.kind === "pdf" ? (
             <PdfPageCanvas
               src={image.src}
-              pageNumber={image.pageNumber ?? 1}
+              pageNumber={image.pageInFile}
               /* 広めに描いて CSS で収める。幅が変わっても描き直さずに済む */
               maxWidth={700}
               className="w-full"
@@ -461,7 +461,7 @@ function ReceiptPane({ row }: { row: ReviewRow | undefined }) {
 
         {image.kind !== "none" && (
           <a
-            href={image.kind === "pdf" ? pdfHref(image.src, image.pageNumber) : image.src}
+            href={image.kind === "pdf" ? pdfHref(image.src, image.pageInFile) : image.src}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-2 inline-flex items-center gap-1.5 text-sm text-teal-700 hover:text-teal-900"

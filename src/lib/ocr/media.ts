@@ -159,7 +159,15 @@ export async function splitPdfPages(media: LoadedMedia): Promise<LoadedMedia[]> 
 
 /**
  * 既存のDocumentPageからメディアを読み込む（再読み取り系で使用）。
- * imagePath が .pdf の場合は元のDocumentのPDFを読む。
+ *
+ * ## ページ自身のファイルがあればそれを読む
+ *
+ * 複数ページPDFは取り込み時に1ページずつのPDFへ分けて保存している。
+ * **そのページだけをAIに渡せる。** 分けていなかった頃は元の全ページを
+ * 渡していたので、2ページ目の項目を読み直したいのに3ページ分が渡っていた。
+ *
+ * 分割前に取り込んだ古い行は `imagePath` が元のPDFを指しているので、
+ * 従来どおり元のPDFを読む（そちらは全ページ渡しのまま）。
  */
 export async function loadPageMedia(page: {
   imagePath: string;
@@ -167,6 +175,22 @@ export async function loadPageMedia(page: {
   documentId: string;
 }): Promise<LoadedMedia> {
   const isPdf = path.extname(page.imagePath).toLowerCase() === ".pdf";
+  const isOwnPageFile = page.imagePath.startsWith("/uploads/pages/");
+
+  if (isPdf && isOwnPageFile) {
+    const physicalPath = toPhysicalPath(page.imagePath);
+    try {
+      return mediaFromBuffer(await readFile(physicalPath), "application/pdf");
+    } catch {
+      // ディスクに無い → DBから復元
+    }
+    if (page.imageData) {
+      await mkdir(path.dirname(physicalPath), { recursive: true });
+      await writeFile(physicalPath, Buffer.from(page.imageData));
+      return mediaFromBuffer(await readFile(physicalPath), "application/pdf");
+    }
+    // どちらも無ければ、元のPDF（全ページ）に落とす
+  }
 
   if (isPdf) {
     const document = await prisma.document.findUnique({

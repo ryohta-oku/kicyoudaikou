@@ -86,6 +86,13 @@ export async function POST(request: NextRequest) {
     let ocrPages!: OcrFields[];
     let imagePath!: string;
     let imageData: Uint8Array<ArrayBuffer> | null = null;
+    /**
+     * 複数ページPDFを1ページずつのPDFとして保存したときの、ページごとのファイル。
+     *
+     * **1ページ＝1レシート＝1ファイル**にしておくと、あとで
+     * 「元のPDFの何ページ目か」を数えなくてよくなる。
+     */
+    let pdfPageFiles: { imagePath: string; data: Uint8Array<ArrayBuffer> }[] = [];
 
     if (document.fileType === "pdf") {
       // === PDF: そのままAIに送信（1回のAPI呼び出し） ===
@@ -114,7 +121,35 @@ export async function POST(request: NextRequest) {
           }
           ocrPages.push(fields);
         }
+
         imagePath = document.filepath;
+
+        /*
+          分割したPDFを**捨てずに残す。**
+
+          これまでは全ページが元のPDFを指していたので、レシートを1枚見せるたびに
+          「元のPDFの何ページ目か」を数える必要があった。何ページ目を選んでも
+          1ページ目が出る、という不具合はそこから来ていた。
+
+          1ページ＝1ファイルにしておけば数えなくてよい。再読み取りのときに
+          そのページだけをAIに渡せるようにもなる（従来は全ページ渡していた）。
+
+          1ページしかないPDFは分ける意味がないので、元のファイルのまま。
+        */
+        if (pageMedias.length > 1) {
+          const pagesDir = path.join(getUploadBaseDir(), "pages", documentId);
+          await mkdir(pagesDir, { recursive: true });
+          for (let i = 0; i < pageMedias.length; i++) {
+            const buf = Buffer.from(pageMedias[i].base64, "base64");
+            const name = `page_${i + 1}.pdf`;
+            await writeFile(path.join(pagesDir, name), buf);
+            pdfPageFiles.push({
+              imagePath: `/uploads/pages/${documentId}/${name}`,
+              // ディスクが飛んでも配れるようにDBにも持つ（/api/files が拾う）
+              data: new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength),
+            });
+          }
+        }
       }
     }
     if (document.fileType !== "pdf") {
@@ -169,13 +204,16 @@ export async function POST(request: NextRequest) {
     const createdPages = [];
     for (let i = 0; i < ocrPages.length; i++) {
       const fields = ocrPages[i];
+      // 分割したPDFがあれば、そのページ自身のファイルを指す
+      const own = pdfPageFiles[i];
       const created = await prisma.documentPage.create({
         data: {
           documentId,
           pageNumber: i + 1,
-          imagePath,
-          // 画像データは1ページ目にのみ保持する（同じ画像の重複保存を避ける）
-          imageData: i === 0 ? imageData : null,
+          imagePath: own?.imagePath ?? imagePath,
+          // 画像データは1ページ目にのみ保持する（同じ画像の重複保存を避ける）。
+          // 分割PDFはページごとに別物なので、それぞれ持つ
+          imageData: own ? own.data : i === 0 ? imageData : null,
           ocrText: fields.ocrText,
           correctedText: fields.ocrText,
           date: fields.date,

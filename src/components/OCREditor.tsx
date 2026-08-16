@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Check, RotateCcw, Loader2, CircleCheck, Sparkles, RefreshCw, Pencil, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { pdfPageHref } from "@/lib/entry-image";
 import GuideBubble from "@/components/GuideBubble";
 import DateInput, { isValidDateValue } from "@/components/DateInput";
 import Image from "next/image";
@@ -414,7 +415,7 @@ export default function OCREditor({
               */
               <iframe
                 key={currentPage.pageNumber}
-                src={`/api/files?path=${encodeURIComponent(documentFilepath)}#page=${currentPage.pageNumber}`}
+                src={pdfPageHref(currentPage.imagePath, currentPage.pageNumber, documentFilepath)}
                 className="w-full border rounded"
                 style={{ height: "600px" }}
                 title={`PDF ページ ${currentPage.pageNumber}`}
