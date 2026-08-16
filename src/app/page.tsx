@@ -23,6 +23,7 @@ import {
   Clock,
   Timer,
   Pencil,
+  BookOpen,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
@@ -530,16 +531,31 @@ export default function DashboardPage() {
         Step1・2はスキャナー側の作業なので押せない。Step3だけを実際の入口にする。
       */}
       <div className="card-glass rounded-xl p-4 md:p-5">
-        <h3 className="text-base font-semibold text-foreground mb-3">
-          紙の書類をパソコンに入れる流れ
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 className="text-base font-semibold text-foreground">
+            紙の書類をパソコンに入れる流れ
+          </h3>
+          {/*
+            Step1・2はスキャナー側の作業で、ここには4語しか書けない。
+            **初めての人はそこで止まる**ので、詳しい説明書への入口を必ず置く。
+          */}
+          <Link
+            href="/guide"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+          >
+            <BookOpen className="w-4 h-4" />
+            はじめての方へ（くわしい手順）
+          </Link>
+        </div>
         <div className="grid grid-cols-4 gap-2 md:gap-4">
           {[
-            { icon: FileStack, label: "紙をスキャナーにセット", step: 1 },
-            { icon: Play, label: "ScanSnapのボタンでPDFにする", step: 2 },
+            // Step1・2はスキャナー側の作業。押せないままにせず、説明書の
+            // 該当箇所へ飛ばす ―― ここで止まる人がいちばん多い
+            { icon: FileStack, label: "紙をスキャナーにセット", step: 1, guide: "#step-1" },
+            { icon: Play, label: "ScanSnapのボタンでPDFにする", step: 2, guide: "#step-2" },
             { icon: Upload, label: "できたPDFをこの画面に入れる", step: 3, action: true },
-            { icon: MousePointerClick, label: "あとは吹き出しの通りに進める", step: 4 },
-          ].map(({ icon: Icon, label, step, action }) => {
+            { icon: MousePointerClick, label: "あとは吹き出しの通りに進める", step: 4, guide: "#step-4" },
+          ].map(({ icon: Icon, label, step, action, guide }) => {
             const content = (
               <>
                 <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-teal-100 flex items-center justify-center">
@@ -556,12 +572,14 @@ export default function DashboardPage() {
 
             if (!action) {
               return (
-                <div
+                <Link
                   key={step}
-                  className="flex flex-col items-center text-center gap-1.5 p-2 md:p-3 rounded-lg bg-teal-50/50"
+                  href={`/guide${guide ?? ""}`}
+                  className="flex flex-col items-center text-center gap-1.5 p-2 md:p-3 rounded-lg bg-teal-50/50 hover:bg-teal-100 transition-colors"
                 >
                   {content}
-                </div>
+                  <span className="text-[11px] text-teal-700">やり方を見る</span>
+                </Link>
               );
             }
 

@@ -133,3 +133,47 @@ body {
 .bg-teal-950 :where(button, a, [role="button"]):focus-visible {
   outline-color: #ffffff;
 }
+
+/*
+ * 説明書を紙で配れるようにする。
+ *
+ * 就労支援の現場では、画面を見ながらより**手元に紙を置いて**進めたい人がいる。
+ * ブラウザの印刷をそのまま使い、独自のPDF生成は持たない。
+ *
+ * - 画面用の飾り（半透明ガラス・影・グラデーション）は紙だとインクを食うだけ
+ * - 章の途中で改ページされると読めなくなるので、章は割らない
+ * - リンク先のURLは紙では追えないので出さない
+ */
+@media print {
+  header,
+  nav,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .card-glass {
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+    border: 1px solid #d1d5db !important;
+    /* 章の途中で紙が変わらないようにする */
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  figure,
+  ol,
+  table {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

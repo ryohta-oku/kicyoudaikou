@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { FileText, Home, Settings, Building2, Shield, LogOut, Menu, User, ShieldCheck, X, Eye, Clock, Users, ExternalLink, FileCheck2 } from "lucide-react";
+import { FileText, Home, Settings, Building2, Shield, LogOut, Menu, User, ShieldCheck, X, Eye, Clock, Users, ExternalLink, FileCheck2, BookOpen } from "lucide-react";
 import { getSelectedClientId, setSelectedClientId } from "@/lib/client";
 import { getSimulatedRole, setSimulatedRole, getSimulatedUser, setSimulatedUser, SIMULATION_PERSONAS } from "@/lib/roleSimulation";
 import ClientSelector from "@/components/ClientSelector";
@@ -42,6 +42,9 @@ export default function Header() {
 
   const navItems = [
     { href: "/", label: "ダッシュボード", icon: Home },
+    // 迷ったときにどの画面からでも戻れるよう、常に出す。
+    // 説明書は「探して見つける」ものではなく「いつでもそこにある」もの
+    { href: "/guide", label: "使い方", icon: BookOpen },
     { href: "/worklogs", label: "工数管理", icon: Clock },
     { href: "/accounts", label: "勘定科目管理", icon: Settings },
     { href: "/clients", label: "得意先管理", icon: Building2 },
