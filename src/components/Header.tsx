@@ -5,10 +5,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { FileText, Home, Settings, Building2, Shield, LogOut, Menu, User, ShieldCheck, X, Eye, Clock, Users, ExternalLink } from "lucide-react";
+import { FileText, Home, Settings, Building2, Shield, LogOut, Menu, User, ShieldCheck, X, Eye, Clock, Users, ExternalLink, FileCheck2 } from "lucide-react";
 import { getSelectedClientId, setSelectedClientId } from "@/lib/client";
 import { getSimulatedRole, setSimulatedRole, getSimulatedUser, setSimulatedUser, SIMULATION_PERSONAS } from "@/lib/roleSimulation";
 import ClientSelector from "@/components/ClientSelector";
+import { VIEW_COOKIE, VIEW_AS_ADVISOR } from "@/lib/roles";
 
 /**
  * 管理者が動作を確かめるための切り替え。
@@ -35,6 +36,8 @@ export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [simulatedValue, setSimulatedValue] = useState<string>("");
+  /** 「税理士として操作」に切り替えられる人か（担当得意先を持っている） */
+  const [canActAsAdvisor, setCanActAsAdvisor] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const navItems = [
@@ -58,6 +61,29 @@ export default function Header() {
       }
     }
   }, [status]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    fetch("/api/account")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setCanActAsAdvisor(!!data?.canActAsAdvisor))
+      .catch(() => {
+        // 取れなければボタンを出さないだけ
+      });
+  }, [status]);
+
+  /**
+   * 税理士の立場に切り替える。
+   *
+   * cookie を立てるだけ。**サーバー側では「要求」として扱われ、制限する方向に
+   * しか効かない** ―― 担当得意先を持たない人が立てても、見えるものが空になる。
+   * 戻すのは確認画面のバナーから（管理画面には入れなくなるため）。
+   */
+  const switchToAdvisor = () => {
+    document.cookie = `${VIEW_COOKIE}=${VIEW_AS_ADVISOR}; path=/`;
+    // cookie を見て組み立て直す必要があるので、ページごと遷移させる
+    window.location.href = "/review";
+  };
 
   const handleRoleSimulation = (value: string) => {
     const option = ROLE_VIEW_OPTIONS.find((o) => o.value === value);
@@ -145,7 +171,7 @@ export default function Header() {
                 variant="header"
               />
 
-              {/* ロール切替（管理者のみ） */}
+              {/* ロール切替（管理者のみ）。**表示を変えるだけ** */}
               {session.user.role === "admin" && (
                 <div className="flex items-center gap-1.5">
                   <Eye className="h-3.5 w-3.5 text-teal-400" />
@@ -164,6 +190,23 @@ export default function Header() {
                     ))}
                   </select>
                 </div>
+              )}
+
+              {/*
+                税理士として操作する。**上の「〜として表示」とは別物なので、
+                同じ選択肢に並べない。** あちらは表示を変えるだけだが、
+                こちらは本物の操作で、押したことが記録に残る。
+                同じ場所に並べると、その違いが伝わらない。
+              */}
+              {canActAsAdvisor && (
+                <button
+                  onClick={switchToAdvisor}
+                  className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 transition-colors"
+                  title="税理士の立場で仕訳を確認します。記録には「（税理士として）」と残ります"
+                >
+                  <FileCheck2 className="h-3.5 w-3.5" />
+                  税理士として確認
+                </button>
               )}
 
               <nav className="flex items-center gap-1">
