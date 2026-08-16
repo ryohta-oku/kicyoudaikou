@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Check, RotateCcw, Loader2, CircleCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { pdfPageHref } from "@/lib/entry-image";
 import Image from "next/image";
 import SubAccountCombobox from "./SubAccountCombobox";
 import GuideBubble from "./GuideBubble";
@@ -275,11 +276,20 @@ export default function ClassifyEditor({
           </div>
           <div className="p-4">
             {isPdf ? (
+              /*
+                **`#page=N` を付ける。** これが無いと、どの仕訳を選んでも
+                1ページ目が表示される。3ページのPDFで2件目・3件目の仕訳を
+                見ているのに、証憑は1ページ目のまま、という状態だった。
+
+                key にページ番号を入れているのは、同じ src のまま fragment だけ
+                変えても iframe が読み直さないため。
+              */
               <iframe
-                src={`/api/files?path=${encodeURIComponent(documentFilepath)}`}
+                key={matchedPage?.pageNumber ?? 1}
+                src={pdfPageHref(matchedPage?.imagePath, matchedPage?.pageNumber ?? 1, documentFilepath)}
                 className="w-full border rounded"
                 style={{ height: "600px" }}
-                title="PDF"
+                title={`PDF ページ ${matchedPage?.pageNumber ?? 1}`}
               />
             ) : matchedPage ? (
               <div className="overflow-auto max-h-[600px]">

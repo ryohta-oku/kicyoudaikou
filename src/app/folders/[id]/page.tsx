@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { getEffectiveRole, getEffectiveUserId, getEffectiveUserName, SIMULATION_PERSONAS } from "@/lib/roleSimulation";
+import { isExternalRole } from "@/lib/roles";
+import { EXPORT_FORMATS, downloadExport, type ExportFormat } from "@/lib/export-download";
 import {
   FileText,
   ArrowLeft,
@@ -63,6 +65,31 @@ interface JournalEntryData {
   aiReasoning: string;
   isConfirmed: boolean;
   duplicateDismissed: boolean;
+  /**
+   * 税理士がその場で直した記録。新しい順。
+   * **利用者さんが「ここはこうするんだ」と学べるように見せる。**
+   */
+  revisions?: EntryRevisionData[];
+}
+
+interface EntryRevisionData {
+  changedByName: string;
+  /** [{"field","label","before","after"}] のJSON文字列 */
+  changes: string;
+  createdAt: string;
+}
+
+/** 履歴のJSONを読む。壊れていれば空扱い（画面を落とさない） */
+function parseRevisionChanges(
+  raw: string
+): { label: string; before: string; after: string }[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 interface Document {
@@ -92,6 +119,8 @@ interface Page {
   amount: string;
   tax: string;
   memo: string;
+  /** この領収書に登録番号が「元から無い」と人が確認した印 */
+  noRegistrationNumber?: boolean;
 }
 
 interface FullDocument {
@@ -120,6 +149,9 @@ interface Folder {
   doubleCheckById: string;
   doubleCheckByName: string;
   doubleCheckAt: string | null;
+  /** 税理士の最終チェック。null / "pending" / "returned" / "approved" */
+  taxReviewStatus?: string | null;
+  taxReviewedByName?: string;
   needsDoubleCheck: boolean;
   documents: Document[];
 }
@@ -135,8 +167,14 @@ export default function FolderDetailPage({
   const userRole = getEffectiveRole(session?.user?.role || "");
   const effectiveUserId = getEffectiveUserId(session?.user?.role || "", session?.user?.id || "");
   const effectiveUserName = getEffectiveUserName(session?.user?.role || "", session?.user?.name || "");
-  // B型利用者は仕訳関連セクションを非表示
-  const canViewJournal = userRole !== "user_b";
+  /**
+   * 仕訳関連セクションを見せる相手。
+   *
+   * B型利用者には見せない。**税理士（社外）にも見せない** ―― この画面は
+   * 事業所の作業画面で、削除依頼の承認やエクスポートの入口も載っている。
+   * 税理士には専用の確認画面（`/review`）を用意する。
+   */
+  const canViewJournal = userRole !== "user_b" && !isExternalRole(userRole);
   const [folder, setFolder] = useState<Folder | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -181,6 +219,7 @@ export default function FolderDetailPage({
   const [doubleCheckCompleting, setDoubleCheckCompleting] = useState(false);
   /** ダブルチェック完了の連打よけ（成功時は画面遷移するので戻さない） */
   const doubleCheckSubmitting = useRef(false);
+  const [requestingTaxReview, setRequestingTaxReview] = useState(false);
   const [updatingNeedsDoubleCheck, setUpdatingNeedsDoubleCheck] = useState(false);
 
   /**
@@ -554,6 +593,26 @@ export default function FolderDetailPage({
   };
 
   /** ページデータ保存 */
+  /** 税理士に確認をお願いする */
+  const handleRequestTaxReview = async () => {
+    setRequestingTaxReview(true);
+    try {
+      const res = await fetch("/api/review/folder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId: id, action: "request" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "依頼できませんでした");
+        return;
+      }
+      await fetchFolder();
+    } finally {
+      setRequestingTaxReview(false);
+    }
+  };
+
   const handlePageUpdate = async (pageId: string, data: PageUpdateData) => {
     const res = await fetch("/api/ocr/pages", {
       method: "PATCH",
@@ -765,31 +824,16 @@ export default function FolderDetailPage({
     }
   };
 
-  const handleFolderExport = async (format: "generic" | "yayoi" | "freee") => {
+  const handleFolderExport = async (format: ExportFormat) => {
     setExporting(true);
     try {
-      const res = await fetch("/api/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderId: id, format }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "エクスポートに失敗しました");
+      const error = await downloadExport({ folderId: id, format });
+      if (error) {
+        alert(error);
+        return;
       }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = window.document.createElement("a");
-      a.href = url;
-      a.download = `journal_entries_${format}.csv`;
-      window.document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      a.remove();
       setShowFormatPicker(false);
       await fetchFolder();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "エクスポートに失敗しました");
     } finally {
       setExporting(false);
     }
@@ -1605,6 +1649,12 @@ export default function FolderDetailPage({
                         <td className="px-4 py-3 whitespace-nowrap text-gray-700">
                           {entry.accountName}
                           {entry.aiSuggested && !entry.isConfirmed && <span className="ml-1 text-xs text-yellow-600 bg-yellow-100 px-1 rounded">AI</span>}
+                          {/* 税理士が直したものは、ここで気づけるようにする */}
+                          {entry.revisions && entry.revisions.length > 0 && (
+                            <span className="ml-1 text-xs text-indigo-700 bg-indigo-100 border border-indigo-200 px-1 rounded">
+                              税理士修正
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-teal-700 text-xs">{entry.taxRate || "-"}</td>
                         <td className="px-4 py-3 text-center">
@@ -2678,6 +2728,57 @@ export default function FolderDetailPage({
                     </div>
                   </div>
 
+                  {/*
+                    税理士がどこをどう直したか。
+                    **利用者さんに向けて出す。** 何が違っていたのかが分かれば、
+                    次から同じ間違いが減る ―― これがこの記録のいちばんの目的。
+                  */}
+                  {detailEntry.revisions && detailEntry.revisions.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-medium text-indigo-700 mb-1">
+                        税理士さんが直したところ
+                      </h4>
+                      <div className="space-y-2">
+                        {detailEntry.revisions.map((rev, i) => {
+                          const changes = parseRevisionChanges(rev.changes);
+                          return (
+                            <div
+                              key={i}
+                              className="text-xs bg-indigo-50 border border-indigo-200 rounded-lg p-2.5"
+                            >
+                              <p className="text-indigo-900 font-medium mb-1">
+                                {rev.changedByName || "税理士"}
+                                <span className="ml-2 font-normal text-indigo-700">
+                                  {new Date(rev.createdAt).toLocaleString("ja-JP", {
+                                    year: "numeric",
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              </p>
+                              {changes.length === 0 ? (
+                                <p className="text-gray-600">（内容の記録がありません）</p>
+                              ) : (
+                                <ul className="space-y-0.5">
+                                  {changes.map((c, j) => (
+                                    <li key={j} className="text-gray-800">
+                                      <span className="text-gray-500">{c.label}:</span>{" "}
+                                      <span className="line-through text-gray-500">{c.before}</span>
+                                      {" → "}
+                                      <strong className="text-indigo-900">{c.after}</strong>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* AI分類理由 */}
                   {detailEntry.aiReasoning && (
                     <div>
@@ -2791,6 +2892,58 @@ export default function FolderDetailPage({
           A型のみになり引き継ぎ先が無い。**このボタンが AI仕訳分類の起動役も
           兼ねていた**ので、その呼び出しは handleDoubleCheckComplete に移した */}
 
+      {/*
+        税理士に確認をお願いする。最終確認までが済んだフォルダに出す。
+
+        **エクスポートより先に置く。** CSVを出すのは税理士さんが見たあと、
+        というのが本来の順序で、事業所が先に出してしまうと確認の意味が薄れる。
+        管理者・指導者には従来のエクスポートも残してあるので、
+        急ぎのときは自分で出せる。
+      */}
+      {canViewJournal &&
+        !hasUnresolvedAlerts &&
+        folder.documents.length > 0 &&
+        folder.documents.every((d) => d.status === "reviewed") &&
+        folder.taxReviewStatus !== "pending" &&
+        folder.taxReviewStatus !== "approved" && (
+          <div className="mb-6 card-glass rounded-xl p-4">
+            {folder.taxReviewStatus === "returned" ? (
+              <>
+                <p className="font-bold text-red-800 mb-1">税理士から差し戻されました</p>
+                <p className="text-sm text-gray-600 mb-3">
+                  仕訳確認の画面で、指摘のあった仕訳を直してから、もう一度お願いしてください。
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-gray-700 mb-3">
+                最終確認まで終わりました。税理士さんに見てもらいましょう。
+              </p>
+            )}
+            <button
+              onClick={handleRequestTaxReview}
+              disabled={requestingTaxReview}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold disabled:opacity-50"
+            >
+              {requestingTaxReview ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
+              税理士に確認を依頼する
+            </button>
+          </div>
+        )}
+
+      {/* 税理士に預けている間 */}
+      {canViewJournal && folder.taxReviewStatus === "pending" && (
+        <div className="mb-6 card-glass rounded-xl p-4">
+          <p className="font-bold text-foreground mb-1">税理士さんが確認しています</p>
+          <p className="text-sm text-gray-600">
+            確認が終わると、税理士さんの側でCSVが書き出されます。しばらくお待ちください。
+          </p>
+        </div>
+      )}
+
       {/* A型: フローティングCSVエクスポートボタン（アラート未解消時は非表示） */}
       {canViewJournal &&
         !hasUnresolvedAlerts &&
@@ -2806,21 +2959,20 @@ export default function FolderDetailPage({
               </span>
             )}
             {showFormatPicker && (
-              <div className="absolute bottom-full right-0 mb-2 bg-white rounded-xl shadow-2xl border p-3 w-56">
-                <p className="text-xs font-medium text-teal-700 mb-2">出力形式を選択</p>
+              <div className="absolute bottom-full right-0 mb-2 bg-white rounded-xl shadow-2xl border p-3 w-72">
+                <p className="text-xs font-medium text-teal-700 mb-2">
+                  税理士さんがお使いの会計ソフトを選んでください
+                </p>
                 <div className="space-y-1">
-                  {[
-                    { value: "generic" as const, label: "汎用CSV" },
-                    { value: "yayoi" as const, label: "弥生会計形式" },
-                    { value: "freee" as const, label: "freee形式" },
-                  ].map((opt) => (
+                  {EXPORT_FORMATS.map((opt) => (
                     <button
                       key={opt.value}
                       onClick={() => handleFolderExport(opt.value)}
                       disabled={exporting}
                       className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 rounded-lg transition-colors disabled:opacity-50"
                     >
-                      {opt.label}
+                      <span className="font-medium block">{opt.label}</span>
+                      <span className="text-xs text-gray-500 block">{opt.description}</span>
                     </button>
                   ))}
                 </div>

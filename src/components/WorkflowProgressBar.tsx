@@ -26,6 +26,8 @@ const STEPS_A_FULL: Step[] = [
   { id: "classify", label: "仕訳分類" },
   { id: "review", label: "仕訳確認" },
   { id: "final_review", label: "最終確認" },
+  /** 税理士に見てもらう工程。事業所の手は離れている */
+  { id: "tax_review", label: "税理士確認" },
   { id: "done", label: "完了" },
 ];
 
@@ -59,6 +61,7 @@ interface FolderInfo {
   handoffStatus: string | null;
   doubleCheckStatus: string | null;
   needsDoubleCheck: boolean;
+  taxReviewStatus?: string | null;
   documents: { status: string }[];
 }
 
@@ -71,7 +74,8 @@ const STEP_ORDER: Record<string, number> = {
   classify: 4,
   review: 5,
   final_review: 6,
-  done: 7,
+  tax_review: 7,
+  done: 8,
   handoff: 4, // B型の引き継ぎはダブルチェックの次
 };
 
@@ -104,7 +108,11 @@ function computeCurrentStep(folder: FolderInfo, isTypeB: boolean, pathname: stri
       folder.doubleCheckStatus === "completed" ? "classify" : "double_check";
   } else if (statuses.every((s) => s === "exported")) {
     statusStep = "done";
+  } else if (folder.taxReviewStatus === "pending") {
+    // 税理士に預けている間。事業所の手は離れている
+    statusStep = "tax_review";
   } else if (statuses.every((s) => s === "reviewed" || s === "exported")) {
+    // 差し戻されたときもここに戻る（直してもう一度依頼する）
     statusStep = "final_review";
   } else if (statuses.some((s) => s === "classified" || s === "reviewed")) {
     statusStep = "review";

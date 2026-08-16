@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Loader2, Trash2, Shield, Users, Eye, EyeOff, Pencil, UserPlus, Cpu, AlertTriangle, Check } from "lucide-react";
+import { Loader2, Trash2, Shield, Users, Eye, EyeOff, Pencil, UserPlus, Cpu, AlertTriangle, Check, Building2, FileSpreadsheet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UserInfo {
@@ -57,6 +57,7 @@ const ROLE_OPTIONS = [
   { value: "admin", label: "管理者" },
   { value: "instructor", label: "指導者" },
   { value: "user_a", label: "利用者" },
+  { value: "tax_advisor", label: "税理士（社外）" },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -64,6 +65,7 @@ const ROLE_LABELS: Record<string, string> = {
   instructor: "指導者",
   user_a: "利用者",
   user_b: "利用者（旧B型）",
+  tax_advisor: "税理士（社外）",
   user: "利用者", // 旧ロール互換
 };
 
@@ -72,8 +74,31 @@ const ROLE_COLORS: Record<string, string> = {
   instructor: "bg-green-50 text-green-700 border-green-200",
   user_a: "bg-teal-50 text-teal-700 border-teal-200",
   user_b: "bg-purple-50 text-purple-700 border-purple-200",
+  tax_advisor: "bg-indigo-50 text-indigo-700 border-indigo-200",
   user: "bg-gray-50 text-gray-600 border-gray-200",
 };
+
+interface AdvisorInfo {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  clientIds: string[];
+}
+
+interface ClientOption {
+  id: string;
+  name: string;
+}
+
+/** 得意先ごとのCSV出力設定 */
+interface ClientExportSetting {
+  id: string;
+  name: string;
+  defaultCreditAccountCode: string;
+  defaultCreditAccountName: string;
+  nonQualifiedInvoiceKind: string;
+}
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
@@ -92,6 +117,17 @@ export default function AdminPage() {
    * ボタンを**出さない**。API も 409 で断るが、押してから気づくのでは遅い
    */
   const [sharedLogin, setSharedLogin] = useState(false);
+
+  // 税理士（社外）の担当得意先
+  const [advisors, setAdvisors] = useState<AdvisorInfo[]>([]);
+  const [clientOptions, setClientOptions] = useState<ClientOption[]>([]);
+  const [savingAdvisor, setSavingAdvisor] = useState<string | null>(null);
+
+  // 得意先ごとのCSV出力設定
+  const [exportSettings, setExportSettings] = useState<ClientExportSetting[]>([]);
+  const [counterAccounts, setCounterAccounts] = useState<{ code: string; name: string }[]>([]);
+  const [invoiceKinds, setInvoiceKinds] = useState<string[]>([]);
+  const [savingExport, setSavingExport] = useState<string | null>(null);
 
   // パスワード表示/編集
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
@@ -139,6 +175,98 @@ export default function AdminPage() {
       setSharedLogin(Boolean(data.sharedLogin));
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * 税理士の担当得意先。
+   *
+   * 共通ログイン中でも取りに行く ―― 「どの得意先を見せるか」は記帳代行だけが
+   * 持つ情報で、Client Hub 側には無い。アカウント操作とは別の話。
+   */
+  const fetchAdvisors = async () => {
+    try {
+      const res = await fetch("/api/admin/advisor-clients");
+      if (!res.ok) return;
+      const data = await res.json();
+      setAdvisors(data.advisors || []);
+      setClientOptions(data.clients || []);
+    } catch {
+      // 取得失敗時はカードを出さない
+    }
+  };
+
+  useEffect(() => {
+    if (status === "authenticated" && isAdminOrInstructor) {
+      fetchAdvisors();
+    }
+  }, [status, isAdminOrInstructor]);
+
+  const fetchExportSettings = async () => {
+    try {
+      const res = await fetch("/api/admin/client-export-settings");
+      if (!res.ok) return;
+      const data = await res.json();
+      setExportSettings(data.clients || []);
+      setCounterAccounts(data.accounts || []);
+      setInvoiceKinds(data.invoiceKinds || []);
+    } catch {
+      // 取得失敗時はカードを出さない
+    }
+  };
+
+  useEffect(() => {
+    if (status === "authenticated" && isAdminOrInstructor) {
+      fetchExportSettings();
+    }
+  }, [status, isAdminOrInstructor]);
+
+  const saveExportSetting = async (
+    clientId: string,
+    patch: { creditAccountCode?: string; nonQualifiedInvoiceKind?: string }
+  ) => {
+    setSavingExport(clientId);
+    try {
+      const res = await fetch("/api/admin/client-export-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, ...patch }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage({ type: "error", text: data.error || "保存に失敗しました" });
+        return;
+      }
+      setExportSettings((prev) =>
+        prev.map((c) => (c.id === clientId ? { ...c, ...data.client } : c))
+      );
+    } finally {
+      setSavingExport(null);
+    }
+  };
+
+  const toggleAdvisorClient = async (advisor: AdvisorInfo, clientId: string) => {
+    const next = advisor.clientIds.includes(clientId)
+      ? advisor.clientIds.filter((c) => c !== clientId)
+      : [...advisor.clientIds, clientId];
+
+    setSavingAdvisor(advisor.id);
+    try {
+      const res = await fetch("/api/admin/advisor-clients", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: advisor.id, clientIds: next }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setMessage({ type: "error", text: data.error || "更新に失敗しました" });
+        return;
+      }
+      setAdvisors((prev) =>
+        prev.map((a) => (a.id === advisor.id ? { ...a, clientIds: next } : a))
+      );
+    } finally {
+      setSavingAdvisor(null);
     }
   };
 
@@ -657,6 +785,186 @@ export default function AdminPage() {
           </tbody>
         </table>
       </div>
+
+      {/*
+        税理士が見る得意先。**同じ表に2つの意味が並ぶ**ので、行ごとに書き分ける。
+          税理士（社外）        … 見える得意先そのもの
+          管理者・指導者（社内）… 「税理士として操作」に切り替えたときに見る得意先
+      */}
+      {advisors.length > 0 && (
+        <div className="bg-white border rounded-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-6 py-4 border-b bg-gray-50">
+            <Building2 className="h-5 w-5 text-gray-400" />
+            <h2 className="text-lg font-semibold text-gray-900">
+              税理士が見る得意先
+            </h2>
+          </div>
+
+          <div className="px-6 py-4 bg-indigo-50/50 border-b border-indigo-100">
+            <p className="text-sm text-indigo-900">
+              チェックを入れた得意先の書類・仕訳だけが見えるようになります。
+            </p>
+            <p className="text-xs text-indigo-700 mt-1">
+              1つもチェックが無いと何も見えません。得意先が設定されていないフォルダも見えません。
+            </p>
+          </div>
+
+          <div className="divide-y">
+            {advisors.map((advisor) => {
+              const isOutside = advisor.role === "tax_advisor";
+              return (
+              <div key={advisor.id} className="px-6 py-4">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span className="font-medium text-gray-900">{advisor.name}</span>
+                  <span className="text-sm text-gray-500">{advisor.email}</span>
+                  <span
+                    className={cn(
+                      "text-xs px-2 py-0.5 rounded-full border",
+                      isOutside
+                        ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                        : "bg-gray-50 text-gray-600 border-gray-200"
+                    )}
+                  >
+                    {isOutside ? "税理士（社外）" : ROLE_LABELS[advisor.role] || advisor.role}
+                  </span>
+                  {savingAdvisor === advisor.id && (
+                    <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mb-3">
+                  {isOutside ? (
+                    "この方に見える得意先です。"
+                  ) : advisor.clientIds.length === 0 ? (
+                    <>
+                      チェックを入れると、この方のヘッダーに
+                      <strong className="text-indigo-700">「税理士として確認」</strong>
+                      が出ます。普段の見え方は変わりません。
+                    </>
+                  ) : (
+                    "「税理士として確認」に切り替えたときだけ、この得意先に絞られます。普段の見え方は変わりません。"
+                  )}
+                </p>
+
+                {clientOptions.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    承認済みの得意先がまだありません。得意先を登録すると、ここで割り当てられます。
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {clientOptions.map((client) => {
+                      const checked = advisor.clientIds.includes(client.id);
+                      return (
+                        <label
+                          key={client.id}
+                          className={cn(
+                            "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm cursor-pointer transition-colors",
+                            checked
+                              ? "bg-indigo-50 border-indigo-300 text-indigo-800"
+                              : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={savingAdvisor === advisor.id}
+                            onChange={() => toggleAdvisorClient(advisor, client.id)}
+                            className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          {client.name}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/*
+        CSVを出したあとに手を入れなくて済むようにするための設定。
+        どちらも「無いと取り込めない・間違う」ものだけを置いている。
+      */}
+      {exportSettings.length > 0 && (
+        <div className="bg-white border rounded-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-6 py-4 border-b bg-gray-50">
+            <FileSpreadsheet className="h-5 w-5 text-gray-400" />
+            <h2 className="text-lg font-semibold text-gray-900">得意先ごとのCSV出力設定</h2>
+          </div>
+
+          <div className="px-6 py-4 bg-amber-50/60 border-b border-amber-100">
+            <p className="text-sm text-amber-900">
+              弥生会計・マネーフォワード・freee のどれに取り込む場合でも、この2つが要ります。
+            </p>
+            <p className="text-xs text-amber-800 mt-1">
+              決めかねるときは、税理士さんに確認してください。既定のままでも書き出せます。
+            </p>
+          </div>
+
+          <div className="divide-y">
+            {exportSettings.map((client) => (
+              <div key={client.id} className="px-6 py-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="font-medium text-gray-900">{client.name}</span>
+                  {savingExport === client.id && (
+                    <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <label className="block">
+                    <span className="block text-sm font-medium text-gray-700">
+                      レシートの相手科目（貸方）
+                    </span>
+                    <span className="block text-xs text-gray-500 mb-1">
+                      現金で払っているなら「現金」、カード払いが中心なら「未払金」
+                    </span>
+                    <select
+                      value={client.defaultCreditAccountCode}
+                      disabled={savingExport === client.id}
+                      onChange={(e) =>
+                        saveExportSetting(client.id, { creditAccountCode: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:opacity-50"
+                    >
+                      {counterAccounts.map((a) => (
+                        <option key={a.code} value={a.code}>
+                          {a.code}: {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="block text-sm font-medium text-gray-700">
+                      登録番号がない領収書のインボイス区分
+                    </span>
+                    <span className="block text-xs text-gray-500 mb-1">
+                      経過措置の割合は時期で変わります。空欄にすると「適格」扱いになるため、必ず選びます
+                    </span>
+                    <select
+                      value={client.nonQualifiedInvoiceKind}
+                      disabled={savingExport === client.id}
+                      onChange={(e) =>
+                        saveExportSetting(client.id, { nonQualifiedInvoiceKind: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:opacity-50"
+                    >
+                      {invoiceKinds.map((k) => (
+                        <option key={k} value={k}>
+                          {k}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* AIモデル設定（管理者のみ） */}
       {isAdmin && aiSettings && (

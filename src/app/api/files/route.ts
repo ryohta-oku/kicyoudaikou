@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import { prisma } from "@/lib/prisma";
 import { toPhysicalPath } from "@/lib/storage";
+import { getClientScope, isFilePathAllowed } from "@/lib/advisor";
 import path from "path";
 
 const MIME_TYPES: Record<string, string> = {
@@ -34,6 +35,19 @@ export async function GET(request: NextRequest) {
     // パストラバーサル対策
     if (filePath.includes("..") || !filePath.startsWith("/uploads/")) {
       return NextResponse.json({ error: "無効なパスです", code: "FILE_INVALID_PATH" }, { status: 400 });
+    }
+
+    /*
+      社外の人（税理士）には担当の得意先の証憑だけを渡す。
+      ここは id ではなくパスで引く口なので、パスから書類をたどって確かめる。
+      当てはまらない形のパスは渡さない（advisor.ts の判定を参照）。
+    */
+    const scope = await getClientScope();
+    if (!scope) {
+      return NextResponse.json({ error: "認証が必要です", code: "FILE_UNAUTHORIZED" }, { status: 401 });
+    }
+    if (!(await isFilePathAllowed(scope, filePath))) {
+      return NextResponse.json({ error: "権限がありません", code: "FILE_FORBIDDEN" }, { status: 403 });
     }
 
     const ext = path.extname(filePath).toLowerCase();

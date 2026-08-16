@@ -3,12 +3,14 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { rejectIfSharedLogin } from "@/lib/shared-login";
+import { ADMIN_AREA_ROLES } from "@/lib/roles";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "管理者",
   instructor: "指導者",
   user_a: "利用者（A型）",
   user_b: "利用者（B型）",
+  tax_advisor: "税理士",
   user: "利用者",
 };
 
@@ -28,8 +30,20 @@ export async function GET() {
       return NextResponse.json({ error: "ユーザーが見つかりません" }, { status: 404 });
     }
 
+    /*
+      「税理士として操作」に切り替えられる人か。
+
+      担当得意先の行を持っていること自体が印。役割を増やさずに済むし、
+      「誰が何を見られるか」の置き場所が1つに保たれる。
+      本物の税理士（社外）は常にその立場なので、切り替えは要らない。
+    */
+    const canActAsAdvisor =
+      ADMIN_AREA_ROLES.includes(user.role) &&
+      (await prisma.advisorClient.count({ where: { userId: user.id } })) > 0;
+
     return NextResponse.json({
       user: { ...user, roleLabel: ROLE_LABELS[user.role] || user.role },
+      canActAsAdvisor,
     });
   } catch (error) {
     console.error("Account fetch error:", error);

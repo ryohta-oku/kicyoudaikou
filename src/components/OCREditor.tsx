@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Check, RotateCcw, Loader2, CircleCheck, Sparkles, RefreshCw, Pencil, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { pdfPageHref } from "@/lib/entry-image";
 import GuideBubble from "@/components/GuideBubble";
 import DateInput, { isValidDateValue } from "@/components/DateInput";
 import Image from "next/image";
@@ -20,6 +21,7 @@ interface Page {
   amount: string;
   tax: string;
   memo: string;
+  noRegistrationNumber?: boolean;
 }
 
 interface OCREditorProps {
@@ -40,6 +42,8 @@ export interface PageUpdateData {
   amount: string;
   tax: string;
   memo: string;
+  /** この領収書に登録番号が「元から無い」と人が確認した印 */
+  noRegistrationNumber: boolean;
 }
 
 const CHECK_FIELDS = ["date", "registrationNumber", "amount", "tax"] as const;
@@ -72,6 +76,7 @@ export default function OCREditor({
         amount: p.amount || "",
         tax: p.tax || "",
         memo: p.memo || "",
+        noRegistrationNumber: !!p.noRegistrationNumber,
       };
     });
     return initial;
@@ -120,9 +125,38 @@ export default function OCREditor({
     }));
   };
 
+  /**
+   * 「この領収書に登録番号はありません」の切り替え。
+   *
+   * 入れたときは登録番号を空にする ―― 読み間違いが残ったまま「無い」と
+   * 記録されるのを防ぐため。同時に登録番号のチェックも付ける（人が
+   * 「無い」と判断した時点で、その項目は確認済みだから）。
+   */
+  const toggleNoRegistrationNumber = (pageId: string, next: boolean) => {
+    setEditedFields((prev) => ({
+      ...prev,
+      [pageId]: {
+        ...prev[pageId],
+        noRegistrationNumber: next,
+        ...(next ? { registrationNumber: "" } : {}),
+      },
+    }));
+    setCheckedFields((prev) => ({
+      ...prev,
+      [pageId]: { ...prev[pageId], registrationNumber: next },
+    }));
+  };
+
   const getPageData = (pageId: string): PageUpdateData => ({
     correctedText: editedTexts[pageId] || "",
-    ...(editedFields[pageId] || { date: "", registrationNumber: "", amount: "", tax: "", memo: "" }),
+    ...(editedFields[pageId] || {
+      date: "",
+      registrationNumber: "",
+      amount: "",
+      tax: "",
+      memo: "",
+      noRegistrationNumber: false,
+    }),
   });
 
   const handleSave = async (pageId: string) => {
@@ -165,6 +199,7 @@ export default function OCREditor({
           amount: page.amount || "",
           tax: page.tax || "",
           memo: page.memo || "",
+          noRegistrationNumber: !!page.noRegistrationNumber,
         },
       }));
     }
@@ -226,6 +261,7 @@ export default function OCREditor({
           amount: data.amount || prev[pageId]?.amount || "",
           tax: data.tax || prev[pageId]?.tax || "",
           memo: data.memo || prev[pageId]?.memo || "",
+          noRegistrationNumber: !!prev[pageId]?.noRegistrationNumber,
         },
       }));
       if (data.ocrText) {
@@ -253,7 +289,15 @@ export default function OCREditor({
   const checkedCount = CHECK_FIELDS.filter((f) => currentPageChecks[f]).length;
 
   const isPdf = documentFileType === "pdf";
-  const fields = editedFields[currentPage.id] || { date: "", registrationNumber: "", amount: "", tax: "", memo: "" };
+  const fields = editedFields[currentPage.id] || {
+    date: "",
+    registrationNumber: "",
+    amount: "",
+    tax: "",
+    memo: "",
+    noRegistrationNumber: false,
+  };
+  const noRegNumber = !!fields.noRegistrationNumber;
   const isDisabled = readOnly || confirmedPages[currentPage.id];
 
   // 上から順に最初の未チェックフィールドを特定
@@ -361,8 +405,17 @@ export default function OCREditor({
           </div>
           <div className="p-4">
             {isPdf ? (
+              /*
+                **`#page=N` を付ける。** これが無いと、何ページ目を選んでも
+                1ページ目が表示される。見出しには「ページ2」と出ているのに
+                中身は1ページ目、という状態だった。
+
+                key にページ番号を入れているのは、同じ src のまま fragment だけ
+                変えても iframe が読み直さないため。
+              */
               <iframe
-                src={`/api/files?path=${encodeURIComponent(documentFilepath)}`}
+                key={currentPage.pageNumber}
+                src={pdfPageHref(currentPage.imagePath, currentPage.pageNumber, documentFilepath)}
                 className="w-full border rounded"
                 style={{ height: "600px" }}
                 title={`PDF ページ ${currentPage.pageNumber}`}
@@ -454,14 +507,14 @@ export default function OCREditor({
                 label="登録番号"
                 value={fields.registrationNumber}
                 placeholder="T0000000000000"
-                disabled={isDisabled || !!currentPageChecks.registrationNumber}
+                disabled={isDisabled || noRegNumber || !!currentPageChecks.registrationNumber}
                 onChange={(v) => handleFieldChange(currentPage.id, "registrationNumber", v)}
                 checked={!!currentPageChecks.registrationNumber}
                 onCheck={() => toggleFieldCheck(currentPage.id, "registrationNumber")}
                 showCheck={!readOnly}
                 isGuideActive={activeField === "registrationNumber" && !activeFieldHasAlert}
                 guideStep={checkedCount + 1}
-                onReread={!readOnly && !isDoubleCheck ? () => handleRereadField(currentPage.id, "registrationNumber") : undefined}
+                onReread={!readOnly && !isDoubleCheck && !noRegNumber ? () => handleRereadField(currentPage.id, "registrationNumber") : undefined}
                 isRereading={!!rereadingFields[`${currentPage.id}:registrationNumber`]}
                 emptyHint="空欄です — AIで再読み取りしてください"
                 isConfirmed={isDisabled && !!currentPageChecks.registrationNumber}
@@ -471,13 +524,45 @@ export default function OCREditor({
                   if (!currentPageChecks.registrationNumber) toggleFieldCheck(currentPage.id, "registrationNumber");
                 } : undefined}
                 validationError={
-                  !fields.registrationNumber
-                    ? "登録番号を入力してください"
-                    : !/^T\d{13}$/.test(fields.registrationNumber)
-                      ? "T＋13桁の数字で入力してください"
-                      : undefined
+                  noRegNumber
+                    ? undefined
+                    : !fields.registrationNumber
+                      ? "登録番号を入力してください"
+                      : !/^T\d{13}$/.test(fields.registrationNumber)
+                        ? "T＋13桁の数字で入力してください"
+                        : undefined
                 }
               />
+              {/*
+                免税事業者や手書きの領収書には登録番号が無い。以前はこの場合
+                チェックが通らず、確認完了まで進めなかった（灰色のボタンを押して
+                初めて理由が分かる状態だった）。ここで「無い」と言えるようにする。
+
+                空欄のままにするのではなくフラグで持つのは、**読み取れなかっただけ**
+                なのか**元から無い**のかを、次に見る人が区別できるようにするため。
+              */}
+              {!readOnly && !isDoubleCheck && (
+                <label
+                  className={cn(
+                    "flex items-center gap-2 ml-11 -mt-1 text-sm w-fit",
+                    isDisabled ? "text-gray-400" : "text-gray-600 cursor-pointer"
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={noRegNumber}
+                    disabled={isDisabled}
+                    onChange={(e) => toggleNoRegistrationNumber(currentPage.id, e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                  />
+                  この領収書に登録番号はありません
+                </label>
+              )}
+              {isDoubleCheck && noRegNumber && (
+                <p className="ml-11 -mt-1 text-sm text-gray-600">
+                  この領収書に登録番号はありません（1回目の確認で記録）
+                </p>
+              )}
               {activeField === "registrationNumber" && activeFieldHasAlert && (() => {
                 const v = fields.registrationNumber;
                 const startsWithT = v.startsWith("T");

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { classifyWithAI, classifyText, parseOCRText } from "@/lib/classifier";
+import { normalizeTaxLines, type TaxLine } from "@/lib/ocr/schema";
 import { auth } from "@/lib/auth";
 import { getEffectiveRole } from "@/lib/roleSimulation";
 
@@ -52,6 +53,37 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(result.body, { status: result.status });
 }
 
+/** DBに入っている税率の内訳（JSON文字列）を読む。壊れていれば空扱い */
+function parseTaxLines(raw: string): TaxLine[] {
+  if (!raw) return [];
+  try {
+    return normalizeTaxLines(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+/** 税率の内訳をOCRテキストに添えて、AIが税率ごとに分けられるようにする */
+function withTaxLines(ocrText: string, lines: TaxLine[]): string {
+  const rows = lines
+    .map((l) => `- 税率${l.rate}% / 対象額（税込）${l.amount}円 / 消費税${l.tax || "不明"}円 / 品目: ${l.items || "不明"}`)
+    .join("\n");
+  return `${ocrText}\n\n---\n税率ごとの内訳（この数だけ仕訳を分けること）:\n${rows}`;
+}
+
+/**
+ * 分けた仕訳の合計が、読み取った税込合計と合っているか。
+ *
+ * **合わないものは分けない。** 片方の金額をAIが取り違えると、
+ * 合計が狂った仕訳が2件できてしまう。1件のまま人に見てもらうほうが安全。
+ */
+function sumMatches(items: { amount: number }[], pageAmount: string): boolean {
+  const total = Number(String(pageAmount).replace(/[^\d]/g, ""));
+  if (!total) return false;
+  const sum = items.reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
+  return sum === total;
+}
+
 async function runClassify(documentId: string): Promise<ClassifyResult> {
   try {
     const document = await prisma.document.findUnique({
@@ -97,14 +129,38 @@ async function runClassify(documentId: string): Promise<ClassifyResult> {
 
     for (const page of targetPages) {
       const pageText = page.correctedText || page.ocrText;
+      const taxLines = parseTaxLines(page.taxLines);
+
       try {
-        const result = await classifyWithAI(pageText);
-        // 1ページにつき仕訳は1件。複数返っても先頭のみ採用する。
-        perPageEntries.push({
-          pageId: page.id,
-          pageDate: page.date,
-          item: result[0] || null,
-        });
+        const result = await classifyWithAI(
+          taxLines.length > 0 ? withTaxLines(pageText, taxLines) : pageText
+        );
+
+        /*
+          **原則は1ページ1仕訳。** 束ねてスキャンした領収書が1件に合算される
+          事故を防ぐため、複数返っても先頭だけを採る。
+
+          例外は税率が混在する場合。コンビニの領収書のように軽減税率8%と
+          標準税率10%が1枚に混ざると、1件にまとめた時点で片方の税率が
+          間違いになり、消費税額も合わなくなる。そこだけ内訳の数まで許す。
+        */
+        const allowed = taxLines.length > 0 ? taxLines.length : 1;
+        const picked = result.slice(0, allowed);
+
+        // 分けた結果の合計が読み取った税込合計と食い違うなら、分けない。
+        // 中途半端に分かれるより、1件のまま人に確認してもらうほうが安全
+        if (picked.length > 1 && !sumMatches(picked, page.amount)) {
+          console.warn("税率ごとの合計が一致しないため1件にまとめます", { pageId: page.id });
+          perPageEntries.push({ pageId: page.id, pageDate: page.date, item: result[0] || null });
+          continue;
+        }
+
+        for (const item of picked) {
+          perPageEntries.push({ pageId: page.id, pageDate: page.date, item });
+        }
+        if (picked.length === 0) {
+          perPageEntries.push({ pageId: page.id, pageDate: page.date, item: null });
+        }
       } catch (error) {
         console.warn("AI classification failed, falling back to keyword-based:", error);
         useAI = false;

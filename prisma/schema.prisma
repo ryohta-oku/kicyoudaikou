@@ -31,10 +31,55 @@ model Company {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  folders     Folder[]
-  subAccounts SubAccount[]
+  /// レシートの相手科目（貸方）の既定値。
+  ///
+  /// **弥生・マネーフォワード・freee のいずれも貸方勘定科目が必須**で、
+  /// 空のままだと3社ともCSVを取り込めない。仕訳としても片側だけでは成立しない。
+  /// 「現金で払った」が既定だが、カード払い中心の顧問先では「未払金」になる。
+  /// 得意先ごとに違うので、ここに持つ。
+  defaultCreditAccountCode String @default("1111")
+  defaultCreditAccountName String @default("現金")
+
+  /// 登録番号（インボイスのT番号）が無い領収書に付けるインボイス区分。
+  ///
+  /// **日付から自動判定しない。** 仕入税額控除の経過措置は割合の切り替わり日が
+  /// 資料によって食い違う（マネーフォワードの案内は「70%控除＝2026年10月1日以降」、
+  /// 一般に知られている法令上の区分は「2026年10月1日から50%」）。
+  /// アプリが日付で決めると、どちらが正しくても黙って間違える側になる。
+  /// 設定値として画面に見える形にしておき、税理士に確認して直せるようにする。
+  ///
+  /// 空欄にしないのはマネーフォワードが空欄を「適格」とみなすため
+  /// （免税事業者の領収書が適格扱いになってしまう）。
+  /// 値: "適格" / "80%控除" / "70%控除" / "50%控除" / "30%控除" / "控除なし"
+  nonQualifiedInvoiceKind String @default("80%控除")
+
+  folders        Folder[]
+  subAccounts    SubAccount[]
+  advisorClients AdvisorClient[]
 
   @@map("Client")
+}
+
+/// 税理士（社外）が見てよい得意先。
+///
+/// **行が無い得意先は、その税理士には存在しないものとして扱う。**
+/// 得意先の絞り込みはこれまで localStorage の `selectedClientId` だけで、
+/// サーバー側には無かった。社内の人しか居ない間は成立していたが、
+/// 社外の人を入れる以上、クエリの clientId を信用してはいけない。
+///
+/// `userId` に FK を張らないのは `WorkSession.userId` 等と同じ理由 ――
+/// 共通ログインのとき `User` は「影」で、id を保ったまま役割と氏名だけ同期される。
+model AdvisorClient {
+  id        String   @id @default(uuid())
+  userId    String
+  clientId  String
+  createdBy String   @default("")
+  createdAt DateTime @default(now())
+
+  client Company @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clientId])
+  @@index([userId])
 }
 
 // フォルダ（アップロード時にファイルをグループ化）
@@ -56,6 +101,13 @@ model Folder {
   doubleCheckByName  String   @default("") // 2ndチェック者の表示名
   doubleCheckAt      DateTime?
   needsDoubleCheck   Boolean  @default(false) // A型がダブルチェック必要（B型1人パターン）
+
+  /// 税理士の最終チェック。
+  /// null（依頼していない）/ "pending"（依頼中）/ "returned"（差し戻し）/ "approved"（OK）
+  taxReviewStatus   String?
+  taxReviewedBy     String    @default("")
+  taxReviewedByName String    @default("")
+  taxReviewedAt     DateTime?
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -102,6 +154,22 @@ model DocumentPage {
   tax                String @default("") // 消費税
   memo               String @default("") // メモ
 
+  /// 税率ごとの内訳（JSON配列）。軽減税率8%と標準税率10%が1枚に混ざるレシート用。
+  ///
+  /// 内訳を持たないと全額が片方の税率で記帳され、消費税額が合わなくなる
+  /// （税込1,302円・消費税112円の領収書を全額10%とすると118円になる）。
+  ///
+  /// 形: [{"rate":"8","amount":"378","tax":"28","items":"お茶、おにぎり"}, ...]
+  /// 税率が1種類だけの書類では空のまま（分ける意味が無いため）。
+  taxLines String @default("")
+
+  /// この領収書に登録番号が「元から無い」ことを人が確認した印。
+  /// 免税事業者や手書きの領収書では番号が存在しないため、これが無いと
+  /// 登録番号のチェックが通らず確認完了できなかった。
+  /// registrationNumber が空なだけの状態（＝読み取れなかっただけかもしれない）と
+  /// 区別できるようにフラグで持つ。ダブルチェックする人が探し直さずに済む。
+  noRegistrationNumber Boolean @default(false)
+
   // ダブルチェック
   isDoubleChecked    Boolean @default(false)
 
@@ -142,6 +210,11 @@ model JournalEntry {
   debitAmount     Int      @default(0)  // 借方金額
   creditAmount    Int      @default(0)  // 貸方金額
   taxRate         String   @default("") // 税率区分
+
+  /// 相手科目（この仕訳の反対側）。空なら得意先の既定値を使う。
+  /// 同じ得意先でも「この1枚だけカード払い」があるので、仕訳ごとに上書きできる。
+  creditAccountCode String @default("")
+  creditAccountName String @default("")
   aiSuggested     Boolean  @default(false) // AI推測かどうか
   aiReasoning     String   @default("") // AIによる勘定科目選定理由
   isConfirmed     Boolean  @default(false) // 確認済みかどうか
@@ -152,6 +225,63 @@ model JournalEntry {
   document         Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
   page             DocumentPage?      @relation(fields: [pageId], references: [id])
   deletionRequests DeletionRequest[]
+  taxReview        TaxReview?
+  revisions        EntryRevision[]
+}
+
+/// 税理士がその場で直した記録。
+///
+/// **社外の人が帳簿を書き換えるので、何を誰がいつ変えたかを必ず残す。**
+/// 記録が無いと、あとで数字が違ったときに「元がこうだったのか、直したのか」が
+/// 分からなくなる。税理士の最終チェックは、その記録にこそ意味がある工程。
+///
+/// 事業所側にも見せる。利用者さんが「ここはこうするんだ」と学べるようにするのが
+/// いちばん大きい ―― 次から同じ間違いが減る。
+model EntryRevision {
+  id      String @id @default(uuid())
+  entryId String
+
+  changedBy     String @default("")
+  changedByName String @default("")
+  /// "tax_advisor"（本物の税理士）/ "office_as_advisor"（事業所の人が税理士として）
+  changedByKind String @default("tax_advisor")
+
+  /// 変わった項目だけをJSONで持つ。
+  /// 形: [{"field":"accountName","label":"勘定科目","before":"会議費","after":"福利厚生費"}]
+  /// 全項目を持たないのは、あとで見るときに「何が変わったか」だけが要るため。
+  changes String @default("")
+
+  createdAt DateTime @default(now())
+
+  entry JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId])
+}
+
+/// 税理士による1仕訳ごとの確認。
+///
+/// **誰がどの立場で押したかを両方持つ。** 事業所の人が「税理士として操作」した
+/// ものと、本物の税理士が押したものを後から区別できないと、
+/// 「誰が承認したか」の記録が意味を失う。税理士の最終チェックは、
+/// その記録にこそ意味がある工程。
+model TaxReview {
+  id      String @id @default(uuid())
+  entryId String @unique
+
+  /// "ok"（このままでよい）/ "needs_fix"（直してほしい）
+  status  String
+  /// "needs_fix" のときに何が違うのかを書く
+  comment String @default("")
+
+  reviewedBy     String @default("")
+  reviewedByName String @default("")
+  /// "tax_advisor"（本物の税理士）/ "office_as_advisor"（事業所の人が税理士として）
+  reviewerKind   String @default("tax_advisor")
+
+  reviewedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  entry JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
 }
 
 // 作業セッション（全体時間を管理）

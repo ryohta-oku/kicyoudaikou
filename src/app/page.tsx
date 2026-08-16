@@ -22,6 +22,7 @@ import {
   Check,
   Clock,
   Timer,
+  Pencil,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
@@ -47,12 +48,27 @@ interface Folder {
   firstCheckById: string;
   firstCheckByName: string;
   needsDoubleCheck: boolean;
+  /** 税理士の最終チェック。null / "pending" / "returned" / "approved" */
+  taxReviewStatus?: string | null;
   documents: FolderDocument[];
   alertCount: number;
+  /**
+   * 税理士がその場で直した仕訳の数。
+   * **差し戻しとは別物。** 差し戻しは「事業所で直してください」、
+   * こちらは「もう直してあるので、見て覚えてください」。
+   */
+  advisorEditedCount?: number;
 }
 
 function getFolderStatus(folder: Folder): string {
   if (folder.handoffStatus === "handed_off") return "handed_off";
+  /*
+    税理士の状態を先に見る。**差し戻しは他の何より優先して伝える** ――
+    直してほしい所がある状態で「確認済」と出ていると、
+    もう終わったものに見えてしまう。
+  */
+  if (folder.taxReviewStatus === "returned") return "tax_returned";
+  if (folder.taxReviewStatus === "pending") return "tax_pending";
   const documents = folder.documents;
   if (documents.length === 0) return "uploaded";
   const statuses = documents.map((d) => d.status);
@@ -655,6 +671,17 @@ export default function DashboardPage() {
                       <FileText className="w-3.5 h-3.5" />
                       {folder.documents.length}件
                     </span>
+                    {/*
+                      税理士がその場で直した分。**差し戻しとは別の色で出す。**
+                      差し戻しは「直してください」、こちらは「もう直してあるので
+                      見て覚えてください」。混ぜると、やることが分からなくなる。
+                    */}
+                    {(folder.advisorEditedCount ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2 py-0.5">
+                        <Pencil className="w-3 h-3" />
+                        税理士が{folder.advisorEditedCount}件直しました
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -848,6 +875,17 @@ export default function DashboardPage() {
 
           const getATypeBadge = (f: Folder): { label: string; color: string } => {
             if (f.documents.length === 0) return { label: "ファイルなし", color: "bg-gray-100 text-gray-600" };
+            /*
+              税理士の状態を先に見る。**差し戻しは他の何より優先して伝える** ――
+              直してほしい所がある状態で「最終確認」と出ていると、
+              もう終わったものに見えてしまう。
+            */
+            if (f.taxReviewStatus === "returned") {
+              return { label: "税理士から差し戻し", color: "bg-red-100 text-red-700" };
+            }
+            if (f.taxReviewStatus === "pending") {
+              return { label: "税理士が確認中", color: "bg-indigo-100 text-indigo-700" };
+            }
             if (f.handoffStatus === "handed_off" && f.needsDoubleCheck) return { label: "要ダブルチェック", color: "bg-orange-100 text-orange-800" };
             // ドキュメントは全て確認済みだがアラートが残っている場合
             if (f.alertCount > 0 && f.documents.every((d) => d.status === "reviewed" || d.status === "exported")) {
@@ -904,6 +942,17 @@ export default function DashboardPage() {
                       <FileText className="w-3.5 h-3.5" />
                       {folder.documents.length}件
                     </span>
+                    {/*
+                      税理士がその場で直した分。**差し戻しとは別の色で出す。**
+                      差し戻しは「直してください」、こちらは「もう直してあるので
+                      見て覚えてください」。混ぜると、やることが分からなくなる。
+                    */}
+                    {(folder.advisorEditedCount ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2 py-0.5">
+                        <Pencil className="w-3 h-3" />
+                        税理士が{folder.advisorEditedCount}件直しました
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
