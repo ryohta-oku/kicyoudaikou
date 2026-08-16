@@ -106,6 +106,15 @@ export default function Header() {
     return null;
   }
 
+  /*
+    税理士の確認画面では、事業所のナビ（ダッシュボード・工数管理・得意先管理…）を
+    出さない。税理士さんに要るのは確認する書類だけで、他を見せると迷わせる。
+    あちらは ReviewShell が自前の細いヘッダーを持っている。
+  */
+  if (pathname.startsWith("/review")) {
+    return null;
+  }
+
   const handleClientSelect = (clientId: string) => {
     setSelectedClientIdState(clientId);
     setSelectedClientId(clientId);

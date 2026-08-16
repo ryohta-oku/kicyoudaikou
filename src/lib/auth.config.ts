@@ -20,6 +20,8 @@ const EXTERNAL_ALLOWED: { method: string; pattern: RegExp }[] = [
   { method: "GET", pattern: /^\/api\/accounts$/ },
   // 自分のアカウント情報（画面右上の表示に使う）
   { method: "GET", pattern: /^\/api\/account$/ },
+  // 確認の記録（1仕訳ごとの「よい」「直して」）
+  { method: "POST", pattern: /^\/api\/review\/entries$/ },
 ];
 
 /** 経路と方式だけの判定。**export しているのは、境界を単体で確かめられるようにするため。** */

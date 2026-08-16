@@ -80,6 +80,13 @@ model Folder {
   doubleCheckAt      DateTime?
   needsDoubleCheck   Boolean  @default(false) // A型がダブルチェック必要（B型1人パターン）
 
+  /// 税理士の最終チェック。
+  /// null（依頼していない）/ "pending"（依頼中）/ "returned"（差し戻し）/ "approved"（OK）
+  taxReviewStatus   String?
+  taxReviewedBy     String    @default("")
+  taxReviewedByName String    @default("")
+  taxReviewedAt     DateTime?
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -182,6 +189,33 @@ model JournalEntry {
   document         Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
   page             DocumentPage?      @relation(fields: [pageId], references: [id])
   deletionRequests DeletionRequest[]
+  taxReview        TaxReview?
+}
+
+/// 税理士による1仕訳ごとの確認。
+///
+/// **誰がどの立場で押したかを両方持つ。** 事業所の人が「税理士として操作」した
+/// ものと、本物の税理士が押したものを後から区別できないと、
+/// 「誰が承認したか」の記録が意味を失う。税理士の最終チェックは、
+/// その記録にこそ意味がある工程。
+model TaxReview {
+  id      String @id @default(uuid())
+  entryId String @unique
+
+  /// "ok"（このままでよい）/ "needs_fix"（直してほしい）
+  status  String
+  /// "needs_fix" のときに何が違うのかを書く
+  comment String @default("")
+
+  reviewedBy     String @default("")
+  reviewedByName String @default("")
+  /// "tax_advisor"（本物の税理士）/ "office_as_advisor"（事業所の人が税理士として）
+  reviewerKind   String @default("tax_advisor")
+
+  reviewedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  entry JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
 }
 
 // 作業セッション（全体時間を管理）
