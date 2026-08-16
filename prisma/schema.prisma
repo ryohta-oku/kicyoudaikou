@@ -226,6 +226,36 @@ model JournalEntry {
   page             DocumentPage?      @relation(fields: [pageId], references: [id])
   deletionRequests DeletionRequest[]
   taxReview        TaxReview?
+  revisions        EntryRevision[]
+}
+
+/// 税理士がその場で直した記録。
+///
+/// **社外の人が帳簿を書き換えるので、何を誰がいつ変えたかを必ず残す。**
+/// 記録が無いと、あとで数字が違ったときに「元がこうだったのか、直したのか」が
+/// 分からなくなる。税理士の最終チェックは、その記録にこそ意味がある工程。
+///
+/// 事業所側にも見せる。利用者さんが「ここはこうするんだ」と学べるようにするのが
+/// いちばん大きい ―― 次から同じ間違いが減る。
+model EntryRevision {
+  id      String @id @default(uuid())
+  entryId String
+
+  changedBy     String @default("")
+  changedByName String @default("")
+  /// "tax_advisor"（本物の税理士）/ "office_as_advisor"（事業所の人が税理士として）
+  changedByKind String @default("tax_advisor")
+
+  /// 変わった項目だけをJSONで持つ。
+  /// 形: [{"field":"accountName","label":"勘定科目","before":"会議費","after":"福利厚生費"}]
+  /// 全項目を持たないのは、あとで見るときに「何が変わったか」だけが要るため。
+  changes String @default("")
+
+  createdAt DateTime @default(now())
+
+  entry JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId])
 }
 
 /// 税理士による1仕訳ごとの確認。

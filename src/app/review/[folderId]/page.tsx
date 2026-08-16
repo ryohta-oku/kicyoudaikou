@@ -52,6 +52,7 @@ export default async function ReviewFolderPage({
           name: true,
           // 貸方（相手科目）の既定値。CSVに実際に出るのはこの科目なので、
           // 税理士さんが画面で確かめられるように渡す
+          defaultCreditAccountCode: true,
           defaultCreditAccountName: true,
           // 登録番号が無い領収書のインボイス区分。画面とCSVで同じ値を出す
           nonQualifiedInvoiceKind: true,
@@ -73,13 +74,21 @@ export default async function ReviewFolderPage({
               pageId: true,
               date: true,
               description: true,
+              accountCode: true,
               accountName: true,
               subAccountName: true,
               debitAmount: true,
               taxRate: true,
+              creditAccountCode: true,
               creditAccountName: true,
               isConfirmed: true,
               page: { select: { registrationNumber: true } },
+              // 直したことがあるか。いちばん新しい1件だけあれば「誰が直したか」は出せる
+              revisions: {
+                select: { changedByName: true },
+                orderBy: { createdAt: "desc" },
+                take: 1,
+              },
               taxReview: {
                 select: { status: true, comment: true, reviewedByName: true, reviewerKind: true },
               },
@@ -96,6 +105,7 @@ export default async function ReviewFolderPage({
   if (!isClientAllowed(effective, folder.clientId)) notFound();
 
   const counterAccount = folder.client?.defaultCreditAccountName || "現金";
+  const counterAccountCode = folder.client?.defaultCreditAccountCode || "1111";
   const invoiceKind = normalizeInvoiceKind(folder.client?.nonQualifiedInvoiceKind);
 
   /*
@@ -131,12 +141,15 @@ export default async function ReviewFolderPage({
       group.lines.push({
         id: e.id,
         description: e.description,
+        accountCode: e.accountCode,
         accountName: e.accountName,
         subAccountName: e.subAccountName,
         amount: e.debitAmount,
         taxRate: e.taxRate,
         // 行ごとの上書きが無ければ得意先の既定値。CSVの組み立てと同じ順番
+        counterAccountCode: e.creditAccountCode || counterAccountCode,
         counterAccountName: e.creditAccountName || counterAccount,
+        editedByName: e.revisions[0]?.changedByName || undefined,
         // 「読み取れなかっただけ」と「元から無い」を区別しない ――
         // どちらも適格請求書として扱わないのが安全側（CSV側と同じ判断）
         hasRegistrationNumber: e.page ? e.page.registrationNumber !== "" : false,

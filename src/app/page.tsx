@@ -22,6 +22,7 @@ import {
   Check,
   Clock,
   Timer,
+  Pencil,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
@@ -51,6 +52,12 @@ interface Folder {
   taxReviewStatus?: string | null;
   documents: FolderDocument[];
   alertCount: number;
+  /**
+   * 税理士がその場で直した仕訳の数。
+   * **差し戻しとは別物。** 差し戻しは「事業所で直してください」、
+   * こちらは「もう直してあるので、見て覚えてください」。
+   */
+  advisorEditedCount?: number;
 }
 
 function getFolderStatus(folder: Folder): string {
@@ -664,6 +671,17 @@ export default function DashboardPage() {
                       <FileText className="w-3.5 h-3.5" />
                       {folder.documents.length}件
                     </span>
+                    {/*
+                      税理士がその場で直した分。**差し戻しとは別の色で出す。**
+                      差し戻しは「直してください」、こちらは「もう直してあるので
+                      見て覚えてください」。混ぜると、やることが分からなくなる。
+                    */}
+                    {(folder.advisorEditedCount ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2 py-0.5">
+                        <Pencil className="w-3 h-3" />
+                        税理士が{folder.advisorEditedCount}件直しました
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -924,6 +942,17 @@ export default function DashboardPage() {
                       <FileText className="w-3.5 h-3.5" />
                       {folder.documents.length}件
                     </span>
+                    {/*
+                      税理士がその場で直した分。**差し戻しとは別の色で出す。**
+                      差し戻しは「直してください」、こちらは「もう直してあるので
+                      見て覚えてください」。混ぜると、やることが分からなくなる。
+                    */}
+                    {(folder.advisorEditedCount ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2 py-0.5">
+                        <Pencil className="w-3 h-3" />
+                        税理士が{folder.advisorEditedCount}件直しました
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

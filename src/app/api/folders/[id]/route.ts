@@ -40,6 +40,17 @@ export async function GET(
             _count: { select: { journalEntries: true } },
             journalEntries: {
               orderBy: { date: "asc" },
+              /*
+                税理士がその場で直した記録を一緒に返す。
+                **利用者さんが「ここはこうするんだ」と学べるようにするのが狙い。**
+                次から同じ間違いが減るのが、いちばん大きい効き目。
+              */
+              include: {
+                revisions: {
+                  select: { changedByName: true, changes: true, createdAt: true },
+                  orderBy: { createdAt: "desc" },
+                },
+              },
             },
           },
           orderBy: { createdAt: "desc" },

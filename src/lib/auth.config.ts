@@ -20,8 +20,14 @@ const EXTERNAL_ALLOWED: { method: string; pattern: RegExp }[] = [
   { method: "GET", pattern: /^\/api\/accounts$/ },
   // 自分のアカウント情報（画面右上の表示に使う）
   { method: "GET", pattern: /^\/api\/account$/ },
-  // 確認の記録（1仕訳ごとの「よい」「直して」）
+  // 確認の記録（領収書ごとの「直して」）
   { method: "POST", pattern: /^\/api\/review\/entries$/ },
+  /*
+    その場で仕訳を直す。**`/api/entries` は通さない** ――
+    あちらは渡された項目をそのまま prisma に流すので、社外の人には渡せない。
+    こちらは直してよい項目を名指しで受け、履歴を残す。
+  */
+  { method: "PATCH", pattern: /^\/api\/review\/entry$/ },
   // フォルダ単位の確認完了・差し戻し
   { method: "POST", pattern: /^\/api\/review\/folder$/ },
   // 確認が終わったあとのCSV出力（担当外は route の中で 403 になる）

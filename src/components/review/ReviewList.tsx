@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Check, MessageSquareWarning, Loader2, CircleCheck, Download, ExternalLink } from "lucide-react";
+import { Check, MessageSquareWarning, Loader2, CircleCheck, Download, ExternalLink, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pdfHref, type EntryImageSource } from "@/lib/entry-image";
 import PdfPageCanvas from "@/components/PdfPageCanvas";
@@ -18,14 +18,18 @@ import {
 export interface ReviewLine {
   id: string;
   description: string;
+  accountCode: string;
   accountName: string;
   subAccountName: string;
   amount: number;
   taxRate: string;
   /** 貸方（相手科目）。CSVに実際に出るのはこの科目 */
+  counterAccountCode: string;
   counterAccountName: string;
   /** 適格請求書の登録番号があったか。インボイス区分の判定に使う */
   hasRegistrationNumber: boolean;
+  /** 税理士が直したことがあれば、直した人の名前 */
+  editedByName?: string;
   review: {
     status: string;
     comment: string;
@@ -42,6 +46,29 @@ export interface ReceiptGroup {
   image: EntryImageSource;
   lines: ReviewLine[];
 }
+
+/** 書き換え中の値。すべて文字列で持ち、送るときにサーバー側で整える */
+interface EditDraft {
+  date: string;
+  subAccountName: string;
+  description: string;
+  amount: string;
+  accountCode: string;
+  taxRate: string;
+  counterAccountCode: string;
+}
+
+interface AccountOption {
+  code: string;
+  name: string;
+  category: string;
+}
+
+/**
+ * 選べる税区分。**内部の呼び方で持ち、画面には会計ソフトの言い方で出す。**
+ * CSVの組み立てが同じ値を読むので、ここを増やすときは lib/tax-class.ts も見ること。
+ */
+const TAX_RATES = ["課税10%", "課税8%", "非課税", "不課税"];
 
 /**
  * 税理士の確認画面の中身。**左にレシート、右に伝票の表。**
@@ -93,6 +120,23 @@ export default function ReviewList({
   const [commenting, setCommenting] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [blocked, setBlocked] = useState<string | null>(null);
+
+  /** その場で直した結果。サーバーが返した値で上書きして表示する */
+  const [overrides, setOverrides] = useState<Record<string, Partial<ReviewLine>>>({});
+  /** 直した人の名前。付いている行には「税理士が修正」と出す */
+  const [edited, setEdited] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      allLines.filter((l) => l.editedByName).map((l) => [l.id, l.editedByName!])
+    )
+  );
+  /** いま書き換えている行 */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<EditDraft | null>(null);
+  /** 勘定科目マスター。編集を始めたときに1回だけ取りに行く */
+  const [accounts, setAccounts] = useState<AccountOption[]>([]);
+
+  /** 直したあとの値で見る */
+  const view = (line: ReviewLine): ReviewLine => ({ ...line, ...overrides[line.id] });
   /** 左に出しているレシート。カーソルが外れても戻さない */
   const [previewId, setPreviewId] = useState<string | null>(receipts[0]?.key ?? null);
 
@@ -100,17 +144,18 @@ export default function ReviewList({
   const [finishing, setFinishing] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  /** 伝票の状態。全行そろって初めてその状態とみなす（中途半端は「未確認」） */
-  const groupStatus = (g: ReceiptGroup): string | null => {
-    const statuses = g.lines.map((l) => state[l.id]?.status);
-    if (statuses.every((s) => s === "ok")) return "ok";
-    if (statuses.some((s) => s === "needs_fix")) return "needs_fix";
-    return null;
-  };
+  /**
+   * 伝票の状態。
+   *
+   * **「よい」は無い。** 税理士さんは全部を見るわけではなく、ある程度信じたうえで
+   * 怪しいところだけを見る。全件に印を付けさせると、実際にはやらない作業を
+   * 前提にした画面になり、その先（CSV）に進めなくなる。
+   */
+  const groupStatus = (g: ReceiptGroup): string | null =>
+    g.lines.some((l) => state[l.id]?.status === "needs_fix") ? "needs_fix" : null;
 
-  const okCount = allLines.filter((l) => state[l.id]?.status === "ok").length;
   const fixCount = allLines.filter((l) => state[l.id]?.status === "needs_fix").length;
-  const allOk = allLines.length > 0 && okCount === allLines.length;
+  const editedCount = allLines.filter((l) => edited[l.id]).length;
 
   const refuse = (id: string) => {
     setBlocked(id);
@@ -148,11 +193,111 @@ export default function ReviewList({
     }
   };
 
+  /** 書き換えを始める。勘定科目マスターはこのときに1回だけ取りに行く */
+  const startEdit = async (group: ReceiptGroup, line: ReviewLine) => {
+    if (readOnly) return refuse(group.key);
+    const current = view(line);
+    setEditingId(line.id);
+    setDraft({
+      date: group.date,
+      subAccountName: current.subAccountName,
+      description: current.description,
+      amount: String(current.amount),
+      accountCode: current.accountCode,
+      taxRate: current.taxRate,
+      counterAccountCode: current.counterAccountCode,
+    });
+    if (accounts.length === 0) {
+      try {
+        const res = await fetch("/api/accounts");
+        if (res.ok) {
+          const data = await res.json();
+          setAccounts(
+            (data.accounts || []).map((a: AccountOption) => ({
+              code: a.code,
+              name: a.name,
+              category: a.category,
+            }))
+          );
+        }
+      } catch {
+        // 取れなくても、勘定科目以外は直せる
+      }
+    }
+  };
+
   /**
-   * 伝票（レシート1枚）ごとにまとめて保存する。
+   * その場で直したものを保存する。
    *
-   * 会計ソフトの承認と同じく、判断の単位は1枚。1枚が2仕訳に分かれていても、
-   * 押すのは1回。記録は仕訳ごとに残るので、後から見たときの粒度は変わらない。
+   * **`/api/entries` ではなく `/api/review/entry` を使う。** あちらは渡された項目を
+   * そのまま prisma に流すので、社外の人には渡せない。こちらは直してよい項目だけを
+   * 受け、誰が何を変えたかを履歴に残す。
+   */
+  const saveEdit = async (line: ReviewLine) => {
+    if (!draft) return;
+    const account = accounts.find((a) => a.code === draft.accountCode);
+    const counter = accounts.find((a) => a.code === draft.counterAccountCode);
+
+    setSaving(line.id);
+    try {
+      const res = await fetch("/api/review/entry", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          folderId,
+          entryId: line.id,
+          patch: {
+            date: draft.date,
+            subAccountName: draft.subAccountName,
+            description: draft.description,
+            debitAmount: draft.amount,
+            taxRate: draft.taxRate,
+            ...(account ? { accountCode: account.code, accountName: account.name } : {}),
+            ...(counter
+              ? { creditAccountCode: counter.code, creditAccountName: counter.name }
+              : {}),
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        // 「変わったところがありません」は閉じるだけでよい
+        if (data.code === "EDIT_NO_CHANGE") {
+          setEditingId(null);
+          setDraft(null);
+          return;
+        }
+        alert(data.error || "保存できませんでした");
+        return;
+      }
+      setOverrides((prev) => ({
+        ...prev,
+        [line.id]: {
+          description: data.entry.description,
+          accountCode: data.entry.accountCode,
+          accountName: data.entry.accountName,
+          subAccountName: data.entry.subAccountName,
+          amount: data.entry.debitAmount,
+          taxRate: data.entry.taxRate,
+          counterAccountCode: data.entry.creditAccountCode,
+          counterAccountName: data.entry.creditAccountName,
+        },
+      }));
+      setEdited((prev) => ({ ...prev, [line.id]: data.changedByName || "税理士" }));
+      setEditingId(null);
+      setDraft(null);
+    } catch {
+      alert("保存できませんでした。もう一度お試しください。");
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  /**
+   * 差し戻しを、レシート1枚ごとにまとめて記録する。
+   *
+   * 1枚が2仕訳に分かれていても押すのは1回。記録は仕訳ごとに残るので、
+   * 後から見たときの粒度は変わらない。
    */
   const save = async (group: ReceiptGroup, status: "ok" | "needs_fix", text: string) => {
     if (readOnly) return refuse(group.key);
@@ -188,13 +333,25 @@ export default function ReviewList({
         <span className="text-gray-700">
           全 <strong>{receipts.length}</strong> 枚（<strong>{allLines.length}</strong> 仕訳）
         </span>
-        <span className="text-green-700">
-          このままでよい <strong>{okCount}</strong> 仕訳
-        </span>
+        {editedCount > 0 && (
+          <span className="text-indigo-700">
+            直した <strong>{editedCount}</strong> 仕訳
+          </span>
+        )}
         <span className="text-red-700">
-          直してほしい <strong>{fixCount}</strong> 仕訳
+          事業所に直してもらう <strong>{fixCount}</strong> 仕訳
         </span>
       </div>
+
+      {/*
+        **全部に印を付ける必要はない。** 気になったところだけ手を入れて、
+        あとはそのままCSVに出す ―― 実際の仕事の順番に合わせる。
+      */}
+      <p className="text-sm text-gray-600 mb-4">
+        気になる行だけ直してください。直すのが面倒なものは
+        <strong className="text-red-700">「事業所に直してもらう」</strong>
+        で戻せます。CSVはいつでも書き出せます。
+      </p>
 
       {/*
         左にレシート、右に仕訳。**重ねない。**
@@ -247,17 +404,22 @@ export default function ReviewList({
             /* 明細＋締め行（＋あれば理由の行）を、左右のセルが縦につなぐ */
             const span = lines.length + 1 + extraRow;
 
-            const total = lines.reduce((sum, l) => sum + l.amount, 0);
+            const total = lines.reduce((sum, l) => sum + view(l).amount, 0);
+            const wasEdited = lines.some((l) => edited[l.id]);
 
             const tint =
-              status === "ok" ? "bg-green-50/70" : status === "needs_fix" ? "bg-red-50/60" : "bg-white/85";
+              status === "needs_fix"
+                ? "bg-red-50/60"
+                : wasEdited
+                  ? "bg-indigo-50/50"
+                  : "bg-white/85";
             const edge =
               previewId === group.key
                 ? "border-teal-400"
-                : status === "ok"
-                  ? "border-green-200"
-                  : status === "needs_fix"
-                    ? "border-red-200"
+                : status === "needs_fix"
+                  ? "border-red-200"
+                  : wasEdited
+                    ? "border-indigo-200"
                     : "border-gray-200";
             const cell = cn("px-2 py-2 align-top", tint, edge);
 
@@ -271,10 +433,12 @@ export default function ReviewList({
                 */
                 onMouseEnter={() => setPreviewId(group.key)}
               >
-                {lines.map((line, i) => {
+                {lines.map((rawLine, i) => {
+                  const line = view(rawLine);
                   const category = normalizeTaxCategory(line.taxRate);
                   const invoice = line.hasRegistrationNumber ? "適格" : nonQualifiedInvoiceKind;
                   const isLast = i === lines.length - 1;
+                  const isEditing = editingId === line.id;
                   return (
                     <tr key={line.id}>
                       {i === 0 && (
@@ -299,70 +463,205 @@ export default function ReviewList({
                         </>
                       )}
 
-                      <td className={cn(cell, i === 0 && "border-t", !isLast && "border-b border-b-gray-100")}>
-                        <div className="font-medium text-foreground">{line.subAccountName || "—"}</div>
-                        <div className="text-xs text-gray-600 break-words">{line.description}</div>
-                      </td>
-                      <td
-                        className={cn(
-                          cell,
-                          i === 0 && "border-t",
-                          !isLast && "border-b border-b-gray-100",
-                          "text-right font-mono font-bold tabular-nums text-foreground whitespace-nowrap"
-                        )}
-                      >
-                        ¥{line.amount.toLocaleString()}
-                      </td>
-                      <td className={cn(cell, i === 0 && "border-t", !isLast && "border-b border-b-gray-100")}>
-                        {line.accountName || "—"}
-                      </td>
-                      <td className={cn(cell, i === 0 && "border-t", !isLast && "border-b border-b-gray-100")}>
-                        {/* CSVに実際に出る文字列をそのまま見せる */}
-                        <div className="text-gray-800">{taxClassName(category, "purchase", "mf")}</div>
-                        <div className="text-xs text-gray-500">
-                          {mfInvoiceValue(category, "purchase", invoice) || "—"}
-                        </div>
-                      </td>
-
-                      {i === 0 && (
-                        <td rowSpan={span} className={cn(cell, "relative border-r border-t border-b rounded-r-xl")}>
-                          <div className="flex flex-col gap-1.5">
+                      {isEditing && draft ? (
+                        /*
+                          書き換え中。**行の高さは変わるが、行数は変わらない。**
+                          左右の rowSpan を数え直さずに済むよう、4列ぶんを1つにまとめる。
+                        */
+                        <td
+                          colSpan={4}
+                          className={cn(cell, i === 0 && "border-t", !isLast && "border-b border-b-gray-100")}
+                        >
+                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                            <Field label="取引日">
+                              <input
+                                value={draft.date}
+                                onChange={(e) => setDraft({ ...draft, date: e.target.value })}
+                                placeholder="2026-04-03"
+                                className={inputClass}
+                              />
+                            </Field>
+                            <Field label="支払先">
+                              <input
+                                value={draft.subAccountName}
+                                onChange={(e) => setDraft({ ...draft, subAccountName: e.target.value })}
+                                className={inputClass}
+                              />
+                            </Field>
+                            <Field label="金額（税込）">
+                              <input
+                                value={draft.amount}
+                                inputMode="numeric"
+                                onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
+                                className={cn(inputClass, "text-right font-mono")}
+                              />
+                            </Field>
+                            <Field label="勘定科目">
+                              <select
+                                value={draft.accountCode}
+                                onChange={(e) => setDraft({ ...draft, accountCode: e.target.value })}
+                                className={inputClass}
+                              >
+                                {/* マスターに無いコードでも、いまの値は必ず選べるようにする */}
+                                {!accounts.some((a) => a.code === draft.accountCode) && (
+                                  <option value={draft.accountCode}>{line.accountName || "（未設定）"}</option>
+                                )}
+                                {accounts
+                                  .filter((a) => a.category === "費用" || a.category === "収益")
+                                  .map((a) => (
+                                    <option key={a.code} value={a.code}>
+                                      {a.name}
+                                    </option>
+                                  ))}
+                              </select>
+                            </Field>
+                            <Field label="税区分">
+                              <select
+                                value={draft.taxRate}
+                                onChange={(e) => setDraft({ ...draft, taxRate: e.target.value })}
+                                className={inputClass}
+                              >
+                                {!TAX_RATES.includes(draft.taxRate) && (
+                                  <option value={draft.taxRate}>{draft.taxRate || "（未設定）"}</option>
+                                )}
+                                {TAX_RATES.map((t) => (
+                                  <option key={t} value={t}>
+                                    {taxClassName(normalizeTaxCategory(t), "purchase", "mf")}
+                                  </option>
+                                ))}
+                              </select>
+                            </Field>
+                            <Field label="貸方（相手科目）">
+                              <select
+                                value={draft.counterAccountCode}
+                                onChange={(e) => setDraft({ ...draft, counterAccountCode: e.target.value })}
+                                className={inputClass}
+                              >
+                                {!accounts.some((a) => a.code === draft.counterAccountCode) && (
+                                  <option value={draft.counterAccountCode}>
+                                    {line.counterAccountName || "（未設定）"}
+                                  </option>
+                                )}
+                                {accounts
+                                  .filter((a) => a.category === "資産" || a.category === "負債")
+                                  .map((a) => (
+                                    <option key={a.code} value={a.code}>
+                                      {a.name}
+                                    </option>
+                                  ))}
+                              </select>
+                            </Field>
+                            <div className="col-span-2 lg:col-span-4">
+                              <Field label="摘要">
+                                <input
+                                  value={draft.description}
+                                  onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                                  className={inputClass}
+                                />
+                              </Field>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2 mt-2">
                             <button
-                              onClick={() => (readOnly ? refuse(group.key) : save(group, "ok", ""))}
-                              disabled={isSaving}
-                              className={cn(
-                                "inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-colors",
-                                status === "ok"
-                                  ? "bg-green-600 text-white"
-                                  : "bg-white border border-gray-300 text-gray-700 hover:bg-green-50 hover:border-green-400"
-                              )}
+                              onClick={() => saveEdit(rawLine)}
+                              disabled={saving === line.id}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
                             >
-                              {isSaving ? (
+                              {saving === line.id ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : status === "ok" ? (
-                                <CircleCheck className="w-4 h-4" />
                               ) : (
                                 <Check className="w-4 h-4" />
                               )}
-                              よい
+                              この行を直す
                             </button>
                             <button
-                              onClick={() =>
-                                readOnly
-                                  ? refuse(group.key)
-                                  : (setCommenting(group.key), setComment(savedComment))
-                              }
-                              className={cn(
-                                "inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-colors",
-                                status === "needs_fix"
-                                  ? "bg-red-600 text-white"
-                                  : "bg-white border border-gray-300 text-gray-700 hover:bg-red-50 hover:border-red-400"
-                              )}
+                              onClick={() => { setEditingId(null); setDraft(null); }}
+                              className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
                             >
-                              <MessageSquareWarning className="w-4 h-4" />
-                              直して
+                              やめる
                             </button>
                           </div>
+                        </td>
+                      ) : (
+                        <>
+                          <td className={cn(cell, i === 0 && "border-t", !isLast && "border-b border-b-gray-100")}>
+                            <div className="font-medium text-foreground">{line.subAccountName || "—"}</div>
+                            <div className="text-xs text-gray-600 break-words">{line.description}</div>
+                            {edited[line.id] && (
+                              <span className="inline-block mt-1 text-[0.7rem] text-indigo-800 bg-indigo-100 border border-indigo-200 rounded px-1.5 py-0.5">
+                                {edited[line.id]} が直しました
+                              </span>
+                            )}
+                          </td>
+                          <td
+                            className={cn(
+                              cell,
+                              i === 0 && "border-t",
+                              !isLast && "border-b border-b-gray-100",
+                              "text-right font-mono font-bold tabular-nums text-foreground whitespace-nowrap"
+                            )}
+                          >
+                            ¥{line.amount.toLocaleString()}
+                          </td>
+                          <td className={cn(cell, i === 0 && "border-t", !isLast && "border-b border-b-gray-100")}>
+                            {line.accountName || "—"}
+                          </td>
+                          <td
+                            className={cn(
+                              cell,
+                              i === 0 && "border-t",
+                              !isLast && "border-b border-b-gray-100",
+                              "relative"
+                            )}
+                          >
+                            {/* CSVに実際に出る文字列をそのまま見せる */}
+                            <div className="text-gray-800">{taxClassName(category, "purchase", "mf")}</div>
+                            <div className="text-xs text-gray-500">
+                              {mfInvoiceValue(category, "purchase", invoice) || "—"}
+                            </div>
+                            {!readOnly && (
+                              <button
+                                onClick={() => startEdit(group, rawLine)}
+                                title="この行を直す"
+                                className="absolute right-1 top-1 p-1 rounded-md text-gray-400 hover:text-teal-700 hover:bg-teal-50"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        </>
+                      )}
+
+                      {i === 0 && (
+                        <td rowSpan={span} className={cn(cell, "relative border-r border-t border-b rounded-r-xl")}>
+                          {/*
+                            **「よい」は置かない。** 税理士さんは全部を見るわけではなく、
+                            怪しいところだけを見る。押す先は「自分で直す」（各行の鉛筆）か
+                            「事業所に直してもらう」の2つだけでよい。
+                          */}
+                          <button
+                            onClick={() =>
+                              readOnly
+                                ? refuse(group.key)
+                                : (setCommenting(group.key), setComment(savedComment))
+                            }
+                            disabled={isSaving}
+                            className={cn(
+                              "w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs leading-tight transition-colors",
+                              status === "needs_fix"
+                                ? "bg-red-600 text-white"
+                                : "bg-white border border-gray-300 text-gray-700 hover:bg-red-50 hover:border-red-400"
+                            )}
+                          >
+                            {isSaving ? (
+                              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                            ) : (
+                              <MessageSquareWarning className="w-4 h-4 shrink-0" />
+                            )}
+                            事業所に
+                            <br />
+                            直してもらう
+                          </button>
 
                           {blocked === group.key && (
                             <div className="absolute right-2 top-full -mt-1 whitespace-nowrap bg-red-500 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-20">
@@ -455,69 +754,78 @@ export default function ReviewList({
         </div>
       </div>
 
-      {/* 全部見終わったあとの一手。**同時に光るものは一つだけにする** */}
-      <div className="mt-6 card-glass rounded-xl p-4 relative">
-        {folderStatus === "approved" ? (
-          <div>
-            <p className="font-bold text-green-800 mb-1">確認が終わりました</p>
-            <p className="text-sm text-gray-600 mb-3">
-              お使いの会計ソフトの形式でCSVを書き出せます。
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {EXPORT_FORMATS.map((f) => (
-                <button
-                  key={f.value}
-                  onClick={() => exportCsv(f.value)}
-                  disabled={exporting}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-                >
-                  {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : folderStatus === "returned" ? (
-          <div>
-            <p className="font-bold text-red-800 mb-1">事業所に差し戻しました</p>
-            <p className="text-sm text-gray-600">
-              直したら、また確認のお願いが届きます。
-            </p>
-          </div>
-        ) : fixCount > 0 ? (
-          <div>
-            <p className="text-sm text-gray-700 mb-3">
-              直してほしい仕訳が <strong>{fixCount}</strong> 件あります。事業所に戻しましょう。
-            </p>
-            <button
-              onClick={() => finish("return")}
-              disabled={finishing}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-            >
-              {finishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquareWarning className="w-4 h-4" />}
-              事業所に差し戻す
-            </button>
-          </div>
-        ) : allOk ? (
-          <div>
-            <p className="text-sm text-gray-700 mb-3">
-              全部の仕訳を見終わりました。確認を完了してください。
-            </p>
-            <button
-              onClick={() => finish("approve")}
-              disabled={finishing}
-              className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold disabled:opacity-50"
-            >
-              {finishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CircleCheck className="w-5 h-5" />}
-              確認を完了する
-            </button>
-          </div>
-        ) : (
-          <p className="text-sm text-gray-600">
-            残り <strong>{allLines.length - okCount - fixCount}</strong> 仕訳です。
-            領収書1枚ずつ「よい」か「直して」を選んでください。
+      {/*
+        終わりの一手。**CSVは常に出せる。**
+
+        以前は「全仕訳が『よい』になったらCSV」という条件だったが、
+        税理士さんは全部を見ない。条件を残すと、実際にはやらない作業を
+        済ませないと先に進めない画面になっていた。
+
+        「確認を完了する」は事業所に終わったと伝えるためだけに残す。
+        CSVを出す条件ではない。
+      */}
+      <div className="mt-6 card-glass rounded-xl p-4 relative space-y-4">
+        <div>
+          <p className="font-bold text-foreground mb-1">CSVを書き出す</p>
+          <p className="text-sm text-gray-600 mb-3">
+            お使いの会計ソフトを選んでください。そのまま取り込める形で書き出します。
           </p>
-        )}
+          <div className="flex flex-wrap gap-2">
+            {EXPORT_FORMATS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => exportCsv(f.value)}
+                disabled={exporting}
+                title={f.description}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+              >
+                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-t border-gray-200 pt-4">
+          {folderStatus === "approved" ? (
+            <p className="text-sm text-green-800">
+              <strong>確認が終わったことを事業所に伝えました。</strong>
+            </p>
+          ) : folderStatus === "returned" ? (
+            <p className="text-sm text-red-800">
+              <strong>事業所に差し戻しました。</strong>直したら、また確認のお願いが届きます。
+            </p>
+          ) : fixCount > 0 ? (
+            <div>
+              <p className="text-sm text-gray-700 mb-3">
+                事業所に直してもらう仕訳が <strong>{fixCount}</strong> 件あります。戻しましょう。
+              </p>
+              <button
+                onClick={() => finish("return")}
+                disabled={finishing}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+              >
+                {finishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquareWarning className="w-4 h-4" />}
+                事業所に差し戻す
+              </button>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm text-gray-700 mb-3">
+                見終わったら、事業所に伝えておきましょう。
+                {editedCount > 0 && <>直した {editedCount} 件も一緒に伝わります。</>}
+              </p>
+              <button
+                onClick={() => finish("approve")}
+                disabled={finishing}
+                className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold disabled:opacity-50"
+              >
+                {finishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CircleCheck className="w-5 h-5" />}
+                確認を完了する
+              </button>
+            </div>
+          )}
+        </div>
 
         {blocked === "footer" && (
           <div className="absolute left-4 bottom-full mb-2 whitespace-nowrap bg-red-500 text-white text-xs rounded-md px-2.5 py-1.5 shadow-lg z-20">
@@ -527,6 +835,19 @@ export default function ReviewList({
         )}
       </div>
     </div>
+  );
+}
+
+const inputClass =
+  "w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500";
+
+/** 書き換え中の入力に、何の項目かを添える */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block min-w-0">
+      <span className="block text-[0.7rem] text-gray-500 mb-0.5">{label}</span>
+      {children}
+    </label>
   );
 }
 

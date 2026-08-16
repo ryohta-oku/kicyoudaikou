@@ -68,6 +68,9 @@ function checkGate() {
   for (const p of ["/api/folders", "/api/folders/abc", "/api/documents/abc", "/api/files", "/api/accounts"]) {
     check(`GET ${p} は通す`, isAllowedForExternal("GET", p), true);
   }
+  // 税理士がその場で直す口。項目を絞り、履歴を残す専用のもの
+  check("PATCH /api/review/entry は通す", isAllowedForExternal("PATCH", "/api/review/entry"), true);
+  check("POST /api/review/entries は通す", isAllowedForExternal("POST", "/api/review/entries"), true);
 
   console.log("\n=== ② 断る口 ===");
   const denied: [string, string][] = [
@@ -76,7 +79,14 @@ function checkGate() {
     ["DELETE", "/api/folders/abc"],
     ["PATCH", "/api/documents/abc"],
     ["DELETE", "/api/documents/abc"],
+    /*
+      **`/api/entries` は絶対に通さない。** あちらは渡された項目をそのまま
+      prisma に流すので、`isConfirmed` でも `documentId` でも書き換えられる。
+      税理士が直すのは `/api/review/entry`（項目を名指しで受け、履歴を残す）だけ。
+    */
     ["PATCH", "/api/entries"],
+    ["POST", "/api/entries"],
+    ["DELETE", "/api/entries"],
     ["POST", "/api/classify"],
     ["POST", "/api/upload"],
     ["PATCH", "/api/ocr/pages"],

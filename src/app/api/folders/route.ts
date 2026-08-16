@@ -124,6 +124,8 @@ export async function GET(request: NextRequest) {
                   select: { id: true, status: true },
                   where: { status: "pending" },
                 },
+                // 税理士が直した件数を数えるためだけ。中身は返さない
+                _count: { select: { revisions: true } },
               },
             },
           },
@@ -135,9 +137,19 @@ export async function GET(request: NextRequest) {
     // レスポンスにアラート件数を追加し、journalEntries は除外
     const foldersWithAlerts = folders.map((folder) => {
       const alertCount = computeAlertCount(folder.documents);
+      /*
+        税理士が直した仕訳の数。**一覧に出すのは数だけ。**
+        「何か直された」と気づけば詳細を開くので、一覧に中身は要らない
+        （レスポンスを膨らませない）。
+      */
+      const advisorEditedCount = folder.documents.reduce(
+        (sum, doc) => sum + doc.journalEntries.filter((e) => e._count.revisions > 0).length,
+        0
+      );
       return {
         ...folder,
         alertCount,
+        advisorEditedCount,
         documents: folder.documents.map(({ journalEntries: _je, ...doc }) => doc),
       };
     });

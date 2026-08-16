@@ -65,6 +65,31 @@ interface JournalEntryData {
   aiReasoning: string;
   isConfirmed: boolean;
   duplicateDismissed: boolean;
+  /**
+   * 税理士がその場で直した記録。新しい順。
+   * **利用者さんが「ここはこうするんだ」と学べるように見せる。**
+   */
+  revisions?: EntryRevisionData[];
+}
+
+interface EntryRevisionData {
+  changedByName: string;
+  /** [{"field","label","before","after"}] のJSON文字列 */
+  changes: string;
+  createdAt: string;
+}
+
+/** 履歴のJSONを読む。壊れていれば空扱い（画面を落とさない） */
+function parseRevisionChanges(
+  raw: string
+): { label: string; before: string; after: string }[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 interface Document {
@@ -1624,6 +1649,12 @@ export default function FolderDetailPage({
                         <td className="px-4 py-3 whitespace-nowrap text-gray-700">
                           {entry.accountName}
                           {entry.aiSuggested && !entry.isConfirmed && <span className="ml-1 text-xs text-yellow-600 bg-yellow-100 px-1 rounded">AI</span>}
+                          {/* 税理士が直したものは、ここで気づけるようにする */}
+                          {entry.revisions && entry.revisions.length > 0 && (
+                            <span className="ml-1 text-xs text-indigo-700 bg-indigo-100 border border-indigo-200 px-1 rounded">
+                              税理士修正
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-teal-700 text-xs">{entry.taxRate || "-"}</td>
                         <td className="px-4 py-3 text-center">
@@ -2696,6 +2727,57 @@ export default function FolderDetailPage({
                       </select>
                     </div>
                   </div>
+
+                  {/*
+                    税理士がどこをどう直したか。
+                    **利用者さんに向けて出す。** 何が違っていたのかが分かれば、
+                    次から同じ間違いが減る ―― これがこの記録のいちばんの目的。
+                  */}
+                  {detailEntry.revisions && detailEntry.revisions.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-medium text-indigo-700 mb-1">
+                        税理士さんが直したところ
+                      </h4>
+                      <div className="space-y-2">
+                        {detailEntry.revisions.map((rev, i) => {
+                          const changes = parseRevisionChanges(rev.changes);
+                          return (
+                            <div
+                              key={i}
+                              className="text-xs bg-indigo-50 border border-indigo-200 rounded-lg p-2.5"
+                            >
+                              <p className="text-indigo-900 font-medium mb-1">
+                                {rev.changedByName || "税理士"}
+                                <span className="ml-2 font-normal text-indigo-700">
+                                  {new Date(rev.createdAt).toLocaleString("ja-JP", {
+                                    year: "numeric",
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              </p>
+                              {changes.length === 0 ? (
+                                <p className="text-gray-600">（内容の記録がありません）</p>
+                              ) : (
+                                <ul className="space-y-0.5">
+                                  {changes.map((c, j) => (
+                                    <li key={j} className="text-gray-800">
+                                      <span className="text-gray-500">{c.label}:</span>{" "}
+                                      <span className="line-through text-gray-500">{c.before}</span>
+                                      {" → "}
+                                      <strong className="text-indigo-900">{c.after}</strong>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* AI分類理由 */}
                   {detailEntry.aiReasoning && (
