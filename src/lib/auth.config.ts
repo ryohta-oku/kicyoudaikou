@@ -1,5 +1,31 @@
 import type { NextAuthConfig } from "next-auth";
-import { ADMIN_AREA_ROLES } from "@/lib/roles";
+import { ADMIN_AREA_ROLES, isExternalRole } from "@/lib/roles";
+
+/**
+ * 社外の人（税理士）に通してよい API。**ここに無いものは全部断る。**
+ *
+ * 逆（危ないものを列挙して塞ぐ）にしない。ルートは40近くあり、
+ * これから増える。増えたものが既定で開くか閉じるかの違いは大きい。
+ *
+ * 得意先の絞り込みはここではできない（Edge なので prisma を持ち込めない）。
+ * **各ルートの中で `@/lib/advisor` を使って持ち主を確かめること。**
+ * ここが見るのは「経路と方式」だけ。
+ */
+const EXTERNAL_ALLOWED: { method: string; pattern: RegExp }[] = [
+  // 確認画面が読むもの
+  { method: "GET", pattern: /^\/api\/folders$/ },
+  { method: "GET", pattern: /^\/api\/folders\/[^/]+$/ },
+  { method: "GET", pattern: /^\/api\/documents\/[^/]+$/ },
+  { method: "GET", pattern: /^\/api\/files$/ },
+  { method: "GET", pattern: /^\/api\/accounts$/ },
+  // 自分のアカウント情報（画面右上の表示に使う）
+  { method: "GET", pattern: /^\/api\/account$/ },
+];
+
+/** 経路と方式だけの判定。**export しているのは、境界を単体で確かめられるようにするため。** */
+export function isAllowedForExternal(method: string, pathname: string): boolean {
+  return EXTERNAL_ALLOWED.some((r) => r.method === method && r.pattern.test(pathname));
+}
 
 /**
  * ミドルウェアから使える認証設定。
@@ -29,7 +55,7 @@ export const authConfig = {
       return session;
     },
     /**
-     * 経路の可否判定。守るのは2種類ある。
+     * 経路の可否判定。守るのは3種類ある。
      *
      * **① /api 配下はログイン必須。**
      * 画面だけ塞いでも、そのデータを配っている API が開いていれば意味が無い。
@@ -47,10 +73,20 @@ export const authConfig = {
      * ここは以前 `admin` と **`staff`** で絞っていたが、記帳代行に `staff` は
      * 存在せず、指導員が締め出される状態だった（本番が管理者1人だけだったので
      * 表面化していない）。client-hub の語彙をそのまま持ち込んだ誤り。
+     *
+     * **③ 社外の人（税理士）は許可した口だけ。**
+     * ①は「ログインしていれば通す」なので、社外の人が入ると全ての API に
+     * 手が届いてしまう。`EXTERNAL_ALLOWED` に挙げた経路と方式だけを通し、
+     * 残りは 403 で断る。**塞ぐものを挙げるのではなく、通すものを挙げる。**
+     *
+     * ここで見られるのは経路と方式まで。「その得意先を見てよいか」は
+     * prisma が要るので各ルートの中（`@/lib/advisor`）で確かめる。
      */
-    authorized({ auth, request: { nextUrl } }) {
+    authorized({ auth, request }) {
+      const { nextUrl } = request;
       const { pathname } = nextUrl;
       const isLoggedIn = !!auth?.user;
+      const role = auth?.user?.role;
 
       if (pathname.startsWith("/api")) {
         // ログイン前に叩かれる口。ここを塞ぐとログインも初期設定もできなくなる
@@ -67,6 +103,14 @@ export const authConfig = {
             headers: { "Content-Type": "application/json" },
           });
         }
+
+        // ③ 社外の人（税理士）は、確認画面が要る口だけ。それ以外は全部断る
+        if (isExternalRole(role) && !isAllowedForExternal(request.method, pathname)) {
+          return new Response(JSON.stringify({ error: "forbidden", code: "EXTERNAL_ROLE_DENIED" }), {
+            status: 403,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
         return true;
       }
 
@@ -74,7 +118,6 @@ export const authConfig = {
 
       if (!isLoggedIn) return false;
 
-      const role = auth.user?.role;
       if (!role || !ADMIN_AREA_ROLES.includes(role)) {
         return Response.redirect(new URL("/", nextUrl));
       }

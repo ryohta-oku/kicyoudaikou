@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getClientScope } from "@/lib/advisor";
 
 /** フォルダ内の仕訳アラート件数を計算 */
 function computeAlertCount(
@@ -80,10 +81,28 @@ function computeAlertCount(
 
 export async function GET(request: NextRequest) {
   try {
+    const scope = await getClientScope();
+    if (!scope) {
+      return NextResponse.json({ error: "認証が必要です", code: "FOLDERS_UNAUTHORIZED" }, { status: 401 });
+    }
+
     const clientId = request.nextUrl.searchParams.get("clientId");
 
+    /*
+      社外の人（税理士）はクエリの得意先を信用せず、担当分に強制で絞る。
+      得意先を指定してきた場合も、担当外なら空で返す（存在を教えない）。
+    */
+    let where: { clientId?: string | { in: string[] } } | undefined;
+    if (scope.clientIds === null) {
+      where = clientId ? { clientId } : undefined;
+    } else if (clientId) {
+      where = { clientId: scope.clientIds.includes(clientId) ? clientId : "__denied__" };
+    } else {
+      where = { clientId: { in: scope.clientIds } };
+    }
+
     const folders = await prisma.folder.findMany({
-      where: clientId ? { clientId } : undefined,
+      where,
       include: {
         documents: {
           select: {

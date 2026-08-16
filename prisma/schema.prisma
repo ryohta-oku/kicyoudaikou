@@ -31,10 +31,33 @@ model Company {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  folders     Folder[]
-  subAccounts SubAccount[]
+  folders        Folder[]
+  subAccounts    SubAccount[]
+  advisorClients AdvisorClient[]
 
   @@map("Client")
+}
+
+/// 税理士（社外）が見てよい得意先。
+///
+/// **行が無い得意先は、その税理士には存在しないものとして扱う。**
+/// 得意先の絞り込みはこれまで localStorage の `selectedClientId` だけで、
+/// サーバー側には無かった。社内の人しか居ない間は成立していたが、
+/// 社外の人を入れる以上、クエリの clientId を信用してはいけない。
+///
+/// `userId` に FK を張らないのは `WorkSession.userId` 等と同じ理由 ――
+/// 共通ログインのとき `User` は「影」で、id を保ったまま役割と氏名だけ同期される。
+model AdvisorClient {
+  id        String   @id @default(uuid())
+  userId    String
+  clientId  String
+  createdBy String   @default("")
+  createdAt DateTime @default(now())
+
+  client Company @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clientId])
+  @@index([userId])
 }
 
 // フォルダ（アップロード時にファイルをグループ化）

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { getEffectiveRole, getEffectiveUserId, getEffectiveUserName, SIMULATION_PERSONAS } from "@/lib/roleSimulation";
+import { isExternalRole } from "@/lib/roles";
 import {
   FileText,
   ArrowLeft,
@@ -137,8 +138,14 @@ export default function FolderDetailPage({
   const userRole = getEffectiveRole(session?.user?.role || "");
   const effectiveUserId = getEffectiveUserId(session?.user?.role || "", session?.user?.id || "");
   const effectiveUserName = getEffectiveUserName(session?.user?.role || "", session?.user?.name || "");
-  // B型利用者は仕訳関連セクションを非表示
-  const canViewJournal = userRole !== "user_b";
+  /**
+   * 仕訳関連セクションを見せる相手。
+   *
+   * B型利用者には見せない。**税理士（社外）にも見せない** ―― この画面は
+   * 事業所の作業画面で、削除依頼の承認やエクスポートの入口も載っている。
+   * 税理士には専用の確認画面（`/review`）を用意する。
+   */
+  const canViewJournal = userRole !== "user_b" && !isExternalRole(userRole);
   const [folder, setFolder] = useState<Folder | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);

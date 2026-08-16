@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getEffectiveRole } from "@/lib/roleSimulation";
+import { getClientScope, isFolderAllowed } from "@/lib/advisor";
 
 export async function GET(
   _request: NextRequest,
@@ -9,6 +10,16 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+
+    // 社外の人（税理士）は担当の得意先のフォルダだけ
+    const scope = await getClientScope();
+    if (!scope) {
+      return NextResponse.json({ error: "認証が必要です", code: "FOLDER_UNAUTHORIZED" }, { status: 401 });
+    }
+    if (!(await isFolderAllowed(scope, id))) {
+      return NextResponse.json({ error: "権限がありません", code: "FOLDER_FORBIDDEN" }, { status: 403 });
+    }
+
     const folder = await prisma.folder.findUnique({
       where: { id },
       include: {

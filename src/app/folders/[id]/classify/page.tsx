@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { getEffectiveRole } from "@/lib/roleSimulation";
+import { isExternalRole } from "@/lib/roles";
 import { getSelectedClientId } from "@/lib/client";
 import {
   FileText,
@@ -65,8 +66,9 @@ export default function ClassifyPage({
 
   const effectiveRole = getEffectiveRole(session?.user?.role || "");
 
-  // 工数記録: 仕訳分類ページの滞在時間
-  useWorkLogger("classify", effectiveRole !== "user_b", {
+  // 工数記録: 仕訳分類ページの滞在時間。
+  // 税理士（社外）は事業所の工数ではないので数えない
+  useWorkLogger("classify", effectiveRole !== "user_b" && !isExternalRole(effectiveRole), {
     sessionId: typeof window !== "undefined" ? localStorage.getItem("workSessionId") : null,
     userId: session?.user?.id || "",
     userName: session?.user?.name || "",
