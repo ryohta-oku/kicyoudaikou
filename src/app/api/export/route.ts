@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { generateCSV, type CSVFormat } from "@/lib/csv";
 import { auth } from "@/lib/auth";
 import { getEffectiveRole } from "@/lib/roleSimulation";
+import { getClientScope, isFolderAllowed, isDocumentAllowed } from "@/lib/advisor";
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,6 +15,22 @@ export async function POST(request: NextRequest) {
 
     if (!documentId && !folderId) {
       return NextResponse.json({ error: "ドキュメントIDまたはフォルダIDが必要です", code: "EXPORT_NO_ID" }, { status: 400 });
+    }
+
+    /*
+      持ち主の確認。**ここが抜けていた。**
+      渡された folderId / documentId をそのまま使っていたので、担当外の得意先の
+      帳簿をCSVに書き出せてしまう状態だった。読めないものは出せないようにする。
+    */
+    const scope = await getClientScope();
+    if (!scope) {
+      return NextResponse.json({ error: "認証が必要です", code: "EXPORT_UNAUTHORIZED" }, { status: 401 });
+    }
+    const allowed = folderId
+      ? await isFolderAllowed(scope, folderId)
+      : await isDocumentAllowed(scope, documentId!);
+    if (!allowed) {
+      return NextResponse.json({ error: "権限がありません", code: "EXPORT_FORBIDDEN" }, { status: 403 });
     }
 
     let entries;

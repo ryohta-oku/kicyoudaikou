@@ -22,6 +22,10 @@ const EXTERNAL_ALLOWED: { method: string; pattern: RegExp }[] = [
   { method: "GET", pattern: /^\/api\/account$/ },
   // 確認の記録（1仕訳ごとの「よい」「直して」）
   { method: "POST", pattern: /^\/api\/review\/entries$/ },
+  // フォルダ単位の確認完了・差し戻し
+  { method: "POST", pattern: /^\/api\/review\/folder$/ },
+  // 確認が終わったあとのCSV出力（担当外は route の中で 403 になる）
+  { method: "POST", pattern: /^\/api\/export$/ },
 ];
 
 /** 経路と方式だけの判定。**export しているのは、境界を単体で確かめられるようにするため。** */

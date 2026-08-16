@@ -122,6 +122,8 @@ export default async function ReviewFolderPage({
 
       <ReviewList
         folderId={folder.id}
+        folderName={folder.name}
+        initialStatus={folder.taxReviewStatus}
         rows={rows}
         readOnly={!!preview}
         readOnlyReason={preview ? "プレビューでは操作できません" : ""}
