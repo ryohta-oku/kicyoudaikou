@@ -5,10 +5,16 @@ import { prisma } from "@/lib/prisma";
 import { getClientScope, isClientAllowed } from "@/lib/advisor";
 import { resolveEntryImage } from "@/lib/entry-image";
 import ReviewShell from "@/components/review/ReviewShell";
-import ReviewList, { type ReviewRow } from "@/components/review/ReviewList";
+import ReviewList, { type ReceiptGroup } from "@/components/review/ReviewList";
+import { INVOICE_KINDS, type InvoiceKind } from "@/lib/tax-class";
 import { resolvePreview } from "../page";
 
 export const dynamic = "force-dynamic";
+
+/** DBの値を受け取る。想定外の文字列は既定に倒す（画面で嘘の区分を出さない） */
+function normalizeInvoiceKind(raw: string | undefined): InvoiceKind {
+  return INVOICE_KINDS.includes(raw as InvoiceKind) ? (raw as InvoiceKind) : "80%控除";
+}
 
 /**
  * 税理士の確認画面（本体）。
@@ -41,7 +47,16 @@ export default async function ReviewFolderPage({
       name: true,
       taxReviewStatus: true,
       clientId: true,
-      client: { select: { name: true } },
+      client: {
+        select: {
+          name: true,
+          // 貸方（相手科目）の既定値。CSVに実際に出るのはこの科目なので、
+          // 税理士さんが画面で確かめられるように渡す
+          defaultCreditAccountName: true,
+          // 登録番号が無い領収書のインボイス区分。画面とCSVで同じ値を出す
+          nonQualifiedInvoiceKind: true,
+        },
+      },
       documents: {
         select: {
           id: true,
@@ -62,7 +77,9 @@ export default async function ReviewFolderPage({
               subAccountName: true,
               debitAmount: true,
               taxRate: true,
+              creditAccountName: true,
               isConfirmed: true,
+              page: { select: { registrationNumber: true } },
               taxReview: {
                 select: { status: true, comment: true, reviewedByName: true, reviewerKind: true },
               },
@@ -78,23 +95,51 @@ export default async function ReviewFolderPage({
   // 担当外は「無い」ものとして扱う。存在を教えない
   if (!isClientAllowed(effective, folder.clientId)) notFound();
 
-  const rows: ReviewRow[] = folder.documents
-    .flatMap((doc) =>
-      doc.journalEntries.map((e) => ({
+  const counterAccount = folder.client?.defaultCreditAccountName || "現金";
+  const invoiceKind = normalizeInvoiceKind(folder.client?.nonQualifiedInvoiceKind);
+
+  /*
+    **レシート単位にまとめてから画面に渡す。**
+
+    軽減税率が混ざった1枚の領収書は複数の仕訳になる（お茶8%＝会議費、
+    コピー用紙10%＝消耗品費）。1仕訳ずつ並べると、同じ1枚から出たものと
+    本物の重複が同じ見た目になり、税理士さんが取り違える。
+
+    まとめる鍵はページ（＝レシート1枚）。ページが無い古い行は書類でまとめる。
+  */
+  const groups = new Map<string, ReceiptGroup>();
+
+  for (const doc of folder.documents) {
+    for (const e of doc.journalEntries) {
+      const key = e.pageId ?? `doc:${doc.id}`;
+      let group = groups.get(key);
+      if (!group) {
+        group = {
+          key,
+          date: e.date,
+          filename: doc.filename,
+          image: resolveEntryImage({
+            pageId: e.pageId,
+            filepath: doc.filepath,
+            fileType: doc.fileType,
+            pages: doc.pages,
+          }),
+          lines: [],
+        };
+        groups.set(key, group);
+      }
+      group.lines.push({
         id: e.id,
-        date: e.date,
         description: e.description,
         accountName: e.accountName,
         subAccountName: e.subAccountName,
         amount: e.debitAmount,
         taxRate: e.taxRate,
-        filename: doc.filename,
-        image: resolveEntryImage({
-          pageId: e.pageId,
-          filepath: doc.filepath,
-          fileType: doc.fileType,
-          pages: doc.pages,
-        }),
+        // 行ごとの上書きが無ければ得意先の既定値。CSVの組み立てと同じ順番
+        counterAccountName: e.creditAccountName || counterAccount,
+        // 「読み取れなかっただけ」と「元から無い」を区別しない ――
+        // どちらも適格請求書として扱わないのが安全側（CSV側と同じ判断）
+        hasRegistrationNumber: e.page ? e.page.registrationNumber !== "" : false,
         review: e.taxReview
           ? {
               status: e.taxReview.status,
@@ -103,9 +148,11 @@ export default async function ReviewFolderPage({
               reviewerKind: e.taxReview.reviewerKind,
             }
           : null,
-      }))
-    )
-    .sort((a, b) => a.date.localeCompare(b.date));
+      });
+    }
+  }
+
+  const receipts = [...groups.values()].sort((a, b) => a.date.localeCompare(b.date));
 
   return (
     <ReviewShell previewName={preview?.name} actingAsAdvisor={!!effective.actingAsAdvisor}>
@@ -124,7 +171,8 @@ export default async function ReviewFolderPage({
         folderId={folder.id}
         folderName={folder.name}
         initialStatus={folder.taxReviewStatus}
-        rows={rows}
+        receipts={receipts}
+        nonQualifiedInvoiceKind={invoiceKind}
         readOnly={!!preview}
         readOnlyReason={preview ? "プレビューでは操作できません" : ""}
       />

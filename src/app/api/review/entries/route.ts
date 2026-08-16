@@ -26,14 +26,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { folderId, entryId, status, comment } = (await request.json()) as {
+    const { folderId, entryIds, status, comment } = (await request.json()) as {
       folderId?: string;
-      entryId?: string;
+      entryIds?: string[];
       status?: string;
       comment?: string;
     };
 
-    if (!folderId || !entryId || (status !== "ok" && status !== "needs_fix")) {
+    if (
+      !folderId ||
+      !Array.isArray(entryIds) ||
+      entryIds.length === 0 ||
+      (status !== "ok" && status !== "needs_fix")
+    ) {
       return NextResponse.json({ error: "入力が不正です", code: "REVIEW_BAD_REQUEST" }, { status: 400 });
     }
     if (status === "needs_fix" && !comment?.trim()) {
@@ -47,12 +52,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "権限がありません", code: "REVIEW_FORBIDDEN" }, { status: 403 });
     }
 
-    // その仕訳が本当にこのフォルダのものか（他のフォルダの仕訳を書き換えられないように）
-    const entry = await prisma.journalEntry.findUnique({
-      where: { id: entryId },
-      select: { document: { select: { folderId: true } } },
+    /*
+      渡された仕訳が**全部**このフォルダのものかを確かめる。
+      1件でも他のフォルダのものが混ざっていたら、まとめて断る ――
+      混ざったまま一部だけ書き込むと、担当外の帳簿に自分の承認が残ってしまう。
+    */
+    const entries = await prisma.journalEntry.findMany({
+      where: { id: { in: entryIds } },
+      select: { id: true, document: { select: { folderId: true } } },
     });
-    if (!entry || entry.document.folderId !== folderId) {
+    const ok =
+      entries.length === entryIds.length &&
+      entries.every((e) => e.document.folderId === folderId);
+    if (!ok) {
       return NextResponse.json({ error: "仕訳が見つかりません", code: "REVIEW_ENTRY_NOT_FOUND" }, { status: 404 });
     }
 
@@ -66,14 +78,30 @@ export async function POST(request: NextRequest) {
       reviewedAt: new Date(),
     };
 
-    const review = await prisma.taxReview.upsert({
-      where: { entryId },
-      create: { entryId, ...data },
-      update: data,
-      select: { status: true, comment: true, reviewedByName: true, reviewerKind: true },
-    });
+    /*
+      判断の単位は領収書1枚。1枚が税率で2仕訳に分かれていても、
+      **その2件は必ず同じ状態になる**（片方だけOKという状態を作らない）。
+      記録は仕訳ごとに残るので、後から見たときの粒度は変わらない。
+    */
+    await prisma.$transaction(
+      entryIds.map((entryId) =>
+        prisma.taxReview.upsert({
+          where: { entryId },
+          create: { entryId, ...data },
+          update: data,
+        })
+      )
+    );
 
-    return NextResponse.json({ review });
+    const saved = {
+      status: data.status,
+      comment: data.comment,
+      reviewedByName: data.reviewedByName,
+      reviewerKind: data.reviewerKind,
+    };
+    return NextResponse.json({
+      reviews: Object.fromEntries(entryIds.map((id) => [id, saved])),
+    });
   } catch (error) {
     console.error("Tax review error:", error);
     return NextResponse.json({ error: "保存に失敗しました", code: "REVIEW_FAILED" }, { status: 500 });
