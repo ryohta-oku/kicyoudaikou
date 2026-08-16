@@ -502,7 +502,7 @@ export default function ClassifyPage({
 
       {/* フローティング仕訳完了ボタン */}
       {allDone && (
-        <div className="fixed bottom-6 right-6 z-40">
+        <div className="guide-shift fixed bottom-6 right-6 z-40">
           <div className="relative">
             <span className="absolute -top-10 right-0 bg-teal-600 text-white text-sm rounded-full px-3 py-1.5 shadow-lg animate-bounce whitespace-nowrap">
               全て確認済み！最終確認へ進みましょう ↓

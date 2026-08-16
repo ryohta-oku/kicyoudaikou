@@ -1,4 +1,4 @@
-import { AlertTriangle, Lightbulb, HelpCircle } from "lucide-react";
+import { AlertTriangle, Lightbulb, HelpCircle, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -62,25 +62,36 @@ export function Section({
   );
 }
 
-/** やること。**1行に1つの動作**しか書かない */
-export function Steps({ items, compact }: { items: React.ReactNode[]; compact?: boolean }) {
+/**
+ * やること。**1行に1つの動作**しか書かない。
+ *
+ * ここは**説明書のページ用で、全部開いたまま**出す（読み通す・紙に印刷するため）。
+ * 作業中に1つずつ開くのは `GuideChecklist` の役目。
+ */
+export function Steps({ items }: { items: GuideStepLike[] }) {
   return (
-    <ol className={compact ? "space-y-2" : "space-y-2.5"}>
+    <ol className="space-y-3">
       {items.map((t, i) => (
         <li key={i} className="flex gap-2.5">
-          <span
-            className={cn(
-              "inline-flex items-center justify-center rounded-full bg-teal-100 text-teal-800 font-bold shrink-0 mt-0.5",
-              compact ? "w-5 h-5 text-xs" : "w-6 h-6 text-sm"
-            )}
-          >
+          <span className="inline-flex items-center justify-center rounded-full bg-teal-100 text-teal-800 font-bold shrink-0 mt-0.5 w-6 h-6 text-sm">
             {i + 1}
           </span>
-          <span className={cn("text-foreground leading-relaxed", compact && "text-sm")}>{t}</span>
+          <div className="min-w-0">
+            <p className="text-foreground leading-relaxed">{t.label}</p>
+            {t.detail && (
+              <p className="text-sm text-gray-600 leading-relaxed mt-1">{t.detail}</p>
+            )}
+          </div>
         </li>
       ))}
     </ol>
   );
+}
+
+/** `content.tsx` の `GuideStep` と同じ形。循環参照を避けるためここにも置く */
+export interface GuideStepLike {
+  label: React.ReactNode;
+  detail?: React.ReactNode;
 }
 
 /**
@@ -109,14 +120,14 @@ export function Tip({ children, compact }: { children: React.ReactNode; compact?
 /**
  * こまったとき。
  * **その作業のすぐ横に置く。** 巻末にまとめると、そこまでたどり着けない。
+ *
+ * `collapsible` を渡すと、見出しを押したときだけ開く（作業中のパネル用）。
+ * **困っていないときに読む文章ではない**ので、いつも開いていると邪魔になる。
+ * 説明書のページでは畳まない（紙に出ないため）。
  */
-export function Trouble({ items }: { items: GuideTrouble[] }) {
-  return (
-    <div className="border-t border-gray-200 pt-3 space-y-3">
-      <h3 className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
-        <HelpCircle className="w-4 h-4 text-gray-400" />
-        こまったとき
-      </h3>
+export function Trouble({ items, collapsible }: { items: GuideTrouble[]; collapsible?: boolean }) {
+  const body = (
+    <div className="space-y-3">
       {items.map((it) => (
         <div key={it.q}>
           <p className="text-sm font-bold text-foreground">{it.q}</p>
@@ -124,6 +135,29 @@ export function Trouble({ items }: { items: GuideTrouble[] }) {
         </div>
       ))}
     </div>
+  );
+
+  if (!collapsible) {
+    return (
+      <div className="border-t border-gray-200 pt-3 space-y-3">
+        <h3 className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
+          <HelpCircle className="w-4 h-4 text-gray-400" />
+          こまったとき
+        </h3>
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <details className="border-t border-gray-200 pt-3 group">
+      <summary className="text-sm font-bold text-gray-700 flex items-center gap-1.5 cursor-pointer list-none">
+        <HelpCircle className="w-4 h-4 text-gray-400 shrink-0" />
+        こまったとき（{items.length}件）
+        <ChevronDown className="w-4 h-4 text-gray-400 ml-auto transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="mt-3">{body}</div>
+    </details>
   );
 }
 

@@ -181,3 +181,37 @@ body {
     page-break-inside: avoid;
   }
 }
+
+/*
+ * 説明パネルが開いているとき、本文を押しのける。
+ *
+ * パネルは `fixed` で右に出るだけなので、そのままだと本文の右側が
+ * 隠れる。**見比べながら読むためのパネルが、見比べる対象を隠していた。**
+ *
+ * body に余白を作るのは、レイアウトを組み替えずに済むから ――
+ * sticky のヘッダー・工程バー・本文がまとめて縮み、
+ * パネル自身（fixed right-0）は右端に残る。
+ *
+ * 幅が狭いときはパネルが下から全面に出るので、余白は付けない。
+ */
+body {
+  transition: padding-right 200ms ease;
+}
+
+@media (min-width: 1024px) {
+  body.guide-open {
+    padding-right: 22rem;
+  }
+
+  /*
+   * 右下に固定しているボタン（CSVエクスポート）は body の余白を無視するので、
+   * 別に寄せる。寄せないとパネルの下に潜って押せなくなる。
+   */
+  body.guide-open .guide-shift {
+    right: calc(1.5rem + 22rem);
+  }
+}
+
+.guide-shift {
+  transition: right 200ms ease;
+}

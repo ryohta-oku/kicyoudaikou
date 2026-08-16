@@ -16,7 +16,7 @@ import {
   type FolderInfo,
 } from "@/lib/workflow-step";
 import { chapterByStep } from "@/components/guide/content";
-import { Section, Steps, Note, Tip, Trouble } from "@/components/guide/GuideParts";
+import GuideAccordion from "@/components/guide/GuideAccordion";
 
 /**
  * いまやっている作業の説明を、作業画面の横に出す。
@@ -164,6 +164,17 @@ export default function GuidePanel() {
   /** 工程が一致している間だけ開いている。画面が変われば自然に閉じる */
   const open = !!currentStep && openStep === currentStep;
 
+  /*
+    本文を押しのける。**印はここで付ける** ―― パネルは fixed なので、
+    自分が出たことを本文に伝える手立てが他にない。
+    幅の指定は globals.css の `body.guide-open` にある。
+  */
+  useEffect(() => {
+    if (!open) return;
+    document.body.classList.add("guide-open");
+    return () => document.body.classList.remove("guide-open");
+  }, [open]);
+
   const close = () => {
     setOpenStep(null);
     if (currentStep) markSeen(userId, currentStep);
@@ -230,16 +241,13 @@ export default function GuidePanel() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
-              {chapters.map((c) => (
-                <Section key={c.step} step={c.step} title={c.title} icon={c.icon} compact>
-                  {c.lead && <p className="text-sm text-foreground leading-relaxed">{c.lead}</p>}
-                  {c.steps && <Steps items={c.steps} compact />}
-                  {c.notes?.map((n, i) => <Note key={i} compact>{n}</Note>)}
-                  {c.tips?.map((t, i) => <Tip key={i} compact>{t}</Tip>)}
-                  {c.troubles && <Trouble items={c.troubles} />}
-                </Section>
-              ))}
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              {/*
+                章の畳み込みと手順のチェックは GuideAccordion に任せる。
+                `scope` はフォルダごとに分ける ―― 別のフォルダに移ったら
+                チェックは白紙から始まるべきなので。
+              */}
+              <GuideAccordion chapters={chapters} scope={folderId ?? "dashboard"} />
             </div>
 
             <div className="border-t border-gray-200 px-4 py-3 shrink-0">
