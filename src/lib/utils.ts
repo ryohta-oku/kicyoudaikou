@@ -27,6 +27,8 @@ export const STATUS_LABELS: Record<string, string> = {
   handed_off: "引き継ぎ済",
   double_check_pending: "ダブルチェック待ち",
   double_check_completed: "ダブルチェック完了",
+  tax_pending: "税理士が確認中",
+  tax_returned: "税理士から差し戻し",
 };
 
 export const STATUS_COLORS: Record<string, string> = {
@@ -40,4 +42,7 @@ export const STATUS_COLORS: Record<string, string> = {
   handed_off: "bg-cyan-100 text-cyan-800",
   double_check_pending: "bg-orange-100 text-orange-800",
   double_check_completed: "bg-green-100 text-green-800",
+  tax_pending: "bg-indigo-100 text-indigo-700",
+  // 差し戻しは手を動かす必要がある。他の状態より強く見せる
+  tax_returned: "bg-red-100 text-red-700",
 };

@@ -123,6 +123,9 @@ interface Folder {
   doubleCheckById: string;
   doubleCheckByName: string;
   doubleCheckAt: string | null;
+  /** 税理士の最終チェック。null / "pending" / "returned" / "approved" */
+  taxReviewStatus?: string | null;
+  taxReviewedByName?: string;
   needsDoubleCheck: boolean;
   documents: Document[];
 }
@@ -190,6 +193,7 @@ export default function FolderDetailPage({
   const [doubleCheckCompleting, setDoubleCheckCompleting] = useState(false);
   /** ダブルチェック完了の連打よけ（成功時は画面遷移するので戻さない） */
   const doubleCheckSubmitting = useRef(false);
+  const [requestingTaxReview, setRequestingTaxReview] = useState(false);
   const [updatingNeedsDoubleCheck, setUpdatingNeedsDoubleCheck] = useState(false);
 
   /**
@@ -563,6 +567,26 @@ export default function FolderDetailPage({
   };
 
   /** ページデータ保存 */
+  /** 税理士に確認をお願いする */
+  const handleRequestTaxReview = async () => {
+    setRequestingTaxReview(true);
+    try {
+      const res = await fetch("/api/review/folder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId: id, action: "request" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "依頼できませんでした");
+        return;
+      }
+      await fetchFolder();
+    } finally {
+      setRequestingTaxReview(false);
+    }
+  };
+
   const handlePageUpdate = async (pageId: string, data: PageUpdateData) => {
     const res = await fetch("/api/ocr/pages", {
       method: "PATCH",
@@ -2799,6 +2823,58 @@ export default function FolderDetailPage({
       {/* 2026-09-01: 引き継ぎのフローティングボタンは削除した。
           A型のみになり引き継ぎ先が無い。**このボタンが AI仕訳分類の起動役も
           兼ねていた**ので、その呼び出しは handleDoubleCheckComplete に移した */}
+
+      {/*
+        税理士に確認をお願いする。最終確認までが済んだフォルダに出す。
+
+        **エクスポートより先に置く。** CSVを出すのは税理士さんが見たあと、
+        というのが本来の順序で、事業所が先に出してしまうと確認の意味が薄れる。
+        管理者・指導者には従来のエクスポートも残してあるので、
+        急ぎのときは自分で出せる。
+      */}
+      {canViewJournal &&
+        !hasUnresolvedAlerts &&
+        folder.documents.length > 0 &&
+        folder.documents.every((d) => d.status === "reviewed") &&
+        folder.taxReviewStatus !== "pending" &&
+        folder.taxReviewStatus !== "approved" && (
+          <div className="mb-6 card-glass rounded-xl p-4">
+            {folder.taxReviewStatus === "returned" ? (
+              <>
+                <p className="font-bold text-red-800 mb-1">税理士から差し戻されました</p>
+                <p className="text-sm text-gray-600 mb-3">
+                  仕訳確認の画面で、指摘のあった仕訳を直してから、もう一度お願いしてください。
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-gray-700 mb-3">
+                最終確認まで終わりました。税理士さんに見てもらいましょう。
+              </p>
+            )}
+            <button
+              onClick={handleRequestTaxReview}
+              disabled={requestingTaxReview}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold disabled:opacity-50"
+            >
+              {requestingTaxReview ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
+              税理士に確認を依頼する
+            </button>
+          </div>
+        )}
+
+      {/* 税理士に預けている間 */}
+      {canViewJournal && folder.taxReviewStatus === "pending" && (
+        <div className="mb-6 card-glass rounded-xl p-4">
+          <p className="font-bold text-foreground mb-1">税理士さんが確認しています</p>
+          <p className="text-sm text-gray-600">
+            確認が終わると、税理士さんの側でCSVが書き出されます。しばらくお待ちください。
+          </p>
+        </div>
+      )}
 
       {/* A型: フローティングCSVエクスポートボタン（アラート未解消時は非表示） */}
       {canViewJournal &&
