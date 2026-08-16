@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { renderPdfPage } from "@/lib/pdf-render";
+import { renderPdfPage, cancelPdfRender } from "@/lib/pdf-render";
 
 /**
  * PDFの指定ページを画像として出す。
@@ -89,6 +89,8 @@ export default function PdfPageCanvas({
     return () => {
       cancelled = true;
       cleanup();
+      // 描きかけを残さない（Strict Mode の2回目と衝突させない）
+      if (canvasRef.current) cancelPdfRender(canvasRef.current);
     };
   }, [src, pageNumber, maxWidth]);
 

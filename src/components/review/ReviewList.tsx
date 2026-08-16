@@ -59,6 +59,8 @@ export default function ReviewList({
   const [commenting, setCommenting] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [blocked, setBlocked] = useState<string | null>(null);
+  /** いまカーソルを合わせている行。拡大したレシートを出す先 */
+  const [hovered, setHovered] = useState<string | null>(null);
 
   const [folderStatus, setFolderStatus] = useState<string | null>(initialStatus);
   const [finishing, setFinishing] = useState(false);
@@ -163,16 +165,34 @@ export default function ReviewList({
           return (
             <li
               key={row.id}
+              /*
+                **`relative` と、ホバー時の `z-50` が要る。**
+                card-glass の backdrop-filter は行ごとに重なりの文脈を作るので、
+                行の中で z-index をいくら上げても、後ろの行がその上に描かれる
+                （拡大したレシートが次の行に潜り込む）。行そのものを持ち上げる。
+              */
               className={cn(
-                "card-glass rounded-xl p-3 flex gap-4",
+                "card-glass rounded-xl p-3 flex gap-4 relative",
+                hovered === row.id && "z-50",
                 r?.status === "ok" && "ring-1 ring-green-200 bg-green-50/40",
                 r?.status === "needs_fix" && "ring-1 ring-red-200 bg-red-50/40"
               )}
             >
-              {/* 左: レシート。ホバーで拡大 */}
-              <div className="relative group shrink-0">
+              {/* 左: レシート。カーソルを合わせると大きく出る */}
+              <div
+                className="relative shrink-0"
+                onMouseEnter={() => setHovered(row.id)}
+                onMouseLeave={() => setHovered((h) => (h === row.id ? null : h))}
+              >
                 <Thumbnail image={row.image} alt={row.filename} />
-                <Enlarged image={row.image} alt={row.filename} above={isLast} />
+                {/*
+                  **ホバーしたときに初めて置く。**
+                  最初から置いて CSS で隠すと、隠れている間は「見えていない」と
+                  判定されてPDFの描画が始まらず、スクロールするまで出ないままになる。
+                */}
+                {hovered === row.id && (
+                  <Enlarged image={row.image} alt={row.filename} above={isLast} />
+                )}
               </div>
 
               {/* 右: 中身 */}
@@ -401,14 +421,21 @@ function Enlarged({
 }) {
   if (image.kind === "none") return null;
 
+  /*
+    行の右側に出す。**下端が画面から切れないように、行の中央に合わせる。**
+    以前は上端/下端に貼り付けていたので、真ん中あたりの行では
+    下がはみ出して読めなかった。
+
+    `above` は最後の数行のときだけ下寄せにするための逃げ道として残す。
+  */
   return (
     <div
       className={cn(
-        "hidden group-hover:block absolute left-full ml-3 z-30 pointer-events-none",
-        above ? "bottom-0" : "top-0"
+        "absolute left-full ml-3 pointer-events-none",
+        above ? "bottom-0" : "top-1/2 -translate-y-1/2"
       )}
     >
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-2">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-2 max-h-[80vh] overflow-hidden">
         {image.kind === "image" ? (
           <Image
             src={image.src}

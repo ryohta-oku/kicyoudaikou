@@ -26,11 +26,21 @@ type PdfPage = {
    * （そちらを使う場合は canvas を null にする必要がある）。
    * どちらも渡さないと描画が終わらないまま止まる。
    */
-  render(o: { canvas: HTMLCanvasElement; viewport: PdfViewport }): { promise: Promise<void> };
+  render(o: { canvas: HTMLCanvasElement; viewport: PdfViewport }): PdfRenderTask;
 };
+type PdfRenderTask = { promise: Promise<void>; cancel(): void };
 
 let pdfjs: typeof import("pdfjs-dist") | null = null;
 const docs = new Map<string, Promise<PdfDoc>>();
+
+/**
+ * いま描いている最中の canvas。
+ *
+ * **同じ canvas に2つの描画を同時に走らせると pdf.js が拒否する。**
+ * 開発中は React の Strict Mode で効果が2回走るため、これが普通に起きて
+ * 「読めませんでした」の表示になっていた。前のものを打ち切ってから描く。
+ */
+const rendering = new WeakMap<HTMLCanvasElement, PdfRenderTask>();
 
 async function getPdfjs() {
   if (pdfjs) return pdfjs;
@@ -92,5 +102,20 @@ export async function renderPdfPage(
   canvas.style.width = `${Math.floor(base.width * cssScale)}px`;
   canvas.style.height = `${Math.floor(base.height * cssScale)}px`;
 
-  await page.render({ canvas, viewport }).promise;
+  // 同じ canvas に前の描画が残っていたら打ち切る
+  rendering.get(canvas)?.cancel();
+
+  const task = page.render({ canvas, viewport });
+  rendering.set(canvas, task);
+  try {
+    await task.promise;
+  } finally {
+    if (rendering.get(canvas) === task) rendering.delete(canvas);
+  }
+}
+
+/** 画面から消えるときに呼ぶ。描きかけを残さない */
+export function cancelPdfRender(canvas: HTMLCanvasElement): void {
+  rendering.get(canvas)?.cancel();
+  rendering.delete(canvas);
 }
