@@ -100,7 +100,13 @@ export async function renderPdfPage(
   canvas.width = Math.floor(viewport.width);
   canvas.height = Math.floor(viewport.height);
   canvas.style.width = `${Math.floor(base.width * cssScale)}px`;
-  canvas.style.height = `${Math.floor(base.height * cssScale)}px`;
+  /*
+    **高さは px で固定しない。**
+    インラインの指定はクラスの `h-auto` に勝つので、`max-w-full` で
+    横に縮めたときに縦だけ残って縦横比が崩れる。
+    レシートを出す場所は幅が変わるので、ここが効いてくる。
+  */
+  canvas.style.height = "auto";
 
   // 同じ canvas に前の描画が残っていたら打ち切る
   rendering.get(canvas)?.cancel();

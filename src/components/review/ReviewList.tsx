@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Check, MessageSquareWarning, Loader2, CircleCheck, Download } from "lucide-react";
+import { Check, MessageSquareWarning, Loader2, CircleCheck, Download, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { EntryImageSource } from "@/lib/entry-image";
+import { pdfHref, type EntryImageSource } from "@/lib/entry-image";
 import PdfPageCanvas from "@/components/PdfPageCanvas";
 
 export interface ReviewRow {
@@ -26,10 +26,14 @@ export interface ReviewRow {
 }
 
 /**
- * 1行 = 1仕訳。左にレシート、右に中身。
+ * 税理士の確認画面の中身。**左にレシート、右に仕訳の一覧。**
  *
- * **カーソルを合わせるとレシートが大きく出る。** 拡大は行の右側に重ねて出し、
- * 画面の下のほうの行では上向きに出す（下に出すと画面外に消えるため）。
+ * 以前はカーソルを合わせると拡大パネルを重ねていたが、拡大すると仕訳が隠れて
+ * 「レシートを見る → 戻して仕訳を見る」の行き来が1件ごとに起きていた。
+ * 確認は見比べる作業なので、同時に見えていないと成立しない。
+ *
+ * 重ねるのをやめたことで、card-glass の backdrop-filter が行ごとに
+ * 重なりの文脈を作る問題（拡大が次の行に潜り込む）も原因ごと消えている。
  */
 const CSV_FORMATS = [
   { value: "generic", label: "汎用CSV" },
@@ -59,8 +63,8 @@ export default function ReviewList({
   const [commenting, setCommenting] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [blocked, setBlocked] = useState<string | null>(null);
-  /** いまカーソルを合わせている行。拡大したレシートを出す先 */
-  const [hovered, setHovered] = useState<string | null>(null);
+  /** 左に出しているレシートの行。カーソルが外れても戻さない */
+  const [previewId, setPreviewId] = useState<string | null>(rows[0]?.id ?? null);
 
   const [folderStatus, setFolderStatus] = useState<string | null>(initialStatus);
   const [finishing, setFinishing] = useState(false);
@@ -144,6 +148,8 @@ export default function ReviewList({
     }
   };
 
+  const shown = rows.find((r) => r.id === previewId) ?? rows[0];
+
   return (
     <div>
       <div className="flex flex-wrap items-center gap-3 mb-4 text-sm">
@@ -158,41 +164,39 @@ export default function ReviewList({
         </span>
       </div>
 
-      <ul className="space-y-3">
-        {rows.map((row, index) => {
+      {/*
+        左にレシート、右に仕訳。**重ねない。**
+
+        以前はカーソルを合わせると拡大パネルを重ねていたが、拡大すると
+        仕訳の内容が隠れるので、1件ごとに「レシートを見る → 戻して仕訳を見る」
+        の行き来が起きていた。確認は見比べる作業なので、同時に見えていないと
+        成立しない。それぞれに場所を与える。
+      */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,24rem)_1fr] gap-4 lg:gap-6">
+        <ReceiptPane row={shown} />
+
+        <ul className="space-y-3 min-w-0">
+        {rows.map((row) => {
           const r = state[row.id];
-          const isLast = index >= rows.length - 2;
           return (
             <li
               key={row.id}
               /*
-                **`relative` と、ホバー時の `z-50` が要る。**
-                card-glass の backdrop-filter は行ごとに重なりの文脈を作るので、
-                行の中で z-index をいくら上げても、後ろの行がその上に描かれる
-                （拡大したレシートが次の行に潜り込む）。行そのものを持ち上げる。
+                カーソルを合わせた行のレシートを左に出す。
+                **外れても戻さない** ―― 「よい」を押しに行く途中で
+                レシートが消えたら、見比べた意味がなくなる。
               */
+              onMouseEnter={() => setPreviewId(row.id)}
               className={cn(
-                "card-glass rounded-xl p-3 flex gap-4 relative",
-                hovered === row.id && "z-50",
+                "card-glass rounded-xl p-3 flex gap-3 transition-colors",
+                previewId === row.id && "ring-2 ring-teal-400",
                 r?.status === "ok" && "ring-1 ring-green-200 bg-green-50/40",
                 r?.status === "needs_fix" && "ring-1 ring-red-200 bg-red-50/40"
               )}
             >
-              {/* 左: レシート。カーソルを合わせると大きく出る */}
-              <div
-                className="relative shrink-0"
-                onMouseEnter={() => setHovered(row.id)}
-                onMouseLeave={() => setHovered((h) => (h === row.id ? null : h))}
-              >
+              {/* どの行かを見分けるための小さいレシート */}
+              <div className="shrink-0">
                 <Thumbnail image={row.image} alt={row.filename} />
-                {/*
-                  **ホバーしたときに初めて置く。**
-                  最初から置いて CSS で隠すと、隠れている間は「見えていない」と
-                  判定されてPDFの描画が始まらず、スクロールするまで出ないままになる。
-                */}
-                {hovered === row.id && (
-                  <Enlarged image={row.image} alt={row.filename} above={isLast} />
-                )}
               </div>
 
               {/* 右: 中身 */}
@@ -210,7 +214,7 @@ export default function ReviewList({
                     ¥{row.amount.toLocaleString()}
                   </span>
                   {row.taxRate && <span className="text-xs text-gray-600">{row.taxRate}</span>}
-                  <span className="text-xs text-gray-400 truncate">{row.filename}</span>
+                  {/* ファイル名は左のレシート側に出す。横幅が減るので毎行には置かない */}
                 </div>
 
                 {r?.status === "needs_fix" && r.comment && (
@@ -295,7 +299,8 @@ export default function ReviewList({
             </li>
           );
         })}
-      </ul>
+        </ul>
+      </div>
 
       {/* 全部見終わったあとの一手。**同時に光るものは一つだけにする** */}
       <div className="mt-6 card-glass rounded-xl p-4 relative">
@@ -374,7 +379,7 @@ export default function ReviewList({
 
 /** 行の左に置く小さいレシート */
 function Thumbnail({ image, alt }: { image: EntryImageSource; alt: string }) {
-  const box = "w-20 h-24 rounded-lg border border-gray-200 bg-white overflow-hidden flex items-center justify-center";
+  const box = "w-14 h-[4.5rem] rounded-lg border border-gray-200 bg-white overflow-hidden flex items-center justify-center";
 
   if (image.kind === "image") {
     return (
@@ -409,49 +414,61 @@ function Thumbnail({ image, alt }: { image: EntryImageSource; alt: string }) {
   return <div className={cn(box, "text-[10px] text-gray-400")}>画像なし</div>;
 }
 
-/** ホバーで出る大きいレシート */
-function Enlarged({
-  image,
-  alt,
-  above,
-}: {
-  image: EntryImageSource;
-  alt: string;
-  above: boolean;
-}) {
-  if (image.kind === "none") return null;
+/**
+ * 左に固定するレシート。
+ *
+ * **仕訳と重ならない場所を持つ**のが要。カーソルを合わせた行のものを出し、
+ * 一覧をスクロールしても貼り付いたままにする。
+ *
+ * 画面が狭いときは上に積む（`lg:` の指定が外れる）。高さを抑えて、
+ * 下の一覧が読めなくならないようにする。
+ */
+function ReceiptPane({ row }: { row: ReviewRow | undefined }) {
+  if (!row) return null;
+  const { image } = row;
 
-  /*
-    行の右側に出す。**下端が画面から切れないように、行の中央に合わせる。**
-    以前は上端/下端に貼り付けていたので、真ん中あたりの行では
-    下がはみ出して読めなかった。
-
-    `above` は最後の数行のときだけ下寄せにするための逃げ道として残す。
-  */
   return (
-    <div
-      className={cn(
-        "absolute left-full ml-3 pointer-events-none",
-        above ? "bottom-0" : "top-1/2 -translate-y-1/2"
-      )}
-    >
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-2 max-h-[80vh] overflow-hidden">
-        {image.kind === "image" ? (
-          <Image
-            src={image.src}
-            alt={alt}
-            width={420}
-            height={560}
-            className="max-w-[420px] max-h-[70vh] w-auto h-auto object-contain"
-            unoptimized
-          />
-        ) : (
-          <PdfPageCanvas
-            src={image.src}
-            pageNumber={image.pageNumber ?? 1}
-            maxWidth={420}
-            label={`PDF ${image.pageNumber ?? 1}ページ`}
-          />
+    <div className="lg:sticky lg:top-4 self-start w-full">
+      <div className="card-glass rounded-xl p-3">
+        <div className="flex items-baseline justify-between gap-2 mb-2">
+          <p className="text-sm font-bold text-foreground truncate">{row.date || "日付なし"}</p>
+          <p className="text-xs text-gray-500 truncate">{row.filename}</p>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 bg-white overflow-auto max-h-[40vh] lg:max-h-[70vh] flex items-start justify-center">
+          {image.kind === "image" ? (
+            <Image
+              src={image.src}
+              alt={row.filename}
+              width={700}
+              height={950}
+              className="w-full h-auto object-contain"
+              unoptimized
+            />
+          ) : image.kind === "pdf" ? (
+            <PdfPageCanvas
+              src={image.src}
+              pageNumber={image.pageNumber ?? 1}
+              /* 広めに描いて CSS で収める。幅が変わっても描き直さずに済む */
+              maxWidth={700}
+              className="w-full"
+              label={`PDF ${image.pageNumber ?? 1}ページ`}
+            />
+          ) : (
+            <p className="text-sm text-gray-400 py-10">画像がありません</p>
+          )}
+        </div>
+
+        {image.kind !== "none" && (
+          <a
+            href={image.kind === "pdf" ? pdfHref(image.src, image.pageNumber) : image.src}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-flex items-center gap-1.5 text-sm text-teal-700 hover:text-teal-900"
+          >
+            <ExternalLink className="w-4 h-4" />
+            元のファイルを開く（拡大して見る）
+          </a>
         )}
       </div>
     </div>

@@ -96,7 +96,11 @@ export default function PdfPageCanvas({
 
   return (
     <div ref={holderRef} className={cn("relative flex items-center justify-center", className)}>
-      <canvas ref={canvasRef} className={state === "done" ? "block" : "hidden"} />
+      <canvas
+        ref={canvasRef}
+        // 描いた幅より狭い場所に置かれても収まるように（高さは自動で追従する）
+        className={cn("max-w-full h-auto", state === "done" ? "block" : "hidden")}
+      />
 
       {state !== "done" && (
         <div className="flex flex-col items-center gap-1 text-gray-400">

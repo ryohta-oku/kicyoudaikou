@@ -35,7 +35,7 @@ export default function ReviewShell({
   return (
     <div className="min-h-screen">
       <header className="bg-white/80 backdrop-blur border-b border-teal-100">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-2">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-2">
           <FileCheck2 className="w-6 h-6 text-teal-600" />
           <span className="font-black text-foreground">記帳代行ツール</span>
           <span className="text-sm text-gray-500">仕訳の確認</span>
@@ -44,7 +44,7 @@ export default function ReviewShell({
 
       {previewName && (
         <div className="bg-gray-800 text-white">
-          <div className="max-w-5xl mx-auto px-4 py-2.5 flex items-center gap-2 text-sm">
+          <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-2 text-sm">
             <Eye className="w-4 h-4 shrink-0" />
             <span>
               これは <strong>{previewName}</strong> に見えている画面です（プレビュー・操作はできません）
@@ -55,7 +55,7 @@ export default function ReviewShell({
 
       {actingAsAdvisor && !previewName && (
         <div className="bg-indigo-700 text-white">
-          <div className="max-w-5xl mx-auto px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <div className="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <span>
               <strong>税理士として操作しています。</strong>
               記録には「（税理士として）」と残ります。
@@ -71,7 +71,7 @@ export default function ReviewShell({
         </div>
       )}
 
-      <main className="max-w-5xl mx-auto px-4 py-6">{children}</main>
+      <main className="max-w-7xl mx-auto px-4 py-6">{children}</main>
     </div>
   );
 }
