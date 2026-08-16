@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Check, ChevronRight, CircleCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GuideStep } from "@/components/guide/content";
+import { progressKey, readChapterDone as readDone, useGuide } from "@/components/guide/GuideProvider";
 
 /**
  * 手順を1つずつ進めるチェックリスト。
@@ -22,20 +23,6 @@ import type { GuideStep } from "@/components/guide/content";
  * 日をまたいで残す意味は無い（次はたいてい別のフォルダ）ので `localStorage` は使わない。
  */
 
-function progressKey(scope: string, chapter: number): string {
-  return `kicyou_guide_progress:${scope}:${chapter}`;
-}
-
-function readDone(scope: string, chapter: number): number[] {
-  try {
-    const raw = sessionStorage.getItem(progressKey(scope, chapter));
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter((n) => typeof n === "number") : [];
-  } catch {
-    return [];
-  }
-}
-
 function writeDone(scope: string, chapter: number, done: number[]) {
   try {
     sessionStorage.setItem(progressKey(scope, chapter), JSON.stringify(done));
@@ -48,16 +35,15 @@ export default function GuideChecklist({
   steps,
   chapter,
   scope,
-  onProgress,
 }: {
   steps: GuideStep[];
   /** 章の番号。途中経過のキーに使う */
   chapter: number;
   /** どのフォルダの作業か。フォルダが変われば白紙に戻る */
   scope: string;
-  /** 章の見出しに ☑ を出すために、全部終わったかを伝える */
-  onProgress?: (allDone: boolean) => void;
 }) {
+  /* チェックを書いたら、トップのステップの ☑ も数え直してもらう */
+  const { refresh } = useGuide();
   const [done, setDone] = useState<number[]>([]);
   const [openIndex, setOpenIndex] = useState(0);
 
@@ -69,16 +55,13 @@ export default function GuideChecklist({
     setOpenIndex(next === -1 ? steps.length : next);
   }, [scope, chapter, steps]);
 
-  useEffect(() => {
-    onProgress?.(done.length >= steps.length && steps.length > 0);
-  }, [done, steps.length, onProgress]);
-
   const allDone = steps.length > 0 && done.length >= steps.length;
 
   const complete = (index: number) => {
     const next = done.includes(index) ? done : [...done, index];
     setDone(next);
     writeDone(scope, chapter, next);
+    refresh();
     // 次の未チェックへ自動で進む。無ければ全部閉じる
     const following = steps.findIndex((_, i) => !next.includes(i));
     setOpenIndex(following === -1 ? steps.length : following);
@@ -88,6 +71,7 @@ export default function GuideChecklist({
     const next = done.filter((n) => n !== index);
     setDone(next);
     writeDone(scope, chapter, next);
+    refresh();
     setOpenIndex(index);
   };
 

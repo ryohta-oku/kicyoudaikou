@@ -116,8 +116,14 @@ export const GUIDE_FOR_STEP: Record<string, number[]> = {
   done: [8],
 };
 
-/** ダッシュボード（フォルダの外）で出す章 */
-export const GUIDE_FOR_DASHBOARD = [1, 2, 3];
+/**
+ * ダッシュボード（フォルダの外）で出す章。
+ *
+ * **トップページの Step 1〜4 と、この配列が同じもの。**
+ * ①②③はトップでできる作業、④はフォルダを開いてからの作業だが、
+ * 「次に何をするか」を見せるためにトップにも並べる。
+ */
+export const GUIDE_FOR_DASHBOARD = [1, 2, 3, 4];
 
 /** 工程バーで使っている表示名。パネルの見出しにも使う */
 export const STEP_LABELS: Record<string, string> = {

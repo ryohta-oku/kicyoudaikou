@@ -14,22 +14,18 @@ import {
   AlertTriangle,
   ScanLine,
   ChevronRight,
-  FileStack,
-  Play,
-  MousePointerClick,
   Send,
-  ArrowRight,
   Check,
   Clock,
   Timer,
   Pencil,
-  BookOpen,
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
 import FileUpload from "@/components/FileUpload";
 import GuideBubble from "@/components/GuideBubble";
 import { useWorkLogger } from "@/hooks/useWorkLogger";
+import GuideStepCard from "@/components/guide/GuideStepCard";
 
 interface FolderDocument {
   id: string;
@@ -327,6 +323,16 @@ export default function DashboardPage() {
    * 「作業者と確認者が別人」という条件になった。誰が1stチェックしたかだけを見る。
    * 過去の user_b のアカウントでも同じに動く。
    */
+  /*
+    Step 3（PDFをこの画面に入れる）だけは、**システムが終わったかどうかを知っている**。
+    今日フォルダが作られていれば取り込みは済んでいる。
+    手でチェックし忘れて、いつまでも「いまここ」のままになるのを防ぐ。
+  */
+  const hasFolderCreatedToday = useMemo(() => {
+    const today = new Date().toDateString();
+    return folders.some((f) => new Date(f.createdAt).toDateString() === today);
+  }, [folders]);
+
   const hasDoubleCheckTasks = useMemo(() => {
     if (userRole !== "user_a" && userRole !== "user_b") return false;
     const effectiveId = getEffectiveUserId(session?.user?.role || "", session?.user?.id || "");
@@ -528,75 +534,14 @@ export default function DashboardPage() {
 
       {/*
         紙の書類が画面に入るまでの流れ。
-        Step1・2はスキャナー側の作業なので押せない。Step3だけを実際の入口にする。
+        **ここが進行管理そのもの** ―― 押すと右に「やり方」が出て、
+        終わると ☑ が付いて次が「いまここ」になる。
+        題名は説明書の章から取る（文言を2か所に書かない）。
       */}
-      <div className="card-glass rounded-xl p-4 md:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <h3 className="text-base font-semibold text-foreground">
-            紙の書類をパソコンに入れる流れ
-          </h3>
-          {/*
-            Step1・2はスキャナー側の作業で、ここには4語しか書けない。
-            **初めての人はそこで止まる**ので、詳しい説明書への入口を必ず置く。
-          */}
-          <Link
-            href="/guide"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
-          >
-            <BookOpen className="w-4 h-4" />
-            はじめての方へ（くわしい手順）
-          </Link>
-        </div>
-        <div className="grid grid-cols-4 gap-2 md:gap-4">
-          {[
-            // Step1・2はスキャナー側の作業。押せないままにせず、説明書の
-            // 該当箇所へ飛ばす ―― ここで止まる人がいちばん多い
-            { icon: FileStack, label: "紙をスキャナーにセット", step: 1, guide: "#step-1" },
-            { icon: Play, label: "ScanSnapのボタンでPDFにする", step: 2, guide: "#step-2" },
-            { icon: Upload, label: "できたPDFをこの画面に入れる", step: 3, action: true },
-            { icon: MousePointerClick, label: "あとは吹き出しの通りに進める", step: 4, guide: "#step-4" },
-          ].map(({ icon: Icon, label, step, action, guide }) => {
-            const content = (
-              <>
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-teal-100 flex items-center justify-center">
-                  <Icon className="w-4 h-4 md:w-5 md:h-5 text-teal-600" />
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-teal-600">
-                    Step {step}
-                  </span>
-                  <p className="text-xs md:text-sm text-gray-700 mt-0.5">{label}</p>
-                </div>
-              </>
-            );
-
-            if (!action) {
-              return (
-                <Link
-                  key={step}
-                  href={`/guide${guide ?? ""}`}
-                  className="flex flex-col items-center text-center gap-1.5 p-2 md:p-3 rounded-lg bg-teal-50/50 hover:bg-teal-100 transition-colors"
-                >
-                  {content}
-                  <span className="text-[11px] text-teal-700">やり方を見る</span>
-                </Link>
-              );
-            }
-
-            return (
-              <button
-                key={step}
-                type="button"
-                onClick={handleScanStepClick}
-                className="flex flex-col items-center text-center gap-1.5 p-2 md:p-3 rounded-lg bg-teal-50/50 hover:bg-teal-100 transition-colors cursor-pointer"
-              >
-                {content}
-                <span className="text-[11px] text-teal-700">ここを押しても始められます</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <GuideStepCard
+        uploadedToday={hasFolderCreatedToday}
+        onStartUpload={handleScanStepClick}
+      />
 
       {/* フォルダ一覧 */}
       {loading ? (
