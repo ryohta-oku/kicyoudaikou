@@ -375,6 +375,21 @@ export default function Header() {
                   </Link>
                 );
               })}
+
+              {/*
+                税理士として確認する。**ここにも置く。**
+                デスクトップのナビにしか置いていなかったので、画面が狭いと
+                消えてしまい、切り替える手立てが無くなっていた。
+              */}
+              {canActAsAdvisor && (
+                <button
+                  onClick={switchToAdvisor}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-indigo-700 hover:bg-indigo-50 transition-colors"
+                >
+                  <FileCheck2 className="h-5 w-5" />
+                  税理士として確認
+                </button>
+              )}
             </nav>
 
             {/* ユーザー情報 */}

@@ -774,9 +774,17 @@ export default function AdminPage() {
                   )}
                 </div>
                 <p className="text-xs text-gray-500 mb-3">
-                  {isOutside
-                    ? "この方に見える得意先です。"
-                    : "「税理士として操作」に切り替えたときだけ、この得意先に絞られます。普段の見え方は変わりません。"}
+                  {isOutside ? (
+                    "この方に見える得意先です。"
+                  ) : advisor.clientIds.length === 0 ? (
+                    <>
+                      チェックを入れると、この方のヘッダーに
+                      <strong className="text-indigo-700">「税理士として確認」</strong>
+                      が出ます。普段の見え方は変わりません。
+                    </>
+                  ) : (
+                    "「税理士として確認」に切り替えたときだけ、この得意先に絞られます。普段の見え方は変わりません。"
+                  )}
                 </p>
 
                 {clientOptions.length === 0 ? (
