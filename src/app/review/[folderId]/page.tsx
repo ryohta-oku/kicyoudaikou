@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getClientScope, isClientAllowed, isExternalScope } from "@/lib/advisor";
 import { resolveEntryImage } from "@/lib/entry-image";
+import { findDuplicates } from "@/lib/duplicate";
 import ReviewShell from "@/components/review/ReviewShell";
 import ReviewList, { type ReceiptGroup } from "@/components/review/ReviewList";
 import { INVOICE_KINDS, type InvoiceKind } from "@/lib/tax-class";
@@ -85,7 +86,11 @@ export default async function ReviewFolderPage({
               creditAccountCode: true,
               creditAccountName: true,
               isConfirmed: true,
-              page: { select: { registrationNumber: true } },
+              // 事業所が「重複ではない」と判断済みか。**警告を消すためではなく、
+              // 添えて出すため**（判断の経緯を税理士さんに伝える）
+              duplicateDismissed: true,
+              // 登録番号は「適格かどうか」に、レシート番号は重複の判定に使う
+              page: { select: { registrationNumber: true, receiptNumber: true } },
               // 直したことがあるか。いちばん新しい1件だけあれば「誰が直したか」は出せる
               revisions: {
                 select: { changedByName: true },
@@ -166,6 +171,69 @@ export default async function ReviewFolderPage({
           : null,
       });
     }
+  }
+
+  /*
+    同じ領収書を2回入れていないか。
+
+    **税理士さんは帳簿に載る前の最後の関門。** 同じ領収書の二重計上は
+    記帳でいちばん起きやすい間違いで、ここで止められるのがいちばん効く。
+    事業所側では利用者さんにしか出していないので、**利用者さんが見落とすと
+    誰の目にも触れないままCSVになる** ―― その穴をここで塞ぐ。
+
+    判定は事業所側とまったく同じ関数（[lib/duplicate.ts](@/lib/duplicate)）。
+    画面によって答えが変わると、どちらを信じてよいか分からなくなる。
+  */
+  const groupOfEntry = new Map<string, string>();
+  /** 事業所が「重複ではない」と判断済みの仕訳 */
+  const dismissedIds = new Set<string>();
+  const { findings } = findDuplicates(
+    folder.documents.flatMap((doc) =>
+      doc.journalEntries.map((e) => {
+        const key = e.pageId ?? `doc:${doc.id}`;
+        groupOfEntry.set(e.id, key);
+        if (e.duplicateDismissed) dismissedIds.add(e.id);
+        return {
+          id: e.id,
+          documentId: doc.id,
+          accountCode: e.accountCode,
+          debitAmount: e.debitAmount,
+          creditAmount: 0,
+          date: e.date,
+          receiptNumber: e.page?.receiptNumber ?? "",
+          registrationNumber: e.page?.registrationNumber ?? "",
+          /*
+            **`dismissed` は渡さない。** 事業所側では「重複ではない」と押した組を
+            もう出さないが、ここでは出す ―― 利用者さんが見落として消してしまうと、
+            そのまま帳簿に載る。それを止めるのがこの画面の役目。
+
+            代わりに「事業所はこう判断した」と添える（下の `dismissedIds`）。
+            黙って警告だけ出すと、済んだ話を蒸し返しているように見える。
+          */
+        };
+      })
+    )
+  );
+
+  for (const [entryId, finding] of findings) {
+    const group = groups.get(groupOfEntry.get(entryId) ?? "");
+    if (!group) continue;
+    // 1枚から複数の仕訳が出るので、いちばん強い言い分を領収書の印にする
+    if (group.duplicate?.level === "certain") continue;
+    group.duplicate = {
+      level: finding.level,
+      reason: finding.reason,
+      advice: finding.advice,
+      officeDismissed: dismissedIds.has(entryId),
+      /** 相手の領収書。**自分自身は入れない**（1枚の中の別の行が相手になることはない） */
+      partnerFilenames: [
+        ...new Set(
+          finding.partnerIds
+            .map((id) => groups.get(groupOfEntry.get(id) ?? "")?.filename)
+            .filter((name): name is string => !!name && name !== group.filename)
+        ),
+      ],
+    };
   }
 
   const receipts = [...groups.values()].sort((a, b) => a.date.localeCompare(b.date));

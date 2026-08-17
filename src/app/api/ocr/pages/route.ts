@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getEffectiveRole } from "@/lib/roleSimulation";
+import { extractReceiptNumber } from "@/lib/receipt-number";
 
 // ページのOCRテキストを更新
 export async function PATCH(request: NextRequest) {
@@ -12,10 +13,24 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "ページIDが必要です", code: "PAGE_NO_ID" }, { status: 400 });
     }
 
+    /*
+      レシート番号は**人が直した本文から拾い直す。**
+
+      画面に出さない項目なので、UIから送られてくることはない。それでも
+      直した本文には正しい番号が入っている ―― 読み取りが崩れて番号を
+      拾えなかったページも、人が本文を直した時点で拾えるようになる。
+
+      **拾えたときだけ書く。** 拾えないときに空で上書きすると、
+      せっかく取れていた番号が本文の整形だけで消えてしまう。
+    */
+    const foundNumber =
+      correctedText !== undefined ? extractReceiptNumber(correctedText) : "";
+
     const page = await prisma.documentPage.update({
       where: { id: pageId },
       data: {
         ...(correctedText !== undefined && { correctedText }),
+        ...(foundNumber && { receiptNumber: foundNumber }),
         ...(isConfirmed !== undefined && { isConfirmed }),
         ...(isDoubleChecked !== undefined && { isDoubleChecked }),
         ...(date !== undefined && { date }),

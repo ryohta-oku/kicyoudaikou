@@ -30,9 +30,12 @@ function fieldsFromObject(raw: unknown, fallbackText: string): OcrFields | null 
       ? (obj.fields as Record<string, unknown>)
       : null;
   const source = nested ? { ...nested, ocrText: obj.ocrText ?? obj.ocr_text } : obj;
-  const fields = normalizeOcrFields(source as Record<string, unknown>);
-  if (!fields.ocrText) fields.ocrText = fallbackText;
-  return fields;
+  /*
+    **本文の穴埋めは正規化より先に。** レシート番号はAIが返さなければ
+    本文から拾う作りなので、後から本文を入れると拾い直す機会が無くなる。
+  */
+  const text = String(source.ocrText ?? "").trim() || fallbackText;
+  return normalizeOcrFields({ ...(source as Record<string, unknown>), ocrText: text });
 }
 
 function fromJsonObject(parsed: unknown, fallbackText: string): OcrDocumentResult | null {
@@ -92,6 +95,7 @@ function tryParseLegacyFields(content: string): OcrDocumentResult | null {
         ocrText,
         date: get("date"),
         registrationNumber: get("registrationNumber"),
+        receiptNumber: get("receiptNumber"),
         amount: get("amount"),
         tax: get("tax"),
         memo: get("memo"),

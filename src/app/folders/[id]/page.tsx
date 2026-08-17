@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { cn, STATUS_LABELS, STATUS_COLORS, formatCurrency } from "@/lib/utils";
 import { getSelectedClientId } from "@/lib/client";
+import { findDuplicates } from "@/lib/duplicate";
 import Image from "next/image";
 import OCREditor, { type PageUpdateData } from "@/components/OCREditor";
 import SubAccountCombobox from "@/components/SubAccountCombobox";
@@ -101,7 +102,15 @@ interface Document {
   creator: string;
   status: string;
   createdAt: string;
-  pages: { id: string; imagePath: string; pageNumber: number }[];
+  pages: {
+    id: string;
+    imagePath: string;
+    pageNumber: number;
+    /** 店の識別（T番号）。重複の判定に使う */
+    registrationNumber?: string;
+    /** その1回の取引の番号。重複の判定に使う */
+    receiptNumber?: string;
+  }[];
   _count: { journalEntries: number };
   journalEntries: JournalEntryData[];
 }
@@ -1341,33 +1350,38 @@ export default function FolderDetailPage({
 
         const confirmedCount = allEntries.filter((e) => e.isConfirmed).length;
 
-        // 重複検知: 金額 + 勘定科目が一致 & 別ファイル由来
-        // 日付は両方存在して異なる場合のみ除外（片方が空なら重複の可能性あり）
-        // duplicateDismissed のエントリおよび削除依頼済みのエントリは重複検知から除外
-        const duplicateIds = new Set<string>();
-        const duplicatePairs = new Map<string, string[]>();
-        for (let i = 0; i < allEntries.length; i++) {
-          for (let j = i + 1; j < allEntries.length; j++) {
-            const a = allEntries[i];
-            const b = allEntries[j];
-            if (a.duplicateDismissed || b.duplicateDismissed) continue;
-            if (pendingDeletionEntryIds.has(a.id) || pendingDeletionEntryIds.has(b.id)) continue;
-            const datesContradict = a.date && b.date && a.date !== b.date;
-            if (
-              a.documentId !== b.documentId &&
-              !datesContradict &&
-              a.accountCode && b.accountCode && a.accountCode === b.accountCode &&
-              (a.debitAmount > 0 || a.creditAmount > 0) &&
-              a.debitAmount === b.debitAmount &&
-              a.creditAmount === b.creditAmount
-            ) {
-              duplicateIds.add(a.id);
-              duplicateIds.add(b.id);
-              duplicatePairs.set(a.id, [...(duplicatePairs.get(a.id) || []), b.id]);
-              duplicatePairs.set(b.id, [...(duplicatePairs.get(b.id) || []), a.id]);
-            }
-          }
-        }
+        /*
+          重複の判定は [lib/duplicate.ts](@/lib/duplicate) に置いてある。
+
+          **ここに書かないのは、税理士の確認画面と同じ答えを出すため。**
+          以前はこのファイルの中だけに判定があり、金額と勘定科目が同じなら
+          重複としていた ―― 同じ日に同じ店で同じ額を2回買っただけでも出る。
+          いまは**レシート番号（その取引）とT番号（その店）**を併せて見る。
+        */
+        const pageInfo = new Map(
+          classifiedDocs.flatMap((d) => d.pages.map((p) => [p.id, p] as const))
+        );
+        const { findings: duplicateFindings } = findDuplicates(
+          allEntries.map((e) => {
+            const page = e.pageId ? pageInfo.get(e.pageId) : undefined;
+            return {
+              id: e.id,
+              documentId: e.documentId,
+              accountCode: e.accountCode,
+              debitAmount: e.debitAmount,
+              creditAmount: e.creditAmount,
+              date: e.date,
+              receiptNumber: page?.receiptNumber ?? "",
+              registrationNumber: page?.registrationNumber ?? "",
+              dismissed: e.duplicateDismissed,
+              pendingDeletion: pendingDeletionEntryIds.has(e.id),
+            };
+          })
+        );
+        const duplicateIds = new Set(duplicateFindings.keys());
+        const duplicatePairs = new Map(
+          [...duplicateFindings].map(([id, f]) => [id, f.partnerIds])
+        );
 
         // 削除依頼エントリの重複ペアを別途検索（指導員の比較モーダル用）
         const pendingDeletionPairs = new Map<string, string>();
@@ -1462,7 +1476,7 @@ export default function FolderDetailPage({
                   <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-lg px-4 py-3">
                     <CircleAlert className="h-5 w-5 text-orange-600 flex-shrink-0 animate-alert-bounce" />
                     <span className="text-sm text-orange-800">
-                      <strong>{duplicateCount} 件</strong>の仕訳に重複の可能性があります（日付・金額・勘定科目が一致、別ファイル由来）。不要な場合は詳細から削除してください。
+                      <strong>{duplicateCount} 件</strong>の仕訳に、同じ領収書を2回入れた疑いがあります。詳細を開いて見比べ、不要なほうを削除してください。
                     </span>
                   </div>
                 )}
@@ -1530,7 +1544,24 @@ export default function FolderDetailPage({
                       // アラート種別の判定（1つのバッジにまとめる）
                       const alertDetails: { label: string; color: string }[] = [];
                       if (isPendingDeletion) alertDetails.push({ label: "削除依頼の承認待ちです", color: "teal" });
-                      if (isDuplicate) alertDetails.push({ label: "重複の可能性があります", color: "orange" });
+                      /*
+                        **なぜそう出たのかを、その場に書く。**「重複の可能性」とだけ
+                        言われても、利用者さんは何を見比べればいいのか分からない。
+                        レシート番号が同じなのか、番号が読めなかったのかで、
+                        次にすることが変わる。
+                      */
+                      const dupFinding = isDuplicate ? duplicateFindings.get(entry.id) : undefined;
+                      if (dupFinding) {
+                        alertDetails.push({
+                          label:
+                            (dupFinding.level === "certain"
+                              ? "同じ領収書です。"
+                              : "重複かもしれません。") +
+                            dupFinding.reason +
+                            (dupFinding.advice ? `。${dupFinding.advice}` : ""),
+                          color: "orange",
+                        });
+                      }
                       if (missingAlerts.length > 0) alertDetails.push(...missingAlerts.map((a) => ({ label: `${a}が未入力`, color: "amber" })));
                       if (!entry.isConfirmed && alerts.length === 0 && !isPendingDeletion) alertDetails.push({ label: "仕訳が未確認です", color: "blue" });
 
@@ -1597,7 +1628,8 @@ export default function FolderDetailPage({
                                   "text-teal-500"
                                 )} />
                                 )}
-                                <span>{isPendingDeletion && (userRole === "admin" || userRole === "instructor") ? "要承認" : isPendingDeletion ? "削除待ち" : isDuplicate ? "重複？" : missingAlerts.length > 0 ? "要確認" : "未確認"}</span>
+                                {/* レシート番号まで一致していれば言い切る。疑問符は迷わせるだけ */}
+                                <span>{isPendingDeletion && (userRole === "admin" || userRole === "instructor") ? "要承認" : isPendingDeletion ? "削除待ち" : dupFinding?.level === "certain" ? "重複" : isDuplicate ? "重複？" : missingAlerts.length > 0 ? "要確認" : "未確認"}</span>
                               </button>
                               {/* ホバー詳細 */}
                               <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-50 pointer-events-none">
@@ -1692,6 +1724,7 @@ export default function FolderDetailPage({
               {allEntries.map((entry) => {
                 const alerts = getAlerts(entry);
                 const isDuplicate = !isAdminOrInstructor && duplicateIds.has(entry.id);
+                const dupFinding = isDuplicate ? duplicateFindings.get(entry.id) : undefined;
                 const isPendingDeletion = pendingDeletionEntryIds.has(entry.id);
                 const missingAlerts = alerts.filter((a) => a !== "重複の可能性" && a !== "削除依頼中");
                 return (
@@ -1790,7 +1823,11 @@ export default function FolderDetailPage({
                       }}
                     >
                       <CircleAlert className="w-4 h-4 animate-alert-bounce text-orange-600 flex-shrink-0" />
-                      <span>重複の可能性（タップして比較）</span>
+                      <span>
+                        {dupFinding?.level === "certain"
+                          ? "同じ領収書です（タップして比較）"
+                          : "重複の可能性（タップして比較）"}
+                      </span>
                     </button>
                   )}
                   {missingAlerts.length > 0 && (
