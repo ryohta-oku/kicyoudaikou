@@ -58,21 +58,62 @@ async function ensureLocalUser(hub: {
   name: string;
   role: KicyouRole;
 }) {
-  const existing =
-    (await prisma.user.findUnique({ where: { id: hub.id } })) ??
-    (await prisma.user.findUnique({ where: { email: hub.email } }));
+  /**
+   * 引き当ての順:
+   *   ① id = hub.id                          共通ログインが作った影の行
+   *   ② hubUserId = hub.id                   一度でも紐付いた行
+   *   ③ email 一致 **かつ hubUserId が null**  導入前からある行の初回引き当て
+   *   ④ 見つからない                           新規作成
+   *
+   * ③ に「hubUserId が null」が要る。**席の引き継ぎがあるため。**
+   * `starNN.cocoboshi@gmail.com` は事業所が発行する席で、利用者が入れ替わると
+   * 次の方に渡り、client-hub 側では別の id・同じメールの `User` になる。
+   * この条件が無いと、新しい方の初回ログインでメール一致により**前の方の行**が
+   * 使われ、`Folder.firstCheckById` や `WorkLog.userId` が前の方を指したままになる。
+   */
+  const byId = await prisma.user.findUnique({ where: { id: hub.id } });
+  const byHubId = byId
+    ? null
+    : await prisma.user.findUnique({ where: { hubUserId: hub.id } });
+  const byEmail =
+    byId || byHubId
+      ? null
+      : await prisma.user.findUnique({ where: { email: hub.email } });
+
+  // 紐付け済みの行にメールで当たったら「別人の席」。拾わず④で作る
+  const existing = byId ?? byHubId ?? (byEmail?.hubUserId === null ? byEmail : null);
 
   if (existing) {
-    if (existing.role === hub.role && existing.name === hub.name) return existing;
-    return prisma.user.update({
-      where: { id: existing.id },
-      data: { role: hub.role, name: hub.name },
+    const data: { role?: string; name?: string; hubUserId?: string } = {};
+    if (existing.role !== hub.role) data.role = hub.role;
+    if (existing.name !== hub.name) data.name = hub.name;
+    if (existing.hubUserId !== hub.id) data.hubUserId = hub.id;
+    if (Object.keys(data).length === 0) return existing;
+    return prisma.user.update({ where: { id: existing.id }, data });
+  }
+
+  /**
+   * ここに来て `byEmail` があるのは**席の引き継ぎ直後だけ**。前の利用者の行が
+   * まだ同じメールを持っているので、そのままでは一意制約に当たる。
+   *
+   * **前の行のメールを退避させて席を空ける。行は消さない** ――
+   * `WorkLog.userId` / `WorkSession.userId` / `Folder.firstCheckById` が
+   * ぶら下がっていて、消すと前の方の作業記録の名義が引けなくなる。
+   */
+  if (byEmail) {
+    await prisma.user.update({
+      where: { id: byEmail.id },
+      data: { email: retiredEmail(byEmail.email) },
     });
+    console.log(
+      `[auth] 席を引き継ぎ: ${hub.email} を ${byEmail.id} から解放しました`,
+    );
   }
 
   return prisma.user.create({
     data: {
       id: hub.id,
+      hubUserId: hub.id,
       email: hub.email,
       name: hub.name,
       /**
@@ -85,6 +126,21 @@ async function ensureLocalUser(hub: {
       role: hub.role,
     },
   });
+}
+
+/**
+ * 席を明け渡す側のメールアドレス。client-hub 側と同じ形にそろえる。
+ *
+ *   star05.cocoboshi@gmail.com → star05.cocoboshi+retired-20260817@gmail.com
+ */
+function retiredEmail(email: string, at = new Date()): string {
+  const at8 =
+    `${at.getFullYear()}` +
+    `${at.getMonth() + 1}`.padStart(2, "0") +
+    `${at.getDate()}`.padStart(2, "0");
+  const [local, domain] = email.split("@");
+  if (!domain) return `${email}.retired-${at8}`;
+  return `${local}+retired-${at8}@${domain}`;
 }
 
 /** client-hub に照合を委ねる */
