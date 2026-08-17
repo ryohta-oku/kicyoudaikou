@@ -15,6 +15,16 @@ model User {
   plainPassword     String    @default("")
   name              String
   role              String    @default("user_b") // "admin", "instructor", "user_a", or "user_b"
+  /// client-hub 側の User.id。**この行がどの共通アカウントのものかを固定する。**
+  ///
+  /// これが無いと、席（starNN.cocoboshi@gmail.com）を次の利用者へ引き継いだとき、
+  /// 新しい方がログインした瞬間に**メール一致で前の方の行に吸い込まれる**。
+  /// `Folder.firstCheckById` や `WorkLog.userId` が前の方を指したままになり、
+  /// ダブルチェックの「作業者と確認者が別人か」の判定も、作業記録の名義も壊れる。
+  ///
+  /// 一度でも埋まった行は、以降メールでは引き当てない（src/lib/auth.ts）。
+  /// null = 共通ログイン導入前からある行で、初回ログイン時に焼き付ける。
+  hubUserId         String?   @unique
   inviteToken       String?   @unique
   inviteTokenExpiry DateTime?
   createdAt         DateTime  @default(now())
