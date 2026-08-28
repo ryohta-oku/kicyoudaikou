@@ -218,6 +218,7 @@ export async function POST(request: NextRequest) {
           correctedText: fields.ocrText,
           date: fields.date,
           registrationNumber: fields.registrationNumber,
+          receiptNumber: fields.receiptNumber,
           amount: fields.amount,
           tax: fields.tax,
           // 税率が1種類なら空配列が返る。そのときは保存しない（従来どおり1仕訳）

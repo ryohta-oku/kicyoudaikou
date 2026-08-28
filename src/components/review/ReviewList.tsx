@@ -45,6 +45,17 @@ export interface ReceiptGroup {
   filename: string;
   image: EntryImageSource;
   lines: ReviewLine[];
+  /** 同じ領収書を2回入れていないか。判定は [lib/duplicate.ts](@/lib/duplicate) */
+  duplicate?: {
+    /** `certain` はレシート番号まで一致している */
+    level: "certain" | "possible";
+    reason: string;
+    advice?: string;
+    /** 相手の領収書のファイル名。どれと見比べるかが分からないと動けない */
+    partnerFilenames: string[];
+    /** 事業所が「重複ではない」と判断済み。それでも出すが、そのことは伝える */
+    officeDismissed?: boolean;
+  };
 }
 
 /** 書き換え中の値。すべて文字列で持ち、送るときにサーバー側で整える */
@@ -457,6 +468,46 @@ export default function ReviewList({
                                 1枚を税率で
                                 <br />
                                 {lines.length}件に分けています
+                              </div>
+                            )}
+
+                            {/*
+                              同じ領収書を2回入れていないか。**ここに置く**のは、
+                              これが「この1枚」についての話だから ―― 仕訳の行ごとに
+                              出すと、1枚を税率で分けた領収書で同じ警告が2つ並ぶ。
+
+                              **相手のファイル名まで出す。** 「重複の可能性」とだけ
+                              言われても、どれと見比べればいいのか分からない。
+                            */}
+                            {group.duplicate && (
+                              <div
+                                className={cn(
+                                  "mt-1.5 text-[0.7rem] leading-tight rounded px-1.5 py-1 border",
+                                  group.duplicate.level === "certain"
+                                    ? "text-red-800 bg-red-50 border-red-300"
+                                    : "text-orange-800 bg-orange-50 border-orange-200"
+                                )}
+                              >
+                                <span className="font-bold">
+                                  {group.duplicate.level === "certain"
+                                    ? "⚠ 同じ領収書が他にもあります"
+                                    : "重複かもしれません"}
+                                </span>
+                                <div className="mt-0.5">{group.duplicate.reason}</div>
+                                {group.duplicate.partnerFilenames.length > 0 && (
+                                  <div className="mt-0.5 break-all opacity-80">
+                                    相手: {group.duplicate.partnerFilenames.join("、")}
+                                  </div>
+                                )}
+                                {group.duplicate.advice && (
+                                  <div className="mt-0.5 opacity-80">{group.duplicate.advice}</div>
+                                )}
+                                {/* 済んだ話を蒸し返しているように見せない */}
+                                {group.duplicate.officeDismissed && (
+                                  <div className="mt-1 pt-1 border-t border-current/20">
+                                    事業所は「重複ではない」と判断しています
+                                  </div>
+                                )}
                               </div>
                             )}
                           </td>

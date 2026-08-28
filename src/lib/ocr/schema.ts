@@ -6,6 +6,8 @@
  * 全項目 string・全項目 required が Gemini と OpenAI の双方で差異なく扱える唯一の形。
  */
 
+import { extractReceiptNumber } from "@/lib/receipt-number";
+
 /**
  * 税率ごとの内訳。
  *
@@ -28,6 +30,8 @@ export interface OcrFields {
   ocrText: string;
   date: string;
   registrationNumber: string;
+  /** レシート番号（No. / 取引番号 / 伝票番号）。重複の判定にだけ使う */
+  receiptNumber: string;
   /** 税込合計。taxLines がある場合はその合計と一致する */
   amount: string;
   /** 消費税の合計 */
@@ -98,12 +102,27 @@ export function normalizeTaxLines(raw: unknown): TaxLine[] {
   return result.length >= 2 ? result : [];
 }
 
+/**
+ * レシート番号を決める。**AIの答えより本文を優先はしないが、無ければ本文から拾う。**
+ *
+ * ここに置くのは、**読み取りのどの経路を通っても同じ結果になる**ようにするため
+ * （初回OCR・全項目の再読み取り・旧形式の解釈が、それぞれ別々に拾うのを防ぐ）。
+ * AIが `登録番号` を取り違えて返すことがあるので、その形なら捨てて拾い直す。
+ */
+function resolveReceiptNumber(raw: unknown, ocrText: string): string {
+  const given = toText(raw).replace(/^[No.．:：#\s]+/i, "");
+  if (given && !/^T\d{13}$/i.test(given) && /\d/.test(given)) return given;
+  return extractReceiptNumber(ocrText);
+}
+
 /** 任意のオブジェクトを OcrFields に正規化する */
 export function normalizeOcrFields(raw: Record<string, unknown>): OcrFields {
+  const ocrText = toText(raw.ocrText ?? raw.ocr_text);
   return {
-    ocrText: toText(raw.ocrText ?? raw.ocr_text),
+    ocrText,
     date: toText(raw.date),
     registrationNumber: normalizeRegistrationNumber(raw.registrationNumber),
+    receiptNumber: resolveReceiptNumber(raw.receiptNumber, ocrText),
     amount: toText(raw.amount),
     tax: toText(raw.tax),
     taxLines: normalizeTaxLines(raw.taxLines ?? raw.tax_lines),
@@ -115,6 +134,7 @@ export const EMPTY_OCR_FIELDS: OcrFields = {
   ocrText: "",
   date: "",
   registrationNumber: "",
+  receiptNumber: "",
   amount: "",
   tax: "",
   taxLines: [],
@@ -163,6 +183,12 @@ export const OCR_JSON_SCHEMA = {
             description:
               "適格請求書発行事業者の登録番号。T + 数字13桁（例: T1234567890123）。一致しない場合は空文字",
           },
+          receiptNumber: {
+            type: "string",
+            description:
+              "レシート番号・取引番号・伝票番号（例: No. 155693 → 155693）。" +
+              "登録番号（T始まり）や電話番号は入れないこと。見つからない場合は空文字",
+          },
           amount: {
             type: "string",
             description: "税込合計金額、数字のみ。見つからない場合は空文字",
@@ -195,7 +221,16 @@ export const OCR_JSON_SCHEMA = {
             description: "取引先名・品目・摘要の簡潔な要約",
           },
         },
-        required: ["ocrText", "date", "registrationNumber", "amount", "tax", "taxLines", "memo"],
+        required: [
+          "ocrText",
+          "date",
+          "registrationNumber",
+          "receiptNumber",
+          "amount",
+          "tax",
+          "taxLines",
+          "memo",
+        ],
       },
     },
   },

@@ -36,7 +36,23 @@ export async function GET(
             status: true,
             createdAt: true,
             updatedAt: true,
-            pages: { select: { id: true, imagePath: true, pageNumber: true, isDoubleChecked: true }, orderBy: { pageNumber: "asc" } },
+            /*
+              登録番号とレシート番号も返す。**重複の判定に要る。**
+              金額だけで見ていたころは「同じ日に同じ店で同じ額を2回買った」まで
+              重複として出ていた。番号があれば別の取引だと機械で言える。
+              どちらも小さい値なので、レスポンスは実質増えない。
+            */
+            pages: {
+              select: {
+                id: true,
+                imagePath: true,
+                pageNumber: true,
+                isDoubleChecked: true,
+                registrationNumber: true,
+                receiptNumber: true,
+              },
+              orderBy: { pageNumber: "asc" },
+            },
             _count: { select: { journalEntries: true } },
             journalEntries: {
               orderBy: { date: "asc" },
