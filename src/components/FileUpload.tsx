@@ -423,7 +423,7 @@ export default function FileUpload({
             ファイルをドラッグ&ドロップ（複数可）
           </p>
           <p className="text-sm text-gray-500">
-            またはクリックしてファイルを選択（PDF, JPEG, PNG, HEIC 等）
+            またはクリックしてファイルを選択（JPEG, PNG, PDF, HEIC 等）
           </p>
           <p className="text-xs text-teal-600 mt-2">
             {clientConfirmed
@@ -439,7 +439,7 @@ export default function FileUpload({
             announce
             className="absolute -top-3 left-1/2 -translate-x-1/2"
           >
-            ↓ スキャンしたPDFを、この枠の中に落としてください
+            ↓ スキャンした画像を、この枠の中に落としてください
           </GuideBubble>
         )}
       </div>
