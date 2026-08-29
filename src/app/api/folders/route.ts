@@ -87,6 +87,13 @@ export async function GET(request: NextRequest) {
     }
 
     const clientId = request.nextUrl.searchParams.get("clientId");
+    /**
+     * 名前だけを返す軽い形。**取り込み画面の「同じ名前がもうあります」に使う。**
+     *
+     * 通常の一覧は仕訳まで全部返すので、名前を1つ調べるために呼ぶには重すぎる
+     * （PM2のメモリ上限400MBを踏む側の作りになってしまう）。
+     */
+    const namesOnly = request.nextUrl.searchParams.get("namesOnly") === "1";
 
     /*
       社外の人（税理士）はクエリの得意先を信用せず、担当分に強制で絞る。
@@ -99,6 +106,16 @@ export async function GET(request: NextRequest) {
       where = { clientId: scope.clientIds.includes(clientId) ? clientId : "__denied__" };
     } else {
       where = { clientId: { in: scope.clientIds } };
+    }
+
+    if (namesOnly) {
+      const names = await prisma.folder.findMany({
+        where,
+        select: { name: true },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      });
+      return NextResponse.json({ names: names.map((f) => f.name) });
     }
 
     const folders = await prisma.folder.findMany({

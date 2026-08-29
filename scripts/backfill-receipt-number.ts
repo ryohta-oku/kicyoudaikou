@@ -22,8 +22,23 @@
  * `correctedText` に読み取り結果がそのまま入っているので、どちらでも同じ。
  * 人が直していれば、直した側の番号が正しい。
  */
+/*
+  **`.env` を自分で読む。** `DATABASE_URL` は Next.js が読み込むもので、
+  スクリプトを単体で走らせたときには入っていない。入っていないと
+  `src/lib/prisma.ts` の既定値 `file:./dev.db` に落ち、**空のDBを黙って作って**
+  「テーブルがありません」で止まる（本番で実際に踏んだ）。
+*/
+import "dotenv/config";
 import { prisma } from "@/lib/prisma";
 import { extractReceiptNumber } from "@/lib/receipt-number";
+
+if (!process.env.DATABASE_URL) {
+  console.error(
+    "\nDATABASE_URL が空です。空のDBを作ってしまうので止めます。\n" +
+      "  .env に書くか、DATABASE_URL=\"file:./prisma/production.db\" を付けて実行してください\n"
+  );
+  process.exit(1);
+}
 
 const apply = process.argv.includes("--apply");
 
