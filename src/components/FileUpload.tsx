@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import {
   Upload,
@@ -13,6 +13,7 @@ import {
   Send,
   Building2,
   ShieldCheck,
+  FolderPen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GuideBubble from "@/components/GuideBubble";
@@ -73,6 +74,56 @@ export default function FileUpload({
   const [clientId, setClientId] = useState<string | null>(null);
   const [clientName, setClientName] = useState<string>("");
   const [clientConfirmed, setClientConfirmed] = useState(false);
+  /**
+   * フォルダの名前。
+   *
+   * **あとから変えられないので、ここで決めてもらう。** 以前は
+   * 「得意先名＋取り込んだ日」で自動生成するだけだった。同じ日に4月分と5月分を
+   * 続けて入れると**まったく同じ名前が2つ並び、どちらが何月分か画面から
+   * 見分けられなかった**。フォルダはCSVを出す単位なので、取り違えると
+   * 税理士さんへ渡すものを間違える。
+   */
+  const [folderName, setFolderName] = useState("");
+  /** 人が手を入れたか。入れていなければ得意先に追従して作り直す */
+  const [nameEdited, setNameEdited] = useState(false);
+  /** その得意先の既存フォルダ名。同じ名前を付けようとしたら知らせる */
+  const [existingNames, setExistingNames] = useState<string[]>([]);
+  /** 「得意先名 2026-08-28」。得意先が未選択なら日付だけ */
+  const defaultFolderName = (() => {
+    const today = new Date()
+      .toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" })
+      .replace(/\//g, "-");
+    return clientName ? `${clientName} ${today}` : `アップロード ${today}`;
+  })();
+
+  /* 得意先を選び直したら、手を入れていない名前は追従させる */
+  useEffect(() => {
+    if (!nameEdited) setFolderName(defaultFolderName);
+  }, [defaultFolderName, nameEdited]);
+
+  /*
+    同じ名前が既にないかを見るためだけに取る。**名前だけの軽い形で呼ぶ** ――
+    通常の一覧は仕訳まで全部返すので、これのために呼ぶと重すぎる。
+  */
+  useEffect(() => {
+    if (!clientId || !clientConfirmed) {
+      setExistingNames([]);
+      return;
+    }
+    let alive = true;
+    fetch(`/api/folders?clientId=${clientId}&namesOnly=1`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (alive && Array.isArray(data?.names)) setExistingNames(data.names);
+      })
+      .catch(() => {
+        // 取れなくても取り込みはできる。知らせが出ないだけ
+      });
+    return () => {
+      alive = false;
+    };
+  }, [clientId, clientConfirmed]);
+
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     if (!clientConfirmed) return;
     setError(null);
@@ -172,9 +223,8 @@ export default function FileUpload({
     if (files.length === 0) return;
     if (!clientId || !clientConfirmed) return;
 
-    // 会社名＋日付でフォルダ名を自動生成
-    const today = new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "-");
-    const name = clientName ? `${clientName} ${today}` : `アップロード ${today}`;
+    // 空欄で送られたときは、これまでどおり「得意先名＋日付」に倒す
+    const name = folderName.trim() || defaultFolderName;
 
     setIsProcessing(true);
     setError(null);
@@ -454,6 +504,47 @@ export default function FileUpload({
                 {f.file.name}: {f.error}
               </div>
             ))}
+        </div>
+      )}
+
+      {/*
+        フォルダの名前。**送信の直前に置く。**
+        ファイルを入れる前に聞いても、何を入れる束なのかまだ決まっていない。
+      */}
+      {files.length > 0 && clientConfirmed && !isProcessing && hasPendingFiles && (
+        <div className="rounded-xl border border-teal-200 bg-teal-50/60 p-3">
+          <label
+            htmlFor="folder-name"
+            className="flex items-center gap-1.5 text-sm font-bold text-teal-900 mb-1.5"
+          >
+            <FolderPen className="w-4 h-4" />
+            フォルダの名前
+          </label>
+          <input
+            id="folder-name"
+            value={folderName}
+            onChange={(e) => {
+              setFolderName(e.target.value);
+              setNameEdited(true);
+            }}
+            placeholder={defaultFolderName}
+            className="w-full px-3 py-2 rounded-lg border border-teal-300 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+          />
+          <p className="mt-1.5 text-xs text-teal-800">
+            <strong>あとから変えられません。</strong>
+            何月分かを入れておくと、税理士さんへ渡すときに迷いません
+            （例：{clientName || "○○商店"} 2026年4月分）
+          </p>
+          {/* 同じ名前が並ぶと、どちらが何月分か画面から見分けられない */}
+          {existingNames.includes(folderName.trim()) && (
+            <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-900 bg-amber-100 border border-amber-300 rounded-lg px-2 py-1.5">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
+              <span>
+                <strong>同じ名前のフォルダがすでにあります。</strong>
+                このままだと一覧で見分けられません。何月分かを足してください
+              </span>
+            </p>
+          )}
         </div>
       )}
 
