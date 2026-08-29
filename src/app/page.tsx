@@ -324,7 +324,7 @@ export default function DashboardPage() {
    * 過去の user_b のアカウントでも同じに動く。
    */
   /*
-    Step 3（PDFをこの画面に入れる）だけは、**システムが終わったかどうかを知っている**。
+    Step 3（画像をこの画面に入れる）だけは、**システムが終わったかどうかを知っている**。
     今日フォルダが作られていれば取り込みは済んでいる。
     手でチェックし忘れて、いつまでも「いまここ」のままになるのを防ぐ。
   */
@@ -555,7 +555,7 @@ export default function DashboardPage() {
             フォルダがありません
           </h3>
           <p className="text-xs md:text-sm text-teal-700 mb-6 px-4">
-            PDF・画像ファイルをアップロードして記帳作業を始めましょう
+            スキャンした画像をアップロードして記帳作業を始めましょう
           </p>
           {isWorkStarted ? (
             <button

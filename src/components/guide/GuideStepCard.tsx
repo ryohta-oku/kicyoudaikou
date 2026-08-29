@@ -31,7 +31,7 @@ import { GUIDE_FOR_DASHBOARD } from "@/lib/workflow-step";
 export default function GuideStepCard({
   /** 取り込み済みか。**Step 3 だけはシステムが終わったかどうかを知っている** */
   uploadedToday,
-  /** 「PDFをこの画面に入れる」を押したときに、アップロード欄を開く */
+  /** 「画像をこの画面に入れる」を押したときに、アップロード欄を開く */
   onStartUpload,
 }: {
   uploadedToday: boolean;
@@ -162,7 +162,7 @@ export default function GuideStepCard({
           className="mt-3 inline-flex items-center gap-1.5 text-sm text-teal-700 hover:text-teal-900"
         >
           <Upload className="w-4 h-4" />
-          いますぐPDFを入れる
+          いますぐ画像を入れる
         </button>
       )}
     </div>
